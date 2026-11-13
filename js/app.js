@@ -34,7 +34,7 @@ function renderNav() {
   $('#sidebar').innerHTML = `
     <div class="brand"><img class="brand-logo" src="favicon.svg" alt=""><span class="txt">Tasks</span>
       <button class="icon-btn collapse-btn" data-action="toggle-nav" title="Seitenleiste ${collapsed ? 'ausklappen' : 'einklappen'} (B)">${icon(collapsed ? 'expand' : 'collapse')}</button></div>
-    ${NAV.map((n) => `<a class="nav-item ${active(n.href) ? 'active' : ''}" href="${n.href}" title="${n.label}">${icon(n.icon)}<span class="lbl">${n.label}</span>${n.href === '#inbox' && inboxCount ? `<span class="count">${inboxCount}</span>` : ''}</a>`).join('')}
+    ${NAV.map((n) => `<a class="nav-item ${active(n.href) ? 'active' : ''}" href="${n.href}" title="${n.label}">${icon(n.icon)}<span class="lbl">${n.label}</span>${n.href === '#inbox' && M.aiNewCount() ? '<span class="ai-dot" title="Claude ist mit Aufgaben fertig"></span>' : ''}${n.href === '#inbox' && inboxCount ? `<span class="count">${inboxCount}</span>` : ''}</a>`).join('')}
     <div class="nav-label"><span class="txt">Projekte</span> <button class="icon-btn" style="width:24px;height:24px" data-action="new-project" title="Neues Projekt">${icon('plus')}</button></div>
     ${M.projects().map((p) => `<a class="nav-item ${view === 'project' && param === p.id ? 'active' : ''}" href="#project/${p.id}" title="${esc(p.name)}">${V.projIcon(p, 16)}<span class="lbl">${esc(p.name)}</span><span class="count">${M.openTasks().filter((t) => t.projectId === p.id).length || ''}</span></a>`).join('')}
     <div class="sidebar-foot">
@@ -108,7 +108,30 @@ const renderAll = () => {
   // Detail-Ansicht aktualisieren (z. B. wenn Claude fertig ist), aber nicht während du darin tippst
   if (ui.openTask && !document.activeElement?.closest?.('.sheet')) renderSheet();
   applyFinishedPlans();
+  notifyFinishedTasks();
 };
+
+// Aufgabe geöffnet = Claude-Ergebnis gesehen
+function markAiSeen(id) {
+  const t = store.get('tasks', id);
+  const job = t && M.jobsFor(id)[0];
+  if (job?.status === 'done' && t.aiSeen !== job.id) store.patch('tasks', id, { aiSeen: job.id });
+}
+
+// Hinweis, sobald Claude mit einer Aufgabe fertig ist (nur für Aufträge, die während die App offen ist fertig werden)
+let knownDone = null;
+function notifyFinishedTasks() {
+  const done = store.all('jobs').filter((j) => j.type === 'task' && j.status === 'done');
+  if (!knownDone) { knownDone = new Set(done.map((j) => j.id)); return; }
+  for (const j of done) {
+    if (knownDone.has(j.id)) continue;
+    knownDone.add(j.id);
+    const t = store.get('tasks', j.taskId);
+    if (!t) continue;
+    if (ui.openTask === t.id) { markAiSeen(t.id); continue; }
+    toast(`✨ Claude ist fertig: ${t.title}`, { label: 'Öffnen', fn: () => { ui.openTask = t.id; markAiSeen(t.id); renderSheet(); } });
+  }
+}
 
 // Fertige Claude-Pläne automatisch übernehmen
 function applyFinishedPlans() {
@@ -168,7 +191,7 @@ const A = {
     if (!wasDone) toast(t.repeat ? 'Erledigt ✓ Nächste Wiederholung ist angelegt.' : 'Erledigt ✓', t.repeat ? null : { label: 'Rückgängig', fn: () => M.toggleDone(t.id) });
     if (ui.openTask === t.id) renderSheet();
   },
-  'open-task': (el) => { ui.openTask = el.dataset.id; renderSheet(); },
+  'open-task': (el) => { ui.openTask = el.dataset.id; markAiSeen(el.dataset.id); renderSheet(); },
   'close-sheet': () => { ui.openTask = null; renderSheet(); },
   timer: (el) => {
     const id = el.dataset.id;

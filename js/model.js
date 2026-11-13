@@ -252,6 +252,15 @@ export const helperOnline = () => { const h = helperInfo(); return !!h && Date.n
 export const canUseHelper = () => !!store.sync.user;
 export const jobsFor = (taskId) => store.all('jobs').filter((j) => j.taskId === taskId).sort((a, b) => b.createdAt - a.createdAt);
 
+// Claude-Status einer Aufgabe für Listen/Karten: queued | running | new (fertig, noch nicht angesehen) | seen | error | manual
+export function aiState(t) {
+  const job = jobsFor(t.id)[0];
+  if (!job) return t.ai ? 'manual' : null;
+  if (job.status === 'done') return t.aiSeen === job.id ? 'seen' : 'new';
+  return job.status; // queued | running | error
+}
+export const aiNewCount = () => openTasks().filter((t) => aiState(t) === 'new').length;
+
 export function sendTaskToClaude(t, prompt = claudeTaskPrompt(t)) {
   store.batch(() => {
     store.put('jobs', { type: 'task', taskId: t.id, prompt, status: 'queued', result: null, error: null, applied: false });

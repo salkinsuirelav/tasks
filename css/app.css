@@ -126,6 +126,12 @@ main.full { padding: 0; overflow: hidden; display: flex; flex-direction: column;
 .chip.p-medium { background: var(--medium-bg); color: var(--medium); }
 .chip.p-low { background: var(--low-bg); color: var(--low); }
 .chip.ai { background: var(--accent-soft); color: var(--accent); }
+.chip.ai.new { background: var(--accent); color: #fff; font-weight: 600; }
+.chip.ai.running svg { animation: spin 1.6s linear infinite; }
+.chip.ai.err { background: var(--high-bg); color: var(--high); }
+.nav-item .ai-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-left: auto; flex: none; }
+.nav-item .ai-dot + .count { margin-left: 6px; }
+@keyframes spin { to { transform: rotate(360deg); } }
 .chip.overdue { color: var(--danger); }
 
 /* ===== Eingabe-Karte ("Jot it down") ===== */

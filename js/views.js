@@ -43,11 +43,25 @@ const chips = (t, showDate = true) => [
   chipWhen(t, showDate),
   t.duration ? `<span class="chip mono">${fmtMinutes(t.duration)}</span>` : '',
   t.repeat ? `<span class="chip" title="Wiederholt sich">${icon('repeat')}</span>` : '',
-  t.ai ? `<span class="chip ai">${icon('sparkle')} Claude</span>` : '',
+  aiChip(t),
   t.status === 'doing' ? '<span class="chip">In Arbeit</span>' : '',
-  t.status === 'waiting' ? '<span class="chip">Wartet</span>' : '',
+  t.status === 'waiting' && !['queued', 'running'].includes(M.aiState(t)) ? '<span class="chip">Wartet</span>' : '',
   Object.values(store.state.files).some((f) => f.taskId === t.id) ? `<span class="chip">${icon('clip')}</span>` : '',
 ].join('');
+
+function aiChip(t) {
+  const st = M.aiState(t);
+  if (!st) return '';
+  const c = {
+    queued: ['ai', '⏳ Claude wartet'],
+    running: ['ai running', `${icon('sparkle')} Claude arbeitet`],
+    new: ['ai new', `${icon('check')} Claude fertig`],
+    seen: ['ai', `${icon('sparkle')} Claude`],
+    error: ['ai err', '⚠️ Claude-Fehler'],
+    manual: ['ai', `${icon('sparkle')} Claude`],
+  }[st];
+  return `<span class="chip ${c[0]}">${c[1]}</span>`;
+}
 
 const checkBtn = (t) => `<button class="check ${t.status === 'done' ? 'on' : ''}" data-action="toggle" data-id="${t.id}" aria-label="Erledigt">${icon('check')}</button>`;
 const playBtn = (t) => {
@@ -111,7 +125,7 @@ export function viewInbox() {
   }
 
   return `
-    ${head('Inbox', `${unplanned.length} offen · ${planned.length} geplant`)}
+    ${head('Inbox', `${unplanned.length} offen · ${planned.length} geplant${M.aiNewCount() ? ` · <span style="color:var(--accent)">${M.aiNewCount()} von Claude fertig</span>` : ''}`)}
     ${capture('data-add="inbox" data-key="inbox-add"')}
     <div style="margin-bottom:14px">${tabs}</div>
     ${body}`;
@@ -457,7 +471,7 @@ export function viewSettings() {
         <button class="btn small" data-action="keys-reset" style="margin-top:10px">Standard wiederherstellen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.4</p>
+      <p class="mono muted">Version 0.4.1</p>
     </div>`;
 }
 
