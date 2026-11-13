@@ -2,7 +2,9 @@
 import * as store from './store.js';
 import * as M from './model.js';
 import { ui, isMobile } from './ui.js';
-import { icon } from './icons.js';
+import { icon, PROJECT_ICONS } from './icons.js';
+import { md, splitSources } from './md.js';
+import { SHORTCUTS, keyOf, keyLabel } from './keys.js';
 import {
   esc, toDateStr, today, addDays, weekStart, dayLabel, longDate, shortWeekday, dayNum, rangeLabel, toMin, fromMin, nowMin,
   fmtDur, fmtHours, fmtClock, fmtMinutes, PRIOS, prioLabel, STATUS, REPEATS, COLORS, byPrio,
@@ -19,9 +21,13 @@ const head = (title, sub = '', actions = '') => `
   </div>`;
 
 const chipPrio = (p) => (p ? `<span class="chip p-${p}">${p === 'frog' ? '🐸 ' : ''}${prioLabel(p)}</span>` : '');
+// Projekt-Symbol: gewähltes Icon in Projektfarbe, sonst ein Farbpunkt
+export const projIcon = (p, size = 14) => p?.icon
+  ? `<span class="picon" style="color:${p.color};width:${size}px;height:${size}px">${icon(p.icon)}</span>`
+  : `<span class="dot" style="background:${p?.color || 'var(--faint)'};width:${Math.round(size * 0.7)}px;height:${Math.round(size * 0.7)}px"></span>`;
 const chipProject = (pid) => {
   const p = M.project(pid);
-  return p ? `<span class="chip"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</span>` : '';
+  return p ? `<span class="chip">${projIcon(p, 12)}${esc(p.name)}</span>` : '';
 };
 const chipWhen = (t, showDate = true) => {
   const parts = [];
@@ -227,8 +233,10 @@ export function viewCalendar() {
         data-action="open-task" data-id="${t.id}" draggable="true" data-drag="task">
         <div class="tm">${t.time}–${fromMin(it.e)}${t.priority === 'frog' ? ' 🐸' : ''}</div>${esc(t.title)}</div>`;
     }).join('');
+    const sel = ui.modal?.type === 'slot' && ui.modal.date === d ? { s: toMin(ui.modal.time), e: toMin(ui.modal.time) + ui.modal.dur } : ui.select?.date === d ? ui.select : null;
+    const ghost = sel ? `<div class="ev ghost ${px(sel.e) - px(sel.s) < 36 ? 'short' : ''}" style="top:${px(sel.s)}px;height:${Math.max(18, px(sel.e) - px(sel.s) - 2)}px;left:3px;right:3px"><div class="tm">${fromMin(sel.s)}–${fromMin(Math.min(sel.e, 24 * 60 - 1))}</div>${esc(ui.modal?.title || '(Neu)')}</div>` : '';
     const nowLine = d === t0 && nowMin() >= startMin && nowMin() <= endMin ? `<div class="now-line" style="top:${px(nowMin())}px"></div>` : '';
-    return `<div class="cal-day ${d === t0 ? 'today' : ''}" data-drop-cal="${d}" data-action="cal-slot" data-date="${d}" style="height:${(s.dayEnd - s.dayStart) * HOUR}px">${evs}${nowLine}</div>`;
+    return `<div class="cal-day ${d === t0 ? 'today' : ''}" data-drop-cal="${d}" data-action="cal-slot" data-date="${d}" style="height:${(s.dayEnd - s.dayStart) * HOUR}px">${evs}${ghost}${nowLine}</div>`;
   };
 
   const header = days.map((d) => {
@@ -274,7 +282,8 @@ export function viewProjects() {
     const pct = ts.length ? Math.round((done / ts.length) * 100) : 0;
     return `
       <div class="pcard" data-action="go" data-href="#project/${p.id}">
-        <h3><span class="dot" style="background:${p.color};width:11px;height:11px"></span>${esc(p.name)}</h3>
+        <h3>${projIcon(p, 18)}${esc(p.name)}</h3>
+        ${p.goal ? `<div class="pgoal">🎯 ${esc(p.goal)}</div>` : ''}
         <div class="row2">
           <div><div class="big">${fmtHours(weekMsForProject(p.id, ws))}</div><div class="lbl">diese Woche</div></div>
           <div style="text-align:right"><div class="mono muted">${ts.length - done} offen · ${done} erledigt</div><div class="mono muted">${fmtHours(totalMsForProject(p.id))} gesamt</div></div>
@@ -298,7 +307,7 @@ export function viewProject(id) {
     <a href="#projects" class="btn ghost small" style="margin:0 0 10px -8px">${icon('arrowLeft')} Projekte</a>
     <div class="head">
       <div style="display:flex;gap:12px;align-items:center;flex:1;min-width:240px">
-        <span class="dot" style="background:${p.color};width:14px;height:14px"></span>
+        ${projIcon(p, 26)}
         <input class="title-in" style="font-size:28px;font-weight:700;border:0;background:transparent;padding:0" value="${esc(p.name)}" data-pfield="name" data-id="${p.id}">
       </div>
       <div class="actions">
@@ -319,10 +328,14 @@ export function viewProject(id) {
         ${done.length ? `<div class="group-title">Erledigt <span class="mono">${done.length}</span></div><div class="list">${done.slice(0, 30).map((t) => taskRow(t)).join('')}</div>` : ''}
       </div>
       <div class="panel" style="align-self:start">
+        <h4>Ziel</h4>
+        <input data-pfield="goal" data-id="${id}" value="${esc(p.goal || '')}" placeholder="Woran merkst du, dass das Projekt fertig ist?" style="margin-bottom:18px">
+        <h4>Notizen</h4>
+        <textarea data-pfield="notes" data-id="${id}" placeholder="Worum geht's? Links, Ideen…" style="min-height:160px;margin-bottom:18px">${esc(p.notes || '')}</textarea>
+        <h4>Symbol</h4>
+        <div class="icons-pick" style="margin-bottom:18px">${iconPick(p.icon, `data-action="project-icon" data-id="${id}"`)}</div>
         <h4>Farbe</h4>
-        <div class="colors" style="margin-bottom:18px">${COLORS.map((c) => `<button class="${c === p.color ? 'on' : ''}" style="background:${c}" data-action="project-color" data-id="${id}" data-color="${c}"></button>`).join('')}</div>
-        <h4>Notizen &amp; Ziel</h4>
-        <textarea data-pfield="notes" data-id="${id}" placeholder="Worum geht's? Was ist das Ziel? Links, Ideen…" style="min-height:180px">${esc(p.notes || '')}</textarea>
+        <div class="colors">${COLORS.map((c) => `<button class="${c === p.color ? 'on' : ''}" style="background:${c}" data-action="project-color" data-id="${id}" data-color="${c}"></button>`).join('')}</div>
       </div>
     </div>`;
 }
@@ -381,7 +394,7 @@ export function viewReview() {
       <div class="panel"><h4>Stunden nach Projekt</h4>
         ${projRows.length ? projRows.map(([pid, ms]) => {
           const p = M.project(pid);
-          return `<div class="hbar"><span class="name"><span class="dot" style="background:${p?.color || 'var(--faint)'}"></span>${esc(p?.name || 'Ohne Projekt')}</span><div class="track"><div style="width:${(ms / projMax) * 100}%;background:${p?.color || 'var(--faint)'}"></div></div><span class="val">${fmtHours(ms)}</span></div>`;
+          return `<div class="hbar"><span class="name">${projIcon(p, 14)}${esc(p?.name || 'Ohne Projekt')}</span><div class="track"><div style="width:${(ms / projMax) * 100}%;background:${p?.color || 'var(--faint)'}"></div></div><span class="val">${fmtHours(ms)}</span></div>`;
         }).join('') : '<div class="empty">Noch keine Zeit erfasst. Starte den Timer (▶) an einer Aufgabe.</div>'}
       </div>
     </div>
@@ -417,6 +430,10 @@ export function viewSettings() {
     <div class="settings">
       <div class="panel"><h4>Sync · <span style="text-transform:none;letter-spacing:0">${statusText}</span></h4>${syncBody}
         ${sy.error ? `<p style="color:var(--danger);font-size:13px">${esc(sy.error)}</p>` : ''}</div>
+      <div class="panel"><h4>Darstellung</h4>
+        <div class="seg">${[['system', 'Wie System'], ['light', 'Hell'], ['dark', 'Dunkel']].map(([v, l]) => `<button class="${(s.theme || 'system') === v ? 'on' : ''}" data-action="theme" data-v="${v}">${l}</button>`).join('')}</div>
+        <p class="muted" style="font-size:13px;margin:10px 0 0">„Wie System“ folgt der Einstellung deines Macs bzw. iPhones (Hell/Dunkel/Automatisch).</p>
+      </div>
       <div class="panel"><h4>Planung</h4>
         <div class="inline">
           <div class="field"><label>Tag beginnt</label><select data-setting="dayStart">${hourOpts(0, 12, s.dayStart)}</select></div>
@@ -434,8 +451,13 @@ export function viewSettings() {
       <div class="panel"><h4>Claude (Mac-Helfer)</h4>
         ${(() => { const h = M.helperInfo(); return M.helperOnline() ? `<p style="margin-top:0">🟢 Online auf <b>${esc(h.host || 'deinem Mac')}</b></p>` : `<p style="margin-top:0" class="muted">⚪️ Offline${h ? ` · zuletzt gesehen ${new Date(h.lastSeen).toLocaleString('de-DE')}` : ' · noch nie verbunden'}. Einrichtung: Ordner <span class="mono">helper/</span> im Repo, Anleitung in <span class="mono">helper/README.md</span>.</p>`; })()}
       </div>
+      <div class="panel desktop-only"><h4>Tastenkürzel</h4>
+        <p class="muted" style="margin-top:0;font-size:13px">Funktionieren, wenn du nicht gerade in einem Textfeld tippst. Zum Ändern auf die Taste klicken und die neue drücken (Entf = keine Taste).</p>
+        ${keysList(true)}
+        <button class="btn small" data-action="keys-reset" style="margin-top:10px">Standard wiederherstellen</button>
+      </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.2 · Prototyp</p>
+      <p class="mono muted">Version 0.4</p>
     </div>`;
 }
 
@@ -456,6 +478,7 @@ export function sheetHTML(t) {
       </div>
       <div class="sheet-body">
         <input class="title-in" data-field="title" value="${esc(t.title)}" placeholder="Titel">
+        ${aiResultCard(t)}
 
         <div class="field" style="margin-top:14px"><label>Status</label>
           <div class="seg">${STATUS.map((x) => `<button class="${t.status === x.id ? 'on' : ''}" data-action="set" data-k="status" data-v="${x.id}">${x.label}</button>`).join('')}</div></div>
@@ -508,10 +531,36 @@ function jobStatusText(job) {
   return {
     queued: online ? '⏳ Wartet auf den Mac-Helfer…' : '⏳ Wartet. Der Mac-Helfer ist gerade offline, der Auftrag startet, sobald er läuft.',
     running: '✨ Claude arbeitet gerade daran…',
-    done: '✓ Fertig. Das Ergebnis steht in den Notizen.',
+    done: '✓ Fertig. Ergebnis steht oben.',
     error: `⚠️ Fehler: ${esc(job.error || 'unbekannt')}`,
   }[job.status] || '';
 }
+
+// Letztes Claude-Ergebnis als übersichtliche Karte direkt unter dem Titel
+function aiResultCard(t) {
+  const jobs = M.jobsFor(t.id);
+  const job = jobs[0];
+  if (!job) return '';
+  if (job.status === 'queued' || job.status === 'running') {
+    return `<div class="ai-result" style="margin:10px 0 4px"><div class="ai-head">${icon('sparkle')}<span>${jobStatusText(job)}</span></div></div>`;
+  }
+  const last = jobs.find((j) => j.status === 'done' && j.result);
+  if (!last || t.aiHidden === last.id) return job.status === 'error' ? `<div class="ai-result" style="margin:10px 0 4px"><div class="ai-head">${jobStatusText(job)}</div></div>` : '';
+  const { body, sources } = splitSources(last.result);
+  const long = body.length > 600 || body.split('\n').length > 12;
+  const open = ui.aiOpen === last.id;
+  const when = new Date(last.finishedAt || last.updatedAt || last.createdAt).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' });
+  return `<div class="ai-result" style="margin:10px 0 4px">
+    <div class="ai-head">${icon('sparkle')}<span>Claude · ${when}</span><span class="sp"></span>
+      <button class="icon-btn" style="width:26px;height:26px" data-action="ai-hide" data-id="${last.id}" title="Ausblenden">${icon('x')}</button></div>
+    <div class="ai-body ${long && !open ? 'clamp' : ''}">${md(body)}</div>
+    ${long ? `<button class="btn small ghost" style="margin:4px 0 0 -8px" data-action="ai-more" data-id="${last.id}">${open ? 'Weniger anzeigen' : 'Alles anzeigen'}</button>` : ''}
+    ${sources.length ? `<details><summary>Quellen (${sources.length})</summary><ul>${sources.map((x) => `<li><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.name)}</a></li>`).join('')}</ul></details>` : ''}
+    ${M.canUseHelper() ? `<div class="ai-reply"><input id="ai-reply" data-key="ai-reply" placeholder="Antwort oder Rückfrage an Claude…" enterkeyhint="send"><button class="btn small primary" style="flex:none" data-action="ai-reply" data-id="${t.id}" data-job="${last.id}">${icon('send')}</button></div>` : ''}
+    <div class="ai-actions"><button class="btn small" data-action="ai-to-notes" data-id="${t.id}" data-job="${last.id}">In Notizen übernehmen</button></div>
+  </div>`;
+}
+
 function claudeBox(t) {
   const job = M.jobsFor(t.id)[0];
   if (!M.canUseHelper()) {
@@ -521,11 +570,24 @@ function claudeBox(t) {
   }
   const busy = job && (job.status === 'queued' || job.status === 'running');
   return `<div class="box">
-    <p style="margin:0 0 10px;font-size:14px" class="muted">${job ? jobStatusText(job) : 'Claude recherchiert oder erledigt die Aufgabe auf deinem Mac (über dein Abo) und schreibt das Ergebnis in die Notizen.'}</p>
+    <p style="margin:0 0 10px;font-size:14px" class="muted">${job ? jobStatusText(job) : 'Claude recherchiert oder erledigt die Aufgabe auf deinem Mac (über dein Abo). Das Ergebnis erscheint kurz und knapp oben in der Aufgabe.'}</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn small primary" data-action="ai-job" data-id="${t.id}" ${busy ? 'disabled style="opacity:.5"' : ''}>${icon('sparkle')} ${job ? 'Nochmal an Claude senden' : 'An Claude senden'}</button>
       <button class="btn small ghost" data-action="ai-task" data-id="${t.id}">Manuell kopieren</button>
     </div></div>`;
+}
+
+const iconPick = (cur, attrs) => PROJECT_ICONS.map((n) => `<button class="${n === cur ? 'on' : ''}" ${attrs} data-icon="${n}" title="${n}">${icon(n)}</button>`).join('');
+
+export function keysList(editable) {
+  const s = store.settings;
+  return `<div class="keys">${SHORTCUTS.map((k) => {
+    const cur = keyOf(s, k.id);
+    const rec = ui.recordKey === k.id;
+    return `<div class="k"><span>${k.label}</span>${editable
+      ? `<button class="${rec ? 'rec' : ''}" data-action="key-record" data-id="${k.id}"><kbd>${rec ? 'Taste drücken…' : keyLabel(cur)}</kbd></button>`
+      : `<kbd>${keyLabel(cur)}</kbd>`}</div>`;
+  }).join('')}</div>`;
 }
 
 // ---------- Fokus-Modus ----------
@@ -590,10 +652,10 @@ export function modalHTML(m) {
         <button class="btn" data-action="close-modal">Abbrechen</button><button class="btn primary" data-action="save-block">Speichern</button></div>`;
   } else if (m.type === 'slot') {
     inner = `
-      <h2>${dayLabel(m.date)}, ${m.time}</h2>
+      <h2>${dayLabel(m.date)}, ${m.time}–${fromMin(Math.min(toMin(m.time) + m.dur, 24 * 60 - 1))}</h2>
       <p>Was soll hier passieren?</p>
-      <div class="field"><input id="slot-title" placeholder="Titel (Aufgabe oder Sperrzeit)" autofocus></div>
-      <div class="field"><label>Dauer</label><select id="slot-dur">${[15, 30, 45, 60, 90, 120, 180].map((d) => `<option value="${d}" ${d === 60 ? 'selected' : ''}>${fmtMinutes(d)}</option>`).join('')}</select></div>
+      <div class="field"><input id="slot-title" data-key="slot-title" placeholder="Titel (Aufgabe oder Sperrzeit)" value="${esc(m.title || '')}" autofocus></div>
+      <div class="field"><label>Dauer</label><select id="slot-dur">${[...new Set([15, 30, 45, 60, 90, 120, 180, m.dur])].sort((a, b) => a - b).map((d) => `<option value="${d}" ${d === m.dur ? 'selected' : ''}>${fmtMinutes(d)}</option>`).join('')}</select></div>
       <div class="foot"><button class="btn" data-action="close-modal">Abbrechen</button>
         <button class="btn" data-action="slot-block">${icon('lock')} Zeit sperren</button>
         <button class="btn primary" data-action="slot-task">${icon('plus')} Aufgabe anlegen</button></div>`;
@@ -601,8 +663,23 @@ export function modalHTML(m) {
     inner = `
       <h2>Neues Projekt</h2>
       <div class="field"><label>Name</label><input id="p-name" placeholder="z. B. 1000 € mit KI verdienen" autofocus></div>
+      <div class="field"><label>Ziel</label><input id="p-goal" placeholder="Woran merkst du, dass das Projekt fertig ist?"></div>
+      <div class="field"><label>Notizen</label><textarea id="p-notes" placeholder="Worum geht's? Links, Ideen…" style="min-height:80px"></textarea></div>
+      <div class="field"><label>Symbol</label><div class="icons-pick">${iconPick(m.icon, 'data-action="pick-icon"')}</div></div>
       <div class="field"><label>Farbe</label><div class="colors">${COLORS.map((c, i) => `<button class="${i === m.colorIdx ? 'on' : ''}" style="background:${c}" data-action="pick-color" data-i="${i}"></button>`).join('')}</div></div>
       <div class="foot"><button class="btn" data-action="close-modal">Abbrechen</button><button class="btn primary" data-action="save-project">Anlegen</button></div>`;
+  } else if (m.type === 'quick') {
+    inner = `
+      <h2>Neue Aufgabe</h2>
+      <p>Enter legt sie in die Inbox${m.date ? ` für <b>${dayLabel(m.date)}</b>` : ''}. Esc bricht ab.</p>
+      <div class="field"><input id="quick-title" placeholder="Was steht an?" autofocus autocomplete="off"></div>
+      <div class="foot"><button class="btn" data-action="close-modal">Abbrechen</button><button class="btn primary" data-action="quick-save">Anlegen</button></div>`;
+  } else if (m.type === 'keys') {
+    inner = `
+      <h2>${icon('keyboard')} Tastenkürzel</h2>
+      <p>Ändern kannst du sie unter Einstellungen.</p>
+      ${keysList(false)}
+      <div class="foot"><a class="btn" href="#settings" data-action="close-modal-go">Ändern</a><button class="btn primary" data-action="close-modal">Fertig</button></div>`;
   }
   return `<div class="overlay modal-overlay" data-action="close-modal"></div><div class="modal" role="dialog">${inner}</div>`;
 }

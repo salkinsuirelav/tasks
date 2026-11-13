@@ -185,11 +185,34 @@ export function applyClaudePlan(text) {
 
 export function claudeTaskPrompt(t) {
   const p = project(t.projectId);
-  return `Bitte übernimm diese Aufgabe für mich. Wenn es eine Recherche ist, recherchiere gründlich und gib mir ein kompaktes Ergebnis mit Quellen. Wenn du sie direkt erledigen kannst (Text, Plan, Code, Entwurf), mach das. Wenn dir Infos fehlen, stell mir am Anfang gebündelt die nötigsten Fragen.
+  return `Bitte übernimm diese Aufgabe für mich. Recherchiere, wenn nötig, oder erledige sie direkt (Text, Plan, Entwurf).
 
 Aufgabe: ${t.title}
-${p ? `Projekt: ${p.name}\n` : ''}${t.notes ? `Notizen:\n${t.notes}\n` : ''}
-Antworte auf Deutsch, kompakt, mit Bullet Points. Ergebnis zuerst.`;
+${p ? `Projekt: ${p.name}${p.goal ? ` (Ziel: ${p.goal})` : ''}\n` : ''}${t.notes ? `Notizen:\n${t.notes}\n` : ''}
+${ANSWER_RULES}`;
+}
+
+// Gilt für jede Antwort, die in der App landet: kurz, scannbar, keine Textwand
+const ANSWER_RULES = `So soll die Antwort aussehen (sie wird in einer kleinen Karte in meiner Task-App angezeigt):
+- Deutsch, maximal 120 Wörter, keine Einleitung, keine Wiederholung der Aufgabe.
+- Zeile 1: **Ergebnis:** in einem Satz.
+- Danach höchstens 5 Bullet Points, je eine Zeile, das Wichtigste zuerst. Links direkt im Bullet als [Name](URL).
+- Zum Schluss: **Nächster Schritt:** eine Zeile.
+- Keine Quellenliste am Ende, keine Unsicherheits-Disclaimer pro Punkt.
+- Nur wenn dir für ein brauchbares Ergebnis wirklich etwas fehlt: eine einzige Rückfrage als letzte Zeile, beginnend mit **Frage:**.`;
+
+// Antwort/Rückfrage auf ein Claude-Ergebnis: neuer Auftrag mit dem bisherigen Verlauf
+export function claudeFollowUpPrompt(t, prevResult, reply) {
+  return `${claudeTaskPrompt(t)}
+
+Deine bisherige Antwort war:
+<<<
+${prevResult}
+>>>
+
+Meine Antwort/Rückfrage dazu: ${reply}
+
+Gib mir jetzt die aktualisierte Antwort (gleiche Regeln wie oben).`;
 }
 
 export const sortTasks = (list, mode) => list.sort(mode === 'time' ? (a, b) => (a.time || '99').localeCompare(b.time || '99') || prioRank(a.priority) - prioRank(b.priority) : byPrio);
@@ -229,9 +252,9 @@ export const helperOnline = () => { const h = helperInfo(); return !!h && Date.n
 export const canUseHelper = () => !!store.sync.user;
 export const jobsFor = (taskId) => store.all('jobs').filter((j) => j.taskId === taskId).sort((a, b) => b.createdAt - a.createdAt);
 
-export function sendTaskToClaude(t) {
+export function sendTaskToClaude(t, prompt = claudeTaskPrompt(t)) {
   store.batch(() => {
-    store.put('jobs', { type: 'task', taskId: t.id, prompt: claudeTaskPrompt(t), status: 'queued', result: null, error: null, applied: false });
+    store.put('jobs', { type: 'task', taskId: t.id, prompt, status: 'queued', result: null, error: null, applied: false });
     store.patch('tasks', t.id, { ai: true, status: t.status === 'todo' ? 'waiting' : t.status });
   });
 }

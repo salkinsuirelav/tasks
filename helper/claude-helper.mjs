@@ -147,14 +147,11 @@ async function main() {
     try {
       const result = await runClaude(claudePath, job.prompt, { web: job.type === 'task' });
       await updateDoc(ref, { status: 'done', result, finishedAt: Date.now(), updatedAt: Date.now() });
+      // Ergebnis zeigt die App direkt aus dem Auftrag an (kurze Karte in der Aufgabe). Hier nur den Status zurücksetzen.
       if (job.type === 'task' && job.taskId) {
         const tRef = doc(db, ...base, 'tasks', job.taskId);
         const t = (await getDoc(tRef)).data();
-        if (t) {
-          const stamp = new Date().toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' });
-          const notes = `${t.notes ? t.notes.trimEnd() + '\n\n' : ''}— Claude · ${stamp} —\n${result}`;
-          await updateDoc(tRef, { notes, status: t.status === 'waiting' ? 'todo' : t.status, updatedAt: Date.now() });
-        }
+        if (t && t.status === 'waiting') await updateDoc(tRef, { status: 'todo', updatedAt: Date.now() });
       }
       log(`✓ Fertig: ${label}`);
     } catch (e) {

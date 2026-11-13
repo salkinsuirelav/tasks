@@ -11,6 +11,9 @@ export const ui = {
   focusTask: null,       // id im Fokus-Modus
   modal: null,           // { type, ... }
   drag: null,            // { id, kind, offsetMin }
+  select: null,          // Kalender: aufgezogener Zeitraum { date, s, e }
+  aiOpen: null,          // Claude-Ergebnis ausgeklappt (job-id)
+  recordKey: null,       // Einstellungen: welches Kürzel gerade neu belegt wird
 };
 
 export const isMobile = () => window.matchMedia('(max-width: 760px)').matches;

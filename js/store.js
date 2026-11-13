@@ -31,7 +31,7 @@ function load() {
 }
 
 function loadSettings() {
-  const defaults = { dayStart: 7, dayEnd: 23, sortMode: 'prio', sidebar: true, weeklyGoal: 20 };
+  const defaults = { dayStart: 7, dayEnd: 23, sortMode: 'prio', sidebar: true, weeklyGoal: 20, theme: 'system', navCollapsed: false, keys: {} };
   try { return { ...defaults, ...JSON.parse(localStorage.getItem('taskapp-settings') || '{}') }; } catch { return defaults; }
 }
 export function saveSettings(patch) {
