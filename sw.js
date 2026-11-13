@@ -1,6 +1,6 @@
 // Service Worker: macht die App offline-fähig.
 // Bei jeder Änderung an den Dateien: VERSION hochzählen, damit iPhone/Mac die neue Version holen.
-const VERSION = 'v0.4.1';
+const VERSION = 'v0.4.2';
 const SHELL = [
   './', 'index.html', 'manifest.json', 'css/app.css',
   'js/app.js', 'js/store.js', 'js/model.js', 'js/views.js', 'js/ui.js', 'js/util.js', 'js/icons.js', 'js/config.js', 'js/md.js', 'js/keys.js',
@@ -26,9 +26,9 @@ self.addEventListener('fetch', (e) => {
     return;
   }
   if (url.origin !== location.origin) return; // Firebase-Datenbank etc. nicht anfassen
-  // Eigene Dateien: erst Netz (neueste Version), offline aus dem Cache
+  // Eigene Dateien: erst Netz (neueste Version, am Browser-Cache vorbei), offline aus dem Cache
   e.respondWith(
-    fetch(req).then((res) => { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(req, copy)); return res; })
+    fetch(req, { cache: 'no-cache' }).then((res) => { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(req, copy)); return res; })
       .catch(() => caches.match(req, { ignoreSearch: true }).then((hit) => hit || caches.match('index.html')))
   );
 });

@@ -64,6 +64,13 @@ function aiChip(t) {
 }
 
 const checkBtn = (t) => `<button class="check ${t.status === 'done' ? 'on' : ''}" data-action="toggle" data-id="${t.id}" aria-label="Erledigt">${icon('check')}</button>`;
+// Kleiner Claude-Knopf an jeder Aufgabe (Liste + Karten)
+const aiBtn = (t) => {
+  if (t.status === 'done') return '';
+  const st = M.aiState(t);
+  if (st === 'queued' || st === 'running') return '';
+  return `<button class="icon-btn ai-btn" data-action="ai-quick" data-id="${t.id}" title="An Claude geben" aria-label="An Claude geben">${icon('sparkle')}</button>`;
+};
 const playBtn = (t) => {
   const on = M.running()?.taskId === t.id;
   return t.status === 'done' ? '' : `<button class="icon-btn play ${on ? 'on' : ''}" data-action="timer" data-id="${t.id}" aria-label="Timer">${icon(on ? 'stop' : 'play')}</button>`;
@@ -73,7 +80,7 @@ export const taskRow = (t, showDate = true) => `
   <div class="row ${t.status === 'done' ? 'done' : ''}" data-action="open-task" data-id="${t.id}" draggable="true" data-drag="task">
     ${checkBtn(t)}
     <div class="title"><span class="t">${esc(t.title)}</span><div class="meta">${chips(t, showDate)}</div></div>
-    ${playBtn(t)}
+    ${aiBtn(t)}${playBtn(t)}
   </div>`;
 
 export const taskCard = (t, showDate = false) => {
@@ -82,7 +89,7 @@ export const taskCard = (t, showDate = false) => {
   <div class="card ${t.status === 'done' ? 'done' : ''}" data-action="open-task" data-id="${t.id}" draggable="true" data-drag="task">
     ${p ? `<div class="bar" style="background:${p.color}"></div>` : ''}
     <div class="ttl">${checkBtn(t)}<span>${esc(t.title)}</span>${playBtn(t)}</div>
-    <div class="meta">${chips(t, showDate)}</div>
+    <div class="meta">${chips(t, showDate)}${aiBtn(t)}</div>
   </div>`;
 };
 
@@ -471,7 +478,7 @@ export function viewSettings() {
         <button class="btn small" data-action="keys-reset" style="margin-top:10px">Standard wiederherstellen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.4.1</p>
+      <p class="mono muted">Version 0.4.2</p>
     </div>`;
 }
 

@@ -334,6 +334,12 @@ const A = {
     renderSheet();
     toast(M.helperOnline() ? 'An Claude geschickt.' : 'Gespeichert. Startet, sobald der Mac-Helfer läuft.');
   },
+  'ai-quick': (el) => {
+    const t = store.get('tasks', el.dataset.id);
+    if (!M.canUseHelper()) return A['ai-task'](el); // ohne Sync: Auftrag kopieren + claude.ai öffnen
+    M.sendTaskToClaude(t);
+    toast(M.helperOnline() ? `An Claude: ${t.title}` : 'Gespeichert. Startet, sobald der Mac-Helfer läuft.');
+  },
   'plan-job': () => {
     M.sendPlanToClaude(store.settings);
     ui.modal = null; renderModal();
