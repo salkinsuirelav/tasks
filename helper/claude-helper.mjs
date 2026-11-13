@@ -148,14 +148,19 @@ async function main() {
   const server = http.createServer((req, res) => {
     const reply = (code, text) => { res.writeHead(code, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end(text); };
     if (req.method === 'GET' && req.url === '/ping') return reply(200, 'ok');
-    if (req.method !== 'POST' || !req.url.startsWith('/add') || !req.headers['x-tasks']) return reply(403, 'Nein');
+    // Erlaubt: Header X-Tasks ODER JSON-Body. Beides kann eine fremde Webseite nicht ohne Erlaubnis schicken.
+    const okHeader = !!req.headers['x-tasks'] || /application\/json/i.test(req.headers['content-type'] || '');
+    if (req.method !== 'POST' || !req.url.startsWith('/add') || !okHeader) {
+      log(`Schnell-Eingabe abgelehnt: ${req.method} ${req.url} (Header: ${Object.keys(req.headers).join(', ')})`);
+      return reply(403, 'Abgelehnt: Methode muss POST sein und Header X-Tasks gesetzt.');
+    }
     let body = '';
     req.on('data', (c) => { body += c; if (body.length > 10000) req.destroy(); });
     req.on('end', async () => {
       let title = body;
       try { const j = JSON.parse(body); title = j.title ?? j.text ?? ''; } catch {}
       title = String(title).trim();
-      if (!title) return reply(400, 'Kein Titel');
+      if (!title) { log(`Schnell-Eingabe ohne Titel. Empfangen: ${body.slice(0, 200)}`); return reply(400, 'Kein Titel angekommen. Im Kurzbefehl bei title die Variable "Provided Input" setzen.'); }
       const id = crypto.randomUUID().replace(/-/g, '').slice(0, 20);
       const now = Date.now();
       try {
