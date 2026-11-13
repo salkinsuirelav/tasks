@@ -1,6 +1,6 @@
 // Tasks · Claude-Helfer für den Mac
 // --------------------------------
-// Läuft auf deinem Mac im Terminal. Er wartet auf Aufträge aus deiner Tasks-App (über Firebase),
+// Läuft auf deinem Mac (im Hintergrund über install.command oder im Terminal über start.command).
 // lässt Claude Code laufen (über dein Claude-Abo) und schreibt das Ergebnis zurück in die App.
 //
 // Sicherheit:
@@ -13,7 +13,7 @@ import path from 'node:path';
 import readline from 'node:readline/promises';
 import { spawn, execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { getFirestore, collection, query, where, onSnapshot, doc, getDoc, getDocs, updateDoc, setDoc } from 'firebase/firestore';
 
@@ -24,8 +24,11 @@ const TIMEOUT_MS = 10 * 60 * 1000;
 const log = (...a) => console.log(new Date().toLocaleTimeString('de-DE'), ...a);
 
 // ---------- 1. Firebase-Config aus der App lesen (js/config.js) ----------
+// Installiert (Hintergrund): config.js liegt neben dem Helfer. Sonst: im Repo unter ../js/config.js
 async function loadConfig() {
-  const src = fs.readFileSync(path.join(HERE, '..', 'js', 'config.js'), 'utf8');
+  const file = [path.join(HERE, 'config.js'), path.join(HERE, '..', 'js', 'config.js')].find((f) => fs.existsSync(f));
+  if (!file) throw new Error('js/config.js nicht gefunden.');
+  const src = fs.readFileSync(file, 'utf8');
   const mod = await import('data:text/javascript,' + encodeURIComponent(src));
   if (!mod.firebaseConfig) throw new Error('In js/config.js ist kein firebaseConfig eingetragen.');
   return mod.firebaseConfig;
@@ -34,6 +37,7 @@ async function loadConfig() {
 // ---------- 2. Zugangsdaten (beim ersten Start abfragen) ----------
 async function loadCredentials() {
   if (fs.existsSync(CRED_FILE)) return JSON.parse(fs.readFileSync(CRED_FILE, 'utf8'));
+  if (!process.stdin.isTTY) throw new Error('Keine Zugangsdaten gespeichert. Bitte install.command nochmal doppelklicken.');
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   console.log('\nErster Start: Melde dich mit deinem Tasks-Konto an (dasselbe wie in der App).');
   const email = (await rl.question('E-Mail: ')).trim();
@@ -85,26 +89,32 @@ function runClaude(claudePath, prompt, { web }) {
   });
 }
 
-// ---------- 5. Hauptprogramm ----------
-async function main() {
-  console.log('┌──────────────────────────────────────┐');
-  console.log('│  Tasks · Claude-Helfer               │');
-  console.log('│  Fenster offen lassen. Beenden: ⌃C   │');
-  console.log('└──────────────────────────────────────┘');
-  const claudePath = findClaude();
-  log('Claude Code gefunden:', claudePath);
+// ---------- 5. Anmelden bei Firebase ----------
+const AUTH_ERRORS = /invalid-credential|wrong-password|user-not-found|invalid-email|user-disabled/;
+async function login() {
   const config = await loadConfig();
   const creds = await loadCredentials();
-
-  const app = initializeApp(config);
-  const auth = getAuth(app);
-  let user;
+  const app = getApps()[0] || initializeApp(config);
   try {
-    user = (await signInWithEmailAndPassword(auth, creds.email, creds.password)).user;
+    const user = (await signInWithEmailAndPassword(getAuth(app), creds.email, creds.password)).user;
+    return { app, user };
   } catch (e) {
-    fs.rmSync(CRED_FILE, { force: true });
-    throw new Error(`Anmeldung fehlgeschlagen (${e.code || e.message}). Zugangsdaten gelöscht, beim nächsten Start neu eingeben.`);
+    // Nur bei falschem Passwort löschen. Bei Netzwerkfehlern (z. B. direkt nach dem Aufwachen)
+    // behalten: der Hintergrunddienst startet dann einfach neu.
+    if (AUTH_ERRORS.test(e.code || '')) {
+      fs.rmSync(CRED_FILE, { force: true });
+      throw Object.assign(new Error(`Anmeldung fehlgeschlagen (${e.code}). Zugangsdaten gelöscht. install.command nochmal starten.`), { badCredentials: true });
+    }
+    throw new Error(`Anmeldung gerade nicht möglich (${e.code || e.message}). Neuer Versuch gleich.`);
   }
+}
+
+// ---------- 6. Hauptprogramm ----------
+async function main() {
+  log('Tasks · Claude-Helfer startet');
+  const claudePath = findClaude();
+  log('Claude Code gefunden:', claudePath);
+  const { app, user } = await login();
   log('Angemeldet als', user.email);
   const db = getFirestore(app);
   const base = ['users', user.uid];
@@ -154,14 +164,25 @@ async function main() {
   }
 }
 
-// "npm run check": prüft nur, ob Claude Code gefunden wird und antwortet
+// "--check": prüft, ob Claude Code gefunden wird und antwortet
 async function selfTest() {
   const claudePath = findClaude();
   log('Claude Code gefunden:', claudePath);
   log('Frage Claude kurz an …');
   const answer = await runClaude(claudePath, 'Antworte nur mit dem Wort: BEREIT', { web: false });
   log('Antwort:', answer);
-  log(/BEREIT/i.test(answer) ? '✓ Alles bereit.' : 'Antwort unerwartet, aber Claude Code läuft.');
+  log(/BEREIT/i.test(answer) ? '✓ Claude Code ist bereit.' : 'Antwort unerwartet, aber Claude Code läuft.');
 }
 
-(process.argv.includes('--check') ? selfTest() : main()).catch((e) => { console.error('\n✗', e.message, '\n'); process.exit(1); });
+// "--setup" (vom Installer): Zugangsdaten abfragen, Anmeldung und Claude testen, dann beenden
+async function setup() {
+  for (let i = 0; i < 3; i++) {
+    try { const { user } = await login(); log('✓ Anmeldung klappt:', user.email); break; }
+    catch (e) { if (!e.badCredentials || i === 2) throw e; console.log('✗ E-Mail oder Passwort falsch. Bitte nochmal eingeben.'); }
+  }
+  await selfTest();
+  process.exit(0);
+}
+
+const mode = process.argv.includes('--setup') ? setup : process.argv.includes('--check') ? selfTest : main;
+mode().catch((e) => { console.error('\n✗', e.message, '\n'); process.exit(1); });

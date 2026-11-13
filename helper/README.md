@@ -34,53 +34,42 @@ Das funktioniert auch vom iPhone aus, solange der Helfer auf dem Mac läuft.
 2. Grüner Button **Code → Download ZIP**.
 3. ZIP entpacken und den Ordner `tasks-main` z. B. nach **Dokumente** verschieben.
 
-> Wichtig: Der Helfer braucht den ganzen Ordner, weil er die Firebase-Einstellungen aus `js/config.js` liest.
+> Wichtig: Den ganzen Ordner entpacken, nicht nur `helper/`. Der Installer braucht `js/config.js`.
 
-### 4. Testen
-Im Terminal (Pfad ggf. anpassen):
-```
-cd ~/Documents/tasks-main/helper
-npm install
-npm run check
-```
-Erwartet: `✓ Alles bereit.`
-- Kommt „Claude Code nicht gefunden“ → Schritt 2 wiederholen.
-- Kommt „nicht angemeldet“ → `claude` im Terminal starten und anmelden.
+### 4. Installieren (Doppelklick)
+1. Im Finder den Ordner `tasks-main/helper` öffnen.
+2. **`install.command` doppelklicken.**
+   - Sagt macOS „kann nicht geöffnet werden“: **Rechtsklick → Öffnen → Öffnen**.
+3. Das Fenster fragt einmal nach **E-Mail und Passwort**. Das sind dieselben wie in der App (Einstellungen → Sync).
+4. Es testet die Anmeldung und Claude und richtet dann den Hintergrunddienst ein. Am Ende steht **„✓ Fertig!“**. Danach kannst du das Fenster schließen.
+5. macOS zeigt evtl. die Mitteilung „Hintergrundobjekt hinzugefügt: node“. Das ist der Helfer, einfach erlauben.
+
+In der App unter **Einstellungen → Claude** steht jetzt **🟢 Online**.
 
 ---
 
-## Starten (jedes Mal)
-
-**Variante A:** Im Finder `helper/start.command` doppelklicken.
-- Beim ersten Mal sagt macOS evtl. „kann nicht geöffnet werden“. Dann: **Rechtsklick → Öffnen → Öffnen**. Danach geht Doppelklick normal.
-
-**Variante B:** Im Terminal:
-```
-cd ~/Documents/tasks-main/helper
-npm start
-```
-
-Beim **ersten Start** fragt er nach E-Mail und Passwort. Das sind dieselben wie in der App (Einstellungen → Sync).
-
-Danach steht da `Warte auf Aufträge …`. In der App unter **Einstellungen → Claude** steht jetzt **🟢 Online**.
-
-**Regeln:**
-- Terminal-Fenster offen lassen. Beenden mit ⌃C.
-- Der Mac muss wach sein. Schläft er, warten die Aufträge und laufen los, sobald der Helfer wieder läuft.
+## Wie es danach läuft
+- **Kein Fenster, nichts zu tun.** Der Helfer startet bei jedem Login automatisch und startet sich selbst neu, falls er abstürzt.
+- **Mac zugeklappt oder im Ruhezustand:** Aufträge (z. B. vom iPhone) warten in Firebase und laufen los, sobald der Mac wieder wach ist.
 - Ein Auftrag nach dem anderen, max. 10 Min pro Auftrag.
 
----
+| Datei | Wofür |
+|---|---|
+| `install.command` | Installieren oder updaten |
+| `status.command` | Läuft er? Letzte Meldungen anzeigen |
+| `uninstall.command` | Komplett entfernen (inkl. gespeichertem Passwort) |
+| `start.command` | Nur zum Ausprobieren im Terminal-Fenster |
+
+Das Protokoll liegt unter `~/Library/Logs/tasks-helper.log`.
 
 ## Wenn etwas nicht klappt
-| Meldung | Lösung |
+| Problem | Lösung |
 |---|---|
-| `Anmeldung fehlgeschlagen` | E-Mail/Passwort falsch. Beim nächsten Start neu eingeben. |
+| `Anmeldung fehlgeschlagen` | E-Mail/Passwort falsch. `install.command` nochmal doppelklicken. |
 | `Missing or insufficient permissions` | Firestore-Regeln prüfen (FIREBASE.md, Schritt 4/8). |
-| App zeigt „Offline“, obwohl der Helfer läuft | 1 Min warten. Sonst Terminal-Meldungen als Screenshot an Claude. |
-| Aufgabe bleibt auf „Claude arbeitet…“ | Helfer neu starten. Hängende Aufträge werden automatisch neu gestartet. |
+| App zeigt „Offline“ | `status.command` doppelklicken und Screenshot an Claude schicken. |
+| „Claude Code ist nicht angemeldet“ | Im Terminal `claude` starten, anmelden, dann `install.command` nochmal. |
+| Aufgabe bleibt auf „Claude arbeitet…“ | Mac neu starten oder `install.command` nochmal. Hängende Aufträge werden automatisch neu gestartet. |
 
 ## Updates
-Wenn sich am Helfer etwas ändert: Schritt 3 wiederholen (neue ZIP) und den alten Ordner ersetzen. Deine Anmeldung bleibt erhalten.
-
-## Später möglich
-- Automatischer Start beim Hochfahren des Macs (launchd).
+Wenn sich am Helfer etwas ändert: Schritt 3 wiederholen (neue ZIP, alten Ordner ersetzen) und `install.command` nochmal doppelklicken. Deine Anmeldung bleibt erhalten.
