@@ -477,8 +477,12 @@ export function viewSettings() {
         ${keysList(true)}
         <button class="btn small" data-action="keys-reset" style="margin-top:10px">Standard wiederherstellen</button>
       </div>
+      <div class="panel"><h4>Neu anfangen</h4>
+        <p class="muted" style="margin-top:0;font-size:13px">Löscht alle Aufgaben mit ihren Zeiteinträgen, Anhängen und Claude-Aufträgen, auf allen Geräten. Projekte und Sperrzeiten bleiben. Vorher wird automatisch ein Backup heruntergeladen.</p>
+        <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
+      </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.4.2</p>
+      <p class="mono muted">Version 0.4.3</p>
     </div>`;
 }
 

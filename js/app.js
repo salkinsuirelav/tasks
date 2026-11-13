@@ -374,6 +374,18 @@ const A = {
     a.href = URL.createObjectURL(blob); a.download = `tasks-backup-${today()}.json`; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   },
+  'wipe-tasks': () => {
+    const n = M.tasks().length;
+    if (!n) return toast('Es gibt keine Aufgaben.');
+    if (!confirm(`Wirklich alle ${n} Aufgaben löschen? Projekte und Sperrzeiten bleiben. Vorher wird ein Backup heruntergeladen.`)) return;
+    A.export();
+    store.batch(() => {
+      if (M.running()) M.stopTimer();
+      ['tasks', 'entries', 'files', 'jobs'].forEach((c) => Object.keys(store.state[c]).forEach((id) => store.remove(c, id)));
+    });
+    ui.openTask = null; renderSheet();
+    toast(`${n} Aufgaben gelöscht. Backup liegt in deinen Downloads.`);
+  },
   'seed-demo': () => { M.seedDemo(); toast('Beispieldaten geladen.'); },
   'close-modal': () => { ui.modal = null; renderModal(); },
   'close-modal-go': (el) => { ui.modal = null; renderModal(); location.hash = el.getAttribute('href'); },
