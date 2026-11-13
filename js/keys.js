@@ -15,6 +15,7 @@ export const SHORTCUTS = [
   { id: 'side', label: 'Offene Aufgaben im Kalender ein/aus', key: 'o' },
   { id: 'autoplan', label: 'Auto-Plan', key: 'a' },
   { id: 'claude', label: 'Mit Claude planen', key: 'c' },
+  { id: 'weekend', label: 'Kalender: Wochenende ein/aus', key: 'w' },
   { id: 'theme', label: 'Hell/Dunkel wechseln', key: 'd' },
   { id: 'done', label: 'Offene Aufgabe erledigen', key: 'e' },
   { id: 'focus', label: 'Offene Aufgabe: Fokus-Modus', key: 'f' },

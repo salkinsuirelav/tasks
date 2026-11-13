@@ -207,7 +207,7 @@ function layoutLanes(items) {
 export function viewCalendar() {
   const s = store.settings;
   const mobile = isMobile();
-  const days = mobile ? [ui.calDay] : Array.from({ length: 7 }, (_, i) => addDays(ui.calStart, i));
+  const days = mobile ? [ui.calDay] : Array.from({ length: s.calWeekdays ? 5 : 7 }, (_, i) => addDays(ui.calStart, i));
   const t0 = today();
   const startMin = s.dayStart * 60, endMin = s.dayEnd * 60;
   const px = (min) => ((min - startMin) * HOUR) / 60;
@@ -268,6 +268,10 @@ export function viewCalendar() {
   const step = mobile ? 1 : 7;
   const actions = `
     <button class="icon-btn" data-action="toggle-side" title="Offene Aufgaben">${icon('sidebar')}</button>
+    <div class="tabs" title="Wochenende ein-/ausblenden (W)">
+      <button class="${s.calWeekdays ? 'on' : ''}" data-action="cal-weekdays" data-v="1">Mo–Fr</button>
+      <button class="${s.calWeekdays ? '' : 'on'}" data-action="cal-weekdays" data-v="0">7 Tage</button>
+    </div>
     <button class="icon-btn" data-action="cal-nav" data-d="-${step}">${icon('left')}</button>
     <button class="btn small" data-action="cal-nav" data-d="0">Heute</button>
     <button class="icon-btn" data-action="cal-nav" data-d="${step}">${icon('right')}</button>
@@ -482,7 +486,7 @@ export function viewSettings() {
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.4.3</p>
+      <p class="mono muted">Version 0.4.4</p>
     </div>`;
 }
 

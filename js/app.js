@@ -179,6 +179,14 @@ function fallbackCopy(text) {
   ta.value = text; document.body.append(ta); ta.select(); document.execCommand('copy'); ta.remove();
 }
 
+// Nur Wochentage: Sa/So auf dem iPhone überspringen
+function skipWeekend(date, dir) {
+  if (!store.settings.calWeekdays) return date;
+  let d = date;
+  while ([0, 6].includes(new Date(d + 'T12:00').getDay())) d = addDays(d, dir);
+  return d;
+}
+
 // ---------- Klick-Aktionen ----------
 const A = {
   go: (el) => { location.hash = el.dataset.href; },
@@ -208,9 +216,13 @@ const A = {
   'plan-nav': (el) => { const d = +el.dataset.d; ui.planStart = d ? addDays(ui.planStart, d) : today(); renderMain(); },
   'cal-nav': (el) => {
     const d = +el.dataset.d;
-    if (isMobile()) ui.calDay = d ? addDays(ui.calDay, d) : today();
+    if (isMobile()) ui.calDay = skipWeekend(d ? addDays(ui.calDay, d) : today(), d < 0 ? -1 : 1);
     else ui.calStart = d ? addDays(ui.calStart, d) : weekStart(today());
     renderMain();
+  },
+  'cal-weekdays': (el) => {
+    store.saveSettings({ calWeekdays: el.dataset.v === '1' });
+    if (isMobile()) { ui.calDay = skipWeekend(ui.calDay, 1); renderMain(); }
   },
   'review-nav': (el) => { const d = +el.dataset.d; ui.reviewWeek = d ? addDays(ui.reviewWeek, d) : weekStart(today()); renderMain(); },
   'toggle-nav': () => store.saveSettings({ navCollapsed: !store.settings.navCollapsed }),
@@ -466,6 +478,7 @@ function shortcut(e) {
     autoplan: () => A['auto-plan'](),
     claude: () => A['claude-plan'](),
     theme: () => store.saveSettings({ theme: isDark() ? 'light' : 'dark' }),
+    weekend: () => view === 'calendar' && A['cal-weekdays']({ dataset: { v: store.settings.calWeekdays ? '0' : '1' } }),
     done: () => ui.openTask && A.toggle({ dataset: { id: ui.openTask } }),
     focus: () => ui.openTask && A.focus({ dataset: { id: ui.openTask } }),
     help: () => { ui.modal = { type: 'keys' }; renderModal(); },
