@@ -77,15 +77,38 @@ export function blocksOn(date) {
   });
 }
 
+// Alles, was an einem Tag Zeit belegt, als Minuten-Abschnitte [s, e] (0–1440).
+// Über Mitternacht: Termine/Sperrzeiten vom Vortag laufen ab 00:00 weiter (cont), heutige enden um 24:00 (spill).
+const DAY = 24 * 60;
+export function segmentsOn(date) {
+  const prev = addDays(date, -1);
+  const out = [];
+  for (const t of tasks()) {
+    if (!t.time) continue;
+    const s = toMin(t.time), e = s + (t.duration || 30);
+    if (t.date === date) out.push({ kind: 'task', t, s, e: Math.min(e, DAY), spill: e > DAY });
+    else if (t.date === prev && e > DAY) out.push({ kind: 'task', t, s: 0, e: e - DAY, cont: true });
+  }
+  for (const b of blocksOn(date)) {
+    const s = toMin(b.start), e = toMin(b.end);
+    out.push(e > s ? { kind: 'block', b, s, e } : { kind: 'block', b, s, e: DAY, spill: true });
+  }
+  for (const b of blocksOn(prev)) {
+    const s = toMin(b.start), e = toMin(b.end);
+    if (e <= s && e > 0) out.push({ kind: 'block', b, s: 0, e, cont: true });
+  }
+  return out;
+}
+
 // Freie Zeitfenster eines Tages (in Minuten), ohne Sperrzeiten und bereits geplante Tasks
 export function freeSlots(date, settings, extraBusy = []) {
   let start = settings.dayStart * 60;
   const end = settings.dayEnd * 60;
   if (date === today()) start = Math.max(start, Math.ceil(nowMin() / 15) * 15);
   if (date < today()) return [];
+  if (settings.planWeekends === false && weekday(date) >= 5) return []; // Einstellung: am Wochenende nichts einplanen
   const busy = [
-    ...blocksOn(date).map((b) => [toMin(b.start), toMin(b.end)]),
-    ...tasks().filter((t) => t.date === date && t.time && t.status !== 'done').map((t) => [toMin(t.time), toMin(t.time) + (t.duration || 30)]),
+    ...segmentsOn(date).filter((x) => x.kind === 'block' || x.t.status !== 'done').map((x) => [x.s, x.e]),
     ...extraBusy,
   ].sort((a, b) => a[0] - b[0]);
   const free = [];
@@ -112,7 +135,7 @@ export function autoPlan(settings, days = 7) {
     const dur = t.duration || 30;
     const range = t.date ? [t.date] : Array.from({ length: days }, (_, i) => addDays(t0, i));
     for (const d of range) {
-      const slot = freeSlots(d, settings, extra[d] || []).find(([s, e]) => e - s >= dur);
+      const slot = freeSlots(d, t.date ? { ...settings, planWeekends: true } : settings, extra[d] || []).find(([s, e]) => e - s >= dur);
       if (slot) {
         undo.push({ id: t.id, date: t.date, time: t.time });
         placed.push({ id: t.id, date: d, time: fromMin(slot[0]) });
@@ -140,7 +163,7 @@ export function claudePlanPrompt(settings, days = 7) {
       fester_tag: t.date || null, notizen: t.notes ? t.notes.slice(0, 200) : undefined,
     }));
   const slots = Array.from({ length: days }, (_, i) => addDays(t0, i)).map((d) => ({
-    tag: d, frei: freeSlots(d, settings).map(([s, e]) => `${fromMin(s)}-${fromMin(e)}`),
+    tag: d, frei: freeSlots(d, list.some((t) => t.fester_tag === d) ? { ...settings, planWeekends: true } : settings).map(([s, e]) => `${fromMin(s)}-${fromMin(e)}`),
   }));
   return `Du bist mein Planungsassistent. Plane meine offenen Aufgaben in meine freien Zeitfenster der nächsten ${days} Tage.
 

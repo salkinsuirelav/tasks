@@ -235,10 +235,7 @@ export function viewCalendar() {
   for (let h = s.dayStart; h < s.dayEnd; h++) hours.push(`<div>${String(h).padStart(2, '0')}:00</div>`);
 
   const dayCol = (d) => {
-    const items = [
-      ...M.tasks().filter((t) => t.date === d && t.time).map((t) => ({ kind: 'task', t, s: toMin(t.time), e: toMin(t.time) + (t.duration || 30) })),
-      ...M.blocksOn(d).map((b) => ({ kind: 'block', b, s: toMin(b.start), e: toMin(b.end) })),
-    ];
+    const items = M.segmentsOn(d);
     layoutLanes(items);
     const evs = items.map((it) => {
       const top = Math.max(0, px(it.s));
@@ -247,15 +244,15 @@ export function viewCalendar() {
       const pos = `top:${top}px;height:${h}px;left:calc(${it.lane * w}% + 3px);right:auto;width:calc(${w}% - 6px)`;
       if (it.kind === 'block') {
         return `<div class="ev block" style="${pos}" data-action="edit-block" data-id="${it.b.id}">
-          <div class="tm">${it.b.start}–${it.b.end}</div>${icon('lock')} ${esc(it.b.label || 'Gesperrt')}</div>`;
+          <div class="tm">${it.cont ? '↳ ' : ''}${it.b.start}–${it.b.end}</div>${icon('lock')} ${esc(it.b.label || 'Gesperrt')}</div>`;
       }
       const t = it.t, p = M.project(t.projectId);
       return `<div class="ev ${t.status === 'done' ? 'done' : ''} ${h < 36 ? 'short' : ''}" style="${pos};border-left-color:${p?.color || 'var(--accent)'}"
         data-action="open-task" data-id="${t.id}" draggable="true" data-drag="task">
-        <div class="tm">${t.time}–${fromMin(it.e)}${t.priority === 'frog' ? ' 🐸' : ''}</div>${esc(t.title)}</div>`;
+        <div class="tm">${it.cont ? '↳ ' : ''}${t.time}–${fromMin((toMin(t.time) + (t.duration || 30)) % (24 * 60))}${t.priority === 'frog' ? ' 🐸' : ''}</div>${esc(t.title)}</div>`;
     }).join('');
     const sel = ui.modal?.type === 'slot' && ui.modal.date === d ? { s: toMin(ui.modal.time), e: toMin(ui.modal.time) + ui.modal.dur } : ui.select?.date === d ? ui.select : null;
-    const ghost = sel ? `<div class="ev ghost ${px(sel.e) - px(sel.s) < 36 ? 'short' : ''}" style="top:${px(sel.s)}px;height:${Math.max(18, px(sel.e) - px(sel.s) - 2)}px;left:3px;right:3px"><div class="tm">${fromMin(sel.s)}–${fromMin(Math.min(sel.e, 24 * 60 - 1))}</div>${esc(ui.modal?.title || '(Neu)')}</div>` : '';
+    const ghost = sel ? `<div class="ev ghost ${px(sel.e) - px(sel.s) < 36 ? 'short' : ''}" style="top:${px(sel.s)}px;height:${Math.max(18, px(Math.min(sel.e, 24 * 60)) - px(sel.s) - 2)}px;left:3px;right:3px"><div class="tm">${fromMin(sel.s)}–${fromMin(sel.e % (24 * 60))}</div>${esc(ui.modal?.title || '(Neu)')}</div>` : '';
     const nowLine = d === t0 && nowMin() >= startMin && nowMin() <= endMin ? `<div class="now-line" style="top:${px(nowMin())}px"></div>` : '';
     return `<div class="cal-day ${d === t0 ? 'today' : ''}" data-drop-cal="${d}" data-action="cal-slot" data-date="${d}" style="height:${(s.dayEnd - s.dayStart) * HOUR}px">${evs}${ghost}${nowLine}</div>`;
   };
@@ -465,6 +462,8 @@ export function viewSettings() {
           <div class="field"><label>Tag endet</label><select data-setting="dayEnd">${hourOpts(13, 24, s.dayEnd)}</select></div>
           <div class="field"><label>Wochenziel (Stunden)</label><input type="number" min="1" max="100" data-setting="weeklyGoal" value="${s.weeklyGoal}"></div>
         </div>
+        <div class="field" style="margin:4px 0 0"><label>Am Wochenende einplanen (Auto-Plan + Claude)</label>
+          <div class="seg"><button class="${s.planWeekends !== false ? 'on' : ''}" data-action="plan-weekends" data-v="1">Ja</button><button class="${s.planWeekends === false ? 'on' : ''}" data-action="plan-weekends" data-v="0">Nein, nur Mo–Fr</button></div></div>
       </div>
       <div class="panel"><h4>Backup</h4>
         <p class="muted" style="margin-top:0">Lädt alle Daten als JSON-Datei herunter. Am besten ab und zu in iCloud Drive speichern.</p>
@@ -486,7 +485,7 @@ export function viewSettings() {
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.4.4</p>
+      <p class="mono muted">Version 0.4.5</p>
     </div>`;
 }
 
@@ -667,7 +666,7 @@ export function modalHTML(m) {
     const b = m.block;
     inner = `
       <h2>${icon('lock')} Zeit sperren</h2>
-      <p>Gesperrte Zeiten werden beim Planen freigehalten (z. B. Gym, Essen, Termine).</p>
+      <p>Gesperrte Zeiten werden beim Planen freigehalten (z. B. Gym, Essen, Schlafen). Liegt „Bis“ vor „Von“, geht die Sperrzeit über Mitternacht.</p>
       <div class="field"><label>Bezeichnung</label><input id="b-label" value="${esc(b.label || '')}" placeholder="z. B. Gym"></div>
       <div class="inline">
         <div class="field"><label>Datum</label><input type="date" id="b-date" value="${b.date}"></div>
@@ -681,7 +680,7 @@ export function modalHTML(m) {
         <button class="btn" data-action="close-modal">Abbrechen</button><button class="btn primary" data-action="save-block">Speichern</button></div>`;
   } else if (m.type === 'slot') {
     inner = `
-      <h2>${dayLabel(m.date)}, ${m.time}–${fromMin(Math.min(toMin(m.time) + m.dur, 24 * 60 - 1))}</h2>
+      <h2>${dayLabel(m.date)}, ${m.time}–${fromMin((toMin(m.time) + m.dur) % (24 * 60))}${toMin(m.time) + m.dur > 24 * 60 ? ' <span class="muted" style="font-size:14px">(nächster Tag)</span>' : ''}</h2>
       <p>Was soll hier passieren?</p>
       <div class="field"><input id="slot-title" data-key="slot-title" placeholder="Titel (Aufgabe oder Sperrzeit)" value="${esc(m.title || '')}" autofocus></div>
       <div class="field"><label>Dauer</label><select id="slot-dur">${[...new Set([15, 30, 45, 60, 90, 120, 180, m.dur])].sort((a, b) => a - b).map((d) => `<option value="${d}" ${d === m.dur ? 'selected' : ''}>${fmtMinutes(d)}</option>`).join('')}</select></div>

@@ -220,6 +220,7 @@ const A = {
     else ui.calStart = d ? addDays(ui.calStart, d) : weekStart(today());
     renderMain();
   },
+  'plan-weekends': (el) => store.saveSettings({ planWeekends: el.dataset.v === '1' }),
   'cal-weekdays': (el) => {
     store.saveSettings({ calWeekdays: el.dataset.v === '1' });
     if (isMobile()) { ui.calDay = skipWeekend(ui.calDay, 1); renderMain(); }
@@ -253,7 +254,7 @@ const A = {
   'save-block': () => {
     const b = ui.modal.block;
     const v = { date: $('#b-date').value, start: $('#b-start').value, end: $('#b-end').value, label: $('#b-label').value.trim(), repeat: $('#b-repeat').value };
-    if (!v.date || !v.start || !v.end || toMin(v.end) <= toMin(v.start)) return toast('Bitte Datum sowie Start vor Ende angeben.');
+    if (!v.date || !v.start || !v.end || v.end === v.start) return toast('Bitte Datum, Start und Ende angeben.');
     store.put('blocks', { ...b, ...v });
     ui.modal = null; renderModal();
   },
@@ -272,7 +273,7 @@ const A = {
   },
   'slot-block': () => {
     const m = ui.modal;
-    store.put('blocks', { date: m.date, start: m.time, end: fromMin(Math.min(toMin(m.time) + m.dur, 24 * 60 - 1)), label: $('#slot-title').value.trim() || 'Gesperrt', repeat: '' });
+    store.put('blocks', { date: m.date, start: m.time, end: fromMin((toMin(m.time) + m.dur) % (24 * 60)), label: $('#slot-title').value.trim() || 'Gesperrt', repeat: '' });
     ui.modal = null; renderModal();
   },
 
