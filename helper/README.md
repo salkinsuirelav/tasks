@@ -39,7 +39,12 @@ Das funktioniert auch vom iPhone aus, solange der Helfer auf dem Mac läuft.
 ### 4. Installieren (Doppelklick)
 1. Im Finder den Ordner `tasks-main/helper` öffnen.
 2. **`install.command` doppelklicken.**
-   - Sagt macOS „kann nicht geöffnet werden“: **Rechtsklick → Öffnen → Öffnen**.
+   - Kommt **„install.command Not Opened / Apple could not verify…“**: Das ist normal für Dateien aus dem Internet ohne Apple-Signatur. **Done** klicken, dann einmal im Terminal die Sperre für den ganzen Ordner aufheben:
+     ```
+     xattr -dr com.apple.quarantine ~/Documents/tasks-main
+     ```
+     (Pfad anpassen, falls der Ordner woanders liegt. Tipp: `xattr -dr com.apple.quarantine ` tippen, mit Leerzeichen am Ende, dann den Ordner ins Terminal ziehen und Enter drücken.) Danach geht der Doppelklick auf alle `.command`-Dateien.
+   - Alternative: **Systemeinstellungen → Datenschutz & Sicherheit** → ganz nach unten → bei „install.command“ auf **Trotzdem öffnen**.
 3. Das Fenster fragt einmal nach **E-Mail und Passwort**. Das sind dieselben wie in der App (Einstellungen → Sync).
 4. Es testet die Anmeldung und Claude und richtet dann den Hintergrunddienst ein. Am Ende steht **„✓ Fertig!“**. Danach kannst du das Fenster schließen.
 5. macOS zeigt evtl. die Mitteilung „Hintergrundobjekt hinzugefügt: node“. Das ist der Helfer, einfach erlauben.
