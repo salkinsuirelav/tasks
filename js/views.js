@@ -243,13 +243,16 @@ export function viewCalendar() {
       const w = 100 / it.lanes;
       const pos = `top:${top}px;height:${h}px;left:calc(${it.lane * w}% + 3px);right:auto;width:calc(${w}% - 6px)`;
       if (it.kind === 'block') {
-        return `<div class="ev block" style="${pos}" data-action="edit-block" data-id="${it.b.id}">
-          <div class="tm">${it.cont ? '↳ ' : ''}${it.b.start}–${it.b.end}</div>${icon('lock')} ${esc(it.b.label || 'Gesperrt')}</div>`;
+        const tm = `<span class="tm">${it.cont ? '↳ ' : ''}${it.b.start}–${it.b.end}</span>`, name = `<span class="nm">${icon('lock')} ${esc(it.b.label || 'Gesperrt')}</span>`;
+        // Kurze Einträge: Name zuerst in einer Zeile, damit er immer lesbar ist
+        return `<div class="ev block ${h < 36 ? 'short' : ''}" style="${pos}" data-action="edit-block" data-id="${it.b.id}" title="${esc(it.b.label || 'Gesperrt')} ${it.b.start}–${it.b.end}">
+          ${h < 36 ? `${name} ${tm}` : `${tm}${name}`}</div>`;
       }
       const t = it.t, p = M.project(t.projectId);
       return `<div class="ev ${t.status === 'done' ? 'done' : ''} ${h < 36 ? 'short' : ''}" style="${pos};border-left-color:${p?.color || 'var(--accent)'}"
-        data-action="open-task" data-id="${t.id}" draggable="true" data-drag="task">
-        <div class="tm">${it.cont ? '↳ ' : ''}${t.time}–${fromMin((toMin(t.time) + (t.duration || 30)) % (24 * 60))}${t.priority === 'frog' ? ' 🐸' : ''}</div>${esc(t.title)}</div>`;
+        data-action="open-task" data-id="${t.id}" draggable="true" data-drag="task" title="${esc(t.title)}">
+        ${(() => { const tm = `<span class="tm">${it.cont ? '↳ ' : ''}${t.time}–${fromMin((toMin(t.time) + (t.duration || 30)) % (24 * 60))}${t.priority === 'frog' ? ' 🐸' : ''}</span>`, nm = `<span class="nm">${esc(t.title)}</span>`;
+          return h < 36 ? `${nm} ${tm}` : `${tm}${nm}`; })()}</div>`;
     }).join('');
     const sel = ui.modal?.type === 'slot' && ui.modal.date === d ? { s: toMin(ui.modal.time), e: toMin(ui.modal.time) + ui.modal.dur } : ui.select?.date === d ? ui.select : null;
     const ghost = sel ? `<div class="ev ghost ${px(sel.e) - px(sel.s) < 36 ? 'short' : ''}" style="top:${px(sel.s)}px;height:${Math.max(18, px(Math.min(sel.e, 24 * 60)) - px(sel.s) - 2)}px;left:3px;right:3px"><div class="tm">${fromMin(sel.s)}–${fromMin(sel.e % (24 * 60))}</div>${esc(ui.modal?.title || '(Neu)')}</div>` : '';
@@ -485,7 +488,7 @@ export function viewSettings() {
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.4.5</p>
+      <p class="mono muted">Version 0.4.6</p>
     </div>`;
 }
 
