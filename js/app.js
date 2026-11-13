@@ -262,7 +262,8 @@ const A = {
   'cal-slot': (el, e) => {
     if (suppressSlotClick) { suppressSlotClick = false; return; }
     const min = slotMin(el, e.clientY, Math.floor);
-    ui.modal = { type: 'slot', date: el.dataset.date, time: fromMin(min), dur: 60, title: '' };
+    const [date, m] = norm(el.dataset.date, min);
+    ui.modal = { type: 'slot', date, time: fromMin(m), dur: 60, title: '', colDate: el.dataset.date, colMin: min };
     renderModal();
   },
   'slot-task': () => {
@@ -489,6 +490,9 @@ function shortcut(e) {
   return true;
 }
 
+// Minuten nach Mitternacht gehören zum nächsten Tag (Kalendertag kann z. B. bis 02:00 gehen)
+const norm = (date, min) => (min >= 24 * 60 ? [addDays(date, 1), min - 24 * 60] : [date, min]);
+
 // ---------- Kalender: Zeitraum mit der Maus aufziehen (wie Google Calendar) ----------
 let suppressSlotClick = false;
 const slotMin = (dayEl, y, round = Math.round) => {
@@ -517,7 +521,8 @@ document.addEventListener('pointerdown', (e) => {
     const sel = ui.select; ui.select = null;
     if (!moved) return; // normaler Klick: macht 'cal-slot'
     suppressSlotClick = true; setTimeout(() => { suppressSlotClick = false; }, 300);
-    ui.modal = { type: 'slot', date, time: fromMin(sel.s), dur: sel.e - sel.s, title: '' };
+    const [d2, m2] = norm(date, sel.s);
+    ui.modal = { type: 'slot', date: d2, time: fromMin(m2), dur: sel.e - sel.s, title: '', colDate: date, colMin: sel.s };
     renderModal();
   };
   document.addEventListener('pointermove', move);
@@ -555,7 +560,8 @@ document.addEventListener('change', async (e) => {
   }
   if (el.dataset.setting) {
     const v = +el.value;
-    if (el.dataset.setting === 'dayEnd' && v <= store.settings.dayStart) return toast('Ende muss nach dem Beginn liegen.');
+    const st = el.dataset.setting === 'dayStart' ? v : store.settings.dayStart, en = el.dataset.setting === 'dayEnd' ? v : store.settings.dayEnd;
+    if ((el.dataset.setting === 'dayEnd' || el.dataset.setting === 'dayStart') && (en <= st || en - 24 > st)) { renderMain(); return toast('Der Tag darf höchstens 24 Stunden lang sein und muss nach dem Beginn enden.'); }
     store.saveSettings({ [el.dataset.setting]: v });
   }
   if (el.hasAttribute('data-import') && el.files[0]) {
@@ -615,8 +621,9 @@ document.addEventListener('drop', (e) => {
   else if (t.dataset.dropCal) {
     const rect = t.getBoundingClientRect();
     let min = store.settings.dayStart * 60 + Math.round(((((e.clientY - rect.top) / HOUR) * 60) - ui.drag.offsetMin) / 15) * 15;
-    min = Math.max(0, Math.min(min, 24 * 60 - 15));
-    store.patch('tasks', id, { date: t.dataset.dropCal, time: fromMin(min) });
+    min = Math.max(0, Math.min(min, store.settings.dayEnd * 60 - 15));
+    const [date, m] = norm(t.dataset.dropCal, min);
+    store.patch('tasks', id, { date, time: fromMin(m) });
   } else if (t.dataset.dropInbox) store.patch('tasks', id, { date: null, time: null });
 });
 document.addEventListener('dragend', () => {

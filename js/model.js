@@ -77,25 +77,25 @@ export function blocksOn(date) {
   });
 }
 
-// Alles, was an einem Tag Zeit belegt, als Minuten-Abschnitte [s, e] (0–1440).
-// Über Mitternacht: Termine/Sperrzeiten vom Vortag laufen ab 00:00 weiter (cont), heutige enden um 24:00 (spill).
+// Alles, was in einem Zeitraum [A, B] (Minuten ab 00:00 des Tages) Zeit belegt.
+// B darf über 1440 liegen (Tag endet z. B. 02:00 am nächsten Morgen). Termine vom Vortag/Folgetag werden mit einbezogen.
+// cont = beginnt vor A (läuft vom Vortag weiter), spill = endet nach B.
 const DAY = 24 * 60;
-export function segmentsOn(date) {
-  const prev = addDays(date, -1);
+export function segmentsOn(date, A = 0, B = DAY) {
   const out = [];
-  for (const t of tasks()) {
-    if (!t.time) continue;
-    const s = toMin(t.time), e = s + (t.duration || 30);
-    if (t.date === date) out.push({ kind: 'task', t, s, e: Math.min(e, DAY), spill: e > DAY });
-    else if (t.date === prev && e > DAY) out.push({ kind: 'task', t, s: 0, e: e - DAY, cont: true });
-  }
-  for (const b of blocksOn(date)) {
-    const s = toMin(b.start), e = toMin(b.end);
-    out.push(e > s ? { kind: 'block', b, s, e } : { kind: 'block', b, s, e: DAY, spill: true });
-  }
-  for (const b of blocksOn(prev)) {
-    const s = toMin(b.start), e = toMin(b.end);
-    if (e <= s && e > 0) out.push({ kind: 'block', b, s: 0, e, cont: true });
+  const push = (kind, x, s, e) => { if (e > A && s < B) out.push({ kind, ...x, s: Math.max(s, A), e: Math.min(e, B), cont: s < A, spill: e > B }); };
+  for (const [d, off] of [[addDays(date, -1), -DAY], [date, 0], [addDays(date, 1), DAY]]) {
+    for (const t of tasks()) {
+      if (t.date !== d || !t.time) continue;
+      const s = toMin(t.time) + off;
+      push('task', { t }, s, s + (t.duration || 30));
+    }
+    for (const b of blocksOn(d)) {
+      const s = toMin(b.start) + off;
+      let e = toMin(b.end) + off;
+      if (e <= s) e += DAY; // über Mitternacht
+      push('block', { b }, s, e);
+    }
   }
   return out;
 }
@@ -103,7 +103,7 @@ export function segmentsOn(date) {
 // Freie Zeitfenster eines Tages (in Minuten), ohne Sperrzeiten und bereits geplante Tasks
 export function freeSlots(date, settings, extraBusy = []) {
   let start = settings.dayStart * 60;
-  const end = settings.dayEnd * 60;
+  const end = Math.min(settings.dayEnd * 60, DAY); // automatisch geplant wird nur bis Mitternacht
   if (date === today()) start = Math.max(start, Math.ceil(nowMin() / 15) * 15);
   if (date < today()) return [];
   if (settings.planWeekends === false && weekday(date) >= 5) return []; // Einstellung: am Wochenende nichts einplanen

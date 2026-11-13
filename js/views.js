@@ -232,10 +232,10 @@ export function viewCalendar() {
     </aside>`;
 
   const hours = [];
-  for (let h = s.dayStart; h < s.dayEnd; h++) hours.push(`<div>${String(h).padStart(2, '0')}:00</div>`);
+  for (let h = s.dayStart; h < s.dayEnd; h++) hours.push(`<div class="${h >= 24 ? 'next' : ''}">${String(h % 24).padStart(2, '0')}:00</div>`);
 
   const dayCol = (d) => {
-    const items = M.segmentsOn(d);
+    const items = M.segmentsOn(d, startMin, endMin);
     layoutLanes(items);
     const evs = items.map((it) => {
       const top = Math.max(0, px(it.s));
@@ -254,10 +254,13 @@ export function viewCalendar() {
         ${(() => { const tm = `<span class="tm">${it.cont ? '↳ ' : ''}${t.time}–${fromMin((toMin(t.time) + (t.duration || 30)) % (24 * 60))}${t.priority === 'frog' ? ' 🐸' : ''}</span>`, nm = `<span class="nm">${esc(t.title)}</span>`;
           return h < 36 ? `${nm} ${tm}` : `${tm}${nm}`; })()}</div>`;
     }).join('');
-    const sel = ui.modal?.type === 'slot' && ui.modal.date === d ? { s: toMin(ui.modal.time), e: toMin(ui.modal.time) + ui.modal.dur } : ui.select?.date === d ? ui.select : null;
-    const ghost = sel ? `<div class="ev ghost ${px(sel.e) - px(sel.s) < 36 ? 'short' : ''}" style="top:${px(sel.s)}px;height:${Math.max(18, px(Math.min(sel.e, 24 * 60)) - px(sel.s) - 2)}px;left:3px;right:3px"><div class="tm">${fromMin(sel.s)}–${fromMin(sel.e % (24 * 60))}</div>${esc(ui.modal?.title || '(Neu)')}</div>` : '';
-    const nowLine = d === t0 && nowMin() >= startMin && nowMin() <= endMin ? `<div class="now-line" style="top:${px(nowMin())}px"></div>` : '';
-    return `<div class="cal-day ${d === t0 ? 'today' : ''}" data-drop-cal="${d}" data-action="cal-slot" data-date="${d}" style="height:${(s.dayEnd - s.dayStart) * HOUR}px">${evs}${ghost}${nowLine}</div>`;
+    const m = ui.modal?.type === 'slot' ? ui.modal : null;
+    const sel = m && (m.colDate || m.date) === d ? { s: m.colMin ?? toMin(m.time), e: (m.colMin ?? toMin(m.time)) + m.dur } : ui.select?.date === d ? ui.select : null;
+    const ghost = sel ? `<div class="ev ghost ${px(sel.e) - px(sel.s) < 36 ? 'short' : ''}" style="top:${px(sel.s)}px;height:${Math.max(18, px(Math.min(sel.e, endMin)) - px(sel.s) - 2)}px;left:3px;right:3px"><div class="tm">${fromMin(sel.s % (24 * 60))}–${fromMin(sel.e % (24 * 60))}</div>${esc(ui.modal?.title || '(Neu)')}</div>` : '';
+    // Jetzt-Linie: heute, oder nach Mitternacht noch in der Spalte von gestern (wenn dein Tag bis in die Nacht geht)
+    const nowAt = d === t0 ? nowMin() : d === addDays(t0, -1) ? nowMin() + 24 * 60 : -1;
+    const nowLine = nowAt >= startMin && nowAt <= endMin ? `<div class="now-line" style="top:${px(nowAt)}px"></div>` : '';
+    return `<div class="cal-day ${d === t0 ? 'today' : ''}" data-drop-cal="${d}" data-action="cal-slot" data-date="${d}" style="height:${(s.dayEnd - s.dayStart) * HOUR}px">${endMin > 24 * 60 ? `<div class="midnight" style="top:${px(24 * 60)}px"></div>` : ''}${evs}${ghost}${nowLine}</div>`;
   };
 
   const header = days.map((d) => {
@@ -449,7 +452,7 @@ export function viewSettings() {
         <div class="inline"><input readonly value="${esc(sy.user.uid)}" class="mono"><button class="btn small" style="flex:none" data-action="copy" data-text="${esc(sy.user.uid)}">Kopieren</button></div></div>
       <button class="btn" data-action="sign-out">Abmelden</button>`;
   }
-  const hourOpts = (from, to, sel) => Array.from({ length: to - from + 1 }, (_, i) => from + i).map((h) => `<option value="${h}" ${h === sel ? 'selected' : ''}>${String(h).padStart(2, '0')}:00</option>`).join('');
+  const hourOpts = (from, to, sel) => Array.from({ length: to - from + 1 }, (_, i) => from + i).map((h) => `<option value="${h}" ${h === sel ? 'selected' : ''}>${String(h % 24).padStart(2, '0')}:00${h > 24 ? ' (nächster Tag)' : ''}</option>`).join('');
   return `
     ${head('Einstellungen')}
     <div class="settings">
@@ -462,7 +465,7 @@ export function viewSettings() {
       <div class="panel"><h4>Planung</h4>
         <div class="inline">
           <div class="field"><label>Tag beginnt</label><select data-setting="dayStart">${hourOpts(0, 12, s.dayStart)}</select></div>
-          <div class="field"><label>Tag endet</label><select data-setting="dayEnd">${hourOpts(13, 24, s.dayEnd)}</select></div>
+          <div class="field"><label>Tag endet</label><select data-setting="dayEnd">${hourOpts(13, 30, s.dayEnd)}</select></div>
           <div class="field"><label>Wochenziel (Stunden)</label><input type="number" min="1" max="100" data-setting="weeklyGoal" value="${s.weeklyGoal}"></div>
         </div>
         <div class="field" style="margin:4px 0 0"><label>Am Wochenende einplanen (Auto-Plan + Claude)</label>
@@ -488,7 +491,7 @@ export function viewSettings() {
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.4.6</p>
+      <p class="mono muted">Version 0.4.7</p>
     </div>`;
 }
 

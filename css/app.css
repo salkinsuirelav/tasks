@@ -205,6 +205,8 @@ main.full { padding: 0; overflow: hidden; display: flex; flex-direction: column;
 .cal-header .dh.today b, .cal-header .dh.today .n { color: var(--now); }
 .cal-header .dh .h { display: block; font-family: var(--mono); font-size: 11px; color: var(--faint); }
 .cal-scroll { flex: 1; overflow-y: auto; display: flex; position: relative; }
+.midnight { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--accent); opacity: .5; pointer-events: none; }
+.cal-times div.next { color: var(--accent); }
 .cal-times div { height: var(--hour); font-family: var(--mono); font-size: 11px; color: var(--faint); text-align: right; padding-right: 8px; transform: translateY(-7px); }
 .cal-day {
   flex: 1; position: relative; border-left: 1px solid var(--line-soft); cursor: copy; user-select: none; -webkit-user-select: none;
