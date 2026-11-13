@@ -9,10 +9,10 @@ import { uid } from './util.js';
 const KEY = 'taskapp-state-v1';
 const PENDING_KEY = 'taskapp-pending-v1';
 const FILES_KEY = 'taskapp-files-v1';
-const COLLECTIONS = ['tasks', 'projects', 'entries', 'blocks', 'files'];
+const COLLECTIONS = ['tasks', 'projects', 'entries', 'blocks', 'files', 'jobs', 'meta'];
 const FB = '12.19.0'; // Firebase-Version (fest, damit nichts überraschend kaputtgeht)
 
-const empty = () => ({ tasks: {}, projects: {}, entries: {}, blocks: {}, files: {} });
+const empty = () => ({ tasks: {}, projects: {}, entries: {}, blocks: {}, files: {}, jobs: {}, meta: {} });
 
 export const state = load();
 export const settings = loadSettings();

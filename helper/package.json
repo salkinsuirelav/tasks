@@ -1,0 +1,9 @@
+{
+  "name": "tasks-claude-helper",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Holt Claude-Aufträge aus deiner Tasks-App und lässt sie von Claude Code auf deinem Mac erledigen.",
+  "scripts": { "start": "node claude-helper.mjs", "check": "node claude-helper.mjs --check" },
+  "dependencies": { "firebase": "12.19.0" }
+}

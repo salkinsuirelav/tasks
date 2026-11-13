@@ -125,7 +125,7 @@ export function autoPlan(settings, days = 7) {
   return { count: placed.length, skipped: candidates.length - placed.length, undo };
 }
 export function undoPlan(undo) {
-  store.batch(() => undo.forEach((u) => store.patch('tasks', u.id, { date: u.date, time: u.time })));
+  store.batch(() => undo.forEach((u) => store.patch('tasks', u.id, { date: u.date, time: u.time, ...(u.duration ? { duration: u.duration } : {}) })));
 }
 
 // ---- Claude: Prompt bauen + Antwort übernehmen ----
@@ -220,3 +220,23 @@ export function seedDemo() {
     });
   });
 }
+
+// ---- Claude über den Mac-Helfer ----
+// Die App legt einen "Auftrag" (job) in Firebase ab. Der Helfer auf deinem Mac holt ihn ab,
+// lässt Claude Code laufen (über dein Abo) und schreibt das Ergebnis zurück.
+export const helperInfo = () => store.get('meta', 'helper');
+export const helperOnline = () => { const h = helperInfo(); return !!h && Date.now() - h.lastSeen < 150000; };
+export const canUseHelper = () => !!store.sync.user;
+export const jobsFor = (taskId) => store.all('jobs').filter((j) => j.taskId === taskId).sort((a, b) => b.createdAt - a.createdAt);
+
+export function sendTaskToClaude(t) {
+  store.batch(() => {
+    store.put('jobs', { type: 'task', taskId: t.id, prompt: claudeTaskPrompt(t), status: 'queued', result: null, error: null, applied: false });
+    store.patch('tasks', t.id, { ai: true, status: t.status === 'todo' ? 'waiting' : t.status });
+  });
+}
+export function sendPlanToClaude(settings) {
+  return store.put('jobs', { type: 'plan', prompt: claudePlanPrompt(settings), status: 'queued', result: null, error: null, applied: false });
+}
+// Fertige Pläne, die noch nicht übernommen wurden (nur aus der letzten Stunde)
+export const unappliedPlans = () => store.all('jobs').filter((j) => j.type === 'plan' && j.status === 'done' && !j.applied && Date.now() - j.createdAt < 3600000);

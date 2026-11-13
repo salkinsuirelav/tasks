@@ -431,6 +431,9 @@ export function viewSettings() {
           <label class="btn" style="justify-content:center">${icon('upload')} Importieren<input type="file" accept="application/json" data-import hidden></label>
         </div>
       </div>
+      <div class="panel"><h4>Claude (Mac-Helfer)</h4>
+        ${(() => { const h = M.helperInfo(); return M.helperOnline() ? `<p style="margin-top:0">🟢 Online auf <b>${esc(h.host || 'deinem Mac')}</b></p>` : `<p style="margin-top:0" class="muted">⚪️ Offline${h ? ` · zuletzt gesehen ${new Date(h.lastSeen).toLocaleString('de-DE')}` : ' · noch nie verbunden'}. Einrichtung: Ordner <span class="mono">helper/</span> im Repo, Anleitung in <span class="mono">helper/README.md</span>.</p>`; })()}
+      </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
       <p class="mono muted">Version 0.2 · Prototyp</p>
     </div>`;
@@ -489,11 +492,7 @@ export function sheetHTML(t) {
             <button class="btn small" style="flex:none" data-action="focus" data-id="${t.id}">Fokus</button>
           </div></div>
 
-        <div class="field"><label>Claude</label>
-          <div class="box">
-            <p style="margin:0 0 10px;font-size:14px" class="muted">${t.ai ? 'An Claude übergeben. Ergebnis kannst du in die Notizen kopieren.' : 'Kopiert einen fertigen Auftrag in die Zwischenablage und öffnet Claude. Du fügst ihn dort ein (läuft über dein Abo).'}</p>
-            <button class="btn small" data-action="ai-task" data-id="${t.id}">${icon('sparkle')} ${t.ai ? 'Erneut an Claude senden' : 'An Claude übergeben'}</button>
-          </div></div>
+        <div class="field"><label>Claude</label>${claudeBox(t)}</div>
 
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:24px">
           <span class="mono muted">Erstellt ${new Date(t.createdAt).toLocaleDateString('de-DE')}</span>
@@ -501,6 +500,32 @@ export function sheetHTML(t) {
         </div>
       </div>
     </div>`;
+}
+
+function jobStatusText(job) {
+  if (!job) return '';
+  const online = M.helperOnline();
+  return {
+    queued: online ? '⏳ Wartet auf den Mac-Helfer…' : '⏳ Wartet. Der Mac-Helfer ist gerade offline, der Auftrag startet, sobald er läuft.',
+    running: '✨ Claude arbeitet gerade daran…',
+    done: '✓ Fertig. Das Ergebnis steht in den Notizen.',
+    error: `⚠️ Fehler: ${esc(job.error || 'unbekannt')}`,
+  }[job.status] || '';
+}
+function claudeBox(t) {
+  const job = M.jobsFor(t.id)[0];
+  if (!M.canUseHelper()) {
+    return `<div class="box">
+      <p style="margin:0 0 10px;font-size:14px" class="muted">Kopiert einen fertigen Auftrag und öffnet Claude. Automatisch geht es, wenn Sync und der Mac-Helfer laufen.</p>
+      <button class="btn small" data-action="ai-task" data-id="${t.id}">${icon('sparkle')} An Claude übergeben</button></div>`;
+  }
+  const busy = job && (job.status === 'queued' || job.status === 'running');
+  return `<div class="box">
+    <p style="margin:0 0 10px;font-size:14px" class="muted">${job ? jobStatusText(job) : 'Claude recherchiert oder erledigt die Aufgabe auf deinem Mac (über dein Abo) und schreibt das Ergebnis in die Notizen.'}</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn small primary" data-action="ai-job" data-id="${t.id}" ${busy ? 'disabled style="opacity:.5"' : ''}>${icon('sparkle')} ${job ? 'Nochmal an Claude senden' : 'An Claude senden'}</button>
+      <button class="btn small ghost" data-action="ai-task" data-id="${t.id}">Manuell kopieren</button>
+    </div></div>`;
 }
 
 // ---------- Fokus-Modus ----------
@@ -538,6 +563,10 @@ export function modalHTML(m) {
     inner = `
       <h2>${icon('sparkle')} Mit Claude planen</h2>
       <p>Claude plant deine offenen Aufgaben in die freien Slots der nächsten 7 Tage. Läuft über dein normales Claude-Abo, ohne API-Kosten.</p>
+      ${M.canUseHelper() ? `<div class="box" style="margin-bottom:16px"><b>Automatisch über deinen Mac</b>
+        <p style="margin:6px 0 10px">${M.helperOnline() ? '🟢 Mac-Helfer ist online.' : '⚪️ Mac-Helfer ist offline. Der Auftrag startet, sobald er läuft.'} Der Plan wird automatisch übernommen, du kannst ihn rückgängig machen.</p>
+        <button class="btn primary small" data-action="plan-job">${icon('sparkle')} Claude planen lassen</button></div>
+        <p style="margin-bottom:10px"><b>Oder manuell:</b></p>` : ''}
       <div class="step"><span class="n">1</span><div><b>Auftrag kopieren</b> und Claude öffnen. Dort einfügen und senden.<br>
         <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button class="btn primary small" data-action="copy-plan-prompt">Kopieren &amp; Claude öffnen</button><button class="btn small" data-action="copy-plan-prompt" data-noopen="1">Nur kopieren</button></div></div></div>
       <div class="step"><span class="n">2</span><div style="flex:1"><b>Claudes Antwort</b> komplett kopieren und hier einfügen:

@@ -80,7 +80,23 @@ const renderFocus = () => {
   $('#focus-root').innerHTML = t ? V.focusHTML(t) : '';
 };
 const renderPill = () => { $('#pill-root').innerHTML = V.timerPill(); };
-const renderAll = () => { renderMain(); renderPill(); renderFocus(); };
+const renderAll = () => {
+  renderMain(); renderPill(); renderFocus();
+  // Detail-Ansicht aktualisieren (z. B. wenn Claude fertig ist), aber nicht während du darin tippst
+  if (ui.openTask && !document.activeElement?.closest?.('.sheet')) renderSheet();
+  applyFinishedPlans();
+};
+
+// Fertige Claude-Pläne automatisch übernehmen
+function applyFinishedPlans() {
+  for (const job of M.unappliedPlans()) {
+    store.patch('jobs', job.id, { applied: true });
+    try {
+      const res = M.applyClaudePlan(job.result || '');
+      toast(`Claude hat ${res.count} Aufgaben eingeplant.`, { label: 'Rückgängig', fn: () => M.undoPlan(res.undo) });
+    } catch (e) { toast('Claudes Plan konnte nicht gelesen werden: ' + e.message); }
+  }
+}
 
 store.subscribe(renderAll);
 window.addEventListener('hashchange', () => { ui.sideOpen = false; renderMain(); });
@@ -242,6 +258,16 @@ const A = {
     });
     ui.openTask = null; renderSheet();
     toast('Aufgabe gelöscht.');
+  },
+  'ai-job': (el) => {
+    M.sendTaskToClaude(store.get('tasks', el.dataset.id));
+    renderSheet();
+    toast(M.helperOnline() ? 'An Claude geschickt. Ergebnis kommt in die Notizen.' : 'Auftrag gespeichert. Startet, sobald der Mac-Helfer läuft.');
+  },
+  'plan-job': () => {
+    M.sendPlanToClaude(store.settings);
+    ui.modal = null; renderModal();
+    toast(M.helperOnline() ? 'Claude plant… Der Plan erscheint gleich automatisch.' : 'Auftrag gespeichert. Startet, sobald der Mac-Helfer läuft.');
   },
   'ai-task': (el) => {
     const t = store.get('tasks', el.dataset.id);
