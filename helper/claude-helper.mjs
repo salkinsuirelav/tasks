@@ -11,6 +11,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline/promises';
+import http from 'node:http';
+import crypto from 'node:crypto';
 import { spawn, execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { initializeApp, getApps } from 'firebase/app';
@@ -139,6 +141,35 @@ async function main() {
     });
   }, (e) => log('Fehler beim Zuhören:', e.message));
   log('Warte auf Aufträge …');
+
+  // Schnell-Eingabe für den Mac-Kurzbefehl: POST http://127.0.0.1:7777/add  {"title": "..."}
+  // Nur von diesem Mac erreichbar (127.0.0.1). Der Header "X-Tasks" muss gesetzt sein: Webseiten im Browser
+  // können so einen Header nicht ohne Erlaubnis mitschicken, damit kann keine fremde Seite Aufgaben anlegen.
+  const server = http.createServer((req, res) => {
+    const reply = (code, text) => { res.writeHead(code, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end(text); };
+    if (req.method === 'GET' && req.url === '/ping') return reply(200, 'ok');
+    if (req.method !== 'POST' || !req.url.startsWith('/add') || !req.headers['x-tasks']) return reply(403, 'Nein');
+    let body = '';
+    req.on('data', (c) => { body += c; if (body.length > 10000) req.destroy(); });
+    req.on('end', async () => {
+      let title = body;
+      try { const j = JSON.parse(body); title = j.title ?? j.text ?? ''; } catch {}
+      title = String(title).trim();
+      if (!title) return reply(400, 'Kein Titel');
+      const id = crypto.randomUUID().replace(/-/g, '').slice(0, 20);
+      const now = Date.now();
+      try {
+        await setDoc(doc(db, ...base, 'tasks', id), {
+          id, title, notes: '', projectId: null, date: null, time: null, duration: 30,
+          priority: '', status: 'todo', repeat: '', ai: false, createdAt: now, updatedAt: now,
+        });
+        log(`＋ Neue Aufgabe: ${title}`);
+        reply(200, `In der Inbox: ${title}`);
+      } catch (e) { log('Fehler beim Anlegen:', e.message); reply(500, 'Fehler: ' + e.message); }
+    });
+  });
+  server.on('error', (e) => log('Schnell-Eingabe nicht verfügbar:', e.message));
+  server.listen(7777, '127.0.0.1', () => log('Schnell-Eingabe bereit: http://127.0.0.1:7777/add'));
 
   async function handle(ref, job) {
     const label = job.type === 'plan' ? 'Wochenplanung' : `Aufgabe ${job.taskId}`;

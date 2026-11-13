@@ -67,6 +67,27 @@ In der App unter **Einstellungen → Claude** steht jetzt **🟢 Online**.
 
 Das Protokoll liegt unter `~/Library/Logs/tasks-helper.log`.
 
+---
+
+## Schnell-Eingabe per Tastenkürzel (aus jeder App)
+
+Der Helfer nimmt auf deinem Mac neue Aufgaben an (`http://127.0.0.1:7777/add`, nur von diesem Mac erreichbar). Mit der Kurzbefehle-App legst du dir ein Tastenkürzel dafür an, z. B. **⌃⌥N**. Das funktioniert auch, wenn gerade die Claude-App oder etwas anderes vorne ist.
+
+**Einmalig einrichten (ca. 5 Min):**
+1. App **Kurzbefehle** öffnen → oben **+** (neuer Kurzbefehl). Oben den Namen auf **Neue Aufgabe** ändern.
+2. Rechts in der Suche **„Nach Eingabe fragen“** eintippen und die Aktion reinziehen. Als Frage: `Neue Aufgabe`.
+3. Suche **„Inhalte von URL abrufen“** → reinziehen.
+   - URL: `http://127.0.0.1:7777/add`
+   - Auf den kleinen Pfeil bei der Aktion klicken, damit sich die Optionen öffnen:
+   - **Methode:** POST
+   - **Header** → „Neuer Header“: Schlüssel `X-Tasks`, Wert `1`
+   - **Anfragetext:** JSON → „Neues Feld“ → **Text** → Schlüssel `title`, Wert: rechte Maustaste bzw. Variablen-Auswahl → **Angegebene Eingabe**
+4. Optional: Suche **„Mitteilung anzeigen“** → reinziehen. Dann siehst du kurz „In der Inbox: …“.
+5. Rechts oben auf das **ⓘ**-Symbol → **Tastaturkurzbefehl hinzufügen** → z. B. ⌃⌥N drücken.
+6. Testen: ⌃⌥N drücken, Titel tippen, Enter. Beim ersten Mal fragt macOS, ob die Verbindung zu `127.0.0.1` erlaubt ist → **Immer erlauben**.
+
+Die Aufgabe landet in der Inbox (auf Mac und iPhone). Funktioniert, solange der Helfer läuft (bei dir automatisch im Hintergrund).
+
 ## Wenn etwas nicht klappt
 | Problem | Lösung |
 |---|---|
@@ -74,7 +95,13 @@ Das Protokoll liegt unter `~/Library/Logs/tasks-helper.log`.
 | `Missing or insufficient permissions` | Firestore-Regeln prüfen (FIREBASE.md, Schritt 4/8). |
 | App zeigt „Offline“ | `status.command` doppelklicken und Screenshot an Claude schicken. |
 | „Claude Code ist nicht angemeldet“ | Im Terminal `claude` starten, anmelden, dann `install.command` nochmal. |
+| Kurzbefehl meldet „Verbindung fehlgeschlagen“ | Helfer läuft nicht oder ist alt. Update-Befehl unten ausführen. |
 | Aufgabe bleibt auf „Claude arbeitet…“ | Mac neu starten oder `install.command` nochmal. Hängende Aufträge werden automatisch neu gestartet. |
 
 ## Updates
+Am einfachsten im Terminal (lädt die neue Version, ersetzt den Ordner in Dokumente und installiert neu, dein Login bleibt):
+```
+cd ~/Documents && curl -L -o tasks.zip https://github.com/salkinsuirelav/tasks/archive/refs/heads/main.zip && rm -rf tasks-main && unzip -q tasks.zip && rm tasks.zip && zsh tasks-main/helper/install.command
+```
+
 Wenn sich am Helfer etwas ändert: Schritt 3 wiederholen (neue ZIP, alten Ordner ersetzen) und `install.command` nochmal doppelklicken. Deine Anmeldung bleibt erhalten.
