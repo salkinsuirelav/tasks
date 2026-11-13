@@ -1,0 +1,408 @@
+// Steuerung: welche Ansicht ist offen, was passiert bei Klicks, Tippen und Drag & Drop.
+import * as store from './store.js';
+import * as M from './model.js';
+import * as V from './views.js';
+import { ui, isMobile } from './ui.js';
+import { icon } from './icons.js';
+import { esc, today, addDays, weekStart, toMin, fromMin, nowMin, fmtClock, fmtDur, COLORS } from './util.js';
+
+const $ = (sel, root = document) => root.querySelector(sel);
+const main = $('#main');
+const HOUR = 56;
+
+// ---------- Navigation ----------
+const NAV = [
+  { href: '#inbox', label: 'Inbox', icon: 'inbox' },
+  { href: '#plan', label: 'Plan', icon: 'board' },
+  { href: '#calendar', label: 'Kalender', icon: 'calendar' },
+  { href: '#projects', label: 'Projekte', icon: 'folder' },
+  { href: '#review', label: 'Rückblick', icon: 'chart' },
+];
+const route = () => { const [view, param] = (location.hash.slice(1) || 'plan').split('/'); return { view, param }; };
+
+function renderNav() {
+  const { view, param } = route();
+  const inboxCount = M.openTasks().filter((t) => !t.date).length;
+  const active = (href) => href === `#${view}` || (view === 'project' && href === '#projects');
+  const sy = store.sync;
+  const syncColor = { online: '#30a46c', offline: '#e2a336', error: '#e5484d', connecting: '#e2a336', 'signed-out': '#e2a336' }[sy.status] || 'var(--faint)';
+  const syncText = { off: 'Nur lokal', online: 'Synchronisiert', offline: 'Offline', error: 'Sync-Fehler', connecting: 'Verbinde…', 'signed-out': 'Nicht angemeldet' }[sy.status];
+  $('#sidebar').innerHTML = `
+    <div class="brand"><span class="brand-logo">${icon('check')}</span>Tasks</div>
+    ${NAV.map((n) => `<a class="nav-item ${active(n.href) ? 'active' : ''}" href="${n.href}">${icon(n.icon)}${n.label}${n.href === '#inbox' && inboxCount ? `<span class="count">${inboxCount}</span>` : ''}</a>`).join('')}
+    <div class="nav-label">Projekte <button class="icon-btn" style="width:24px;height:24px" data-action="new-project" title="Neues Projekt">${icon('plus')}</button></div>
+    ${M.projects().map((p) => `<a class="nav-item ${view === 'project' && param === p.id ? 'active' : ''}" href="#project/${p.id}"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}<span class="count">${M.openTasks().filter((t) => t.projectId === p.id).length || ''}</span></a>`).join('')}
+    <div class="sidebar-foot">
+      <a class="nav-item ${view === 'settings' ? 'active' : ''}" href="#settings">${icon('gear')}Einstellungen</a>
+      <div class="sync-pill"><span class="dot" style="background:${syncColor}"></span>${syncText}</div>
+    </div>`;
+  $('#tabbar').innerHTML = NAV.map((n) => `<a class="${active(n.href) ? 'active' : ''}" href="${n.href}">${icon(n.icon)}${n.label}</a>`).join('');
+}
+
+// ---------- Rendern ----------
+let lastView = '';
+function renderMain() {
+  const { view, param } = route();
+  // Fokus + Scrollpositionen merken, damit beim Neuzeichnen nichts springt
+  const act = document.activeElement;
+  const key = act?.dataset?.key;
+  const sel = key && 'selectionStart' in act ? [act.selectionStart, act.selectionEnd] : null;
+  const scroll = { board: $('.board')?.scrollLeft, cal: $('#cal-scroll')?.scrollTop, side: $('.side-list')?.scrollTop };
+
+  const views = { inbox: V.viewInbox, plan: V.viewPlan, calendar: V.viewCalendar, projects: V.viewProjects, project: () => V.viewProject(param), review: V.viewReview, settings: V.viewSettings };
+  main.classList.toggle('full', view === 'calendar');
+  main.innerHTML = (views[view] || V.viewPlan)();
+
+  if (view === lastView) {
+    if ($('.board') && scroll.board != null) $('.board').scrollLeft = scroll.board;
+    if ($('#cal-scroll') && scroll.cal != null) $('#cal-scroll').scrollTop = scroll.cal;
+    if ($('.side-list') && scroll.side != null) $('.side-list').scrollTop = scroll.side;
+  } else {
+    main.scrollTop = 0;
+    const cs = $('#cal-scroll');
+    if (cs) cs.scrollTop = Math.max(0, (Math.max(8, new Date().getHours() - 1) - store.settings.dayStart) * HOUR);
+    if (view === 'plan' && isMobile()) $('.col.today')?.scrollIntoView({ inline: 'start', block: 'nearest' });
+  }
+  lastView = view;
+  if (key) {
+    const el = main.querySelector(`[data-key="${key}"]`);
+    if (el) { el.focus({ preventScroll: true }); if (sel) try { el.setSelectionRange(...sel); } catch {} }
+  }
+  renderNav();
+}
+const renderSheet = () => {
+  const t = ui.openTask && store.get('tasks', ui.openTask);
+  $('#sheet-root').innerHTML = t ? V.sheetHTML(t) : '';
+};
+const renderModal = () => { $('#modal-root').innerHTML = ui.modal ? V.modalHTML(ui.modal) : ''; $('#modal-root [autofocus]')?.focus(); };
+const renderFocus = () => {
+  const t = ui.focusTask && store.get('tasks', ui.focusTask);
+  $('#focus-root').innerHTML = t ? V.focusHTML(t) : '';
+};
+const renderPill = () => { $('#pill-root').innerHTML = V.timerPill(); };
+const renderAll = () => { renderMain(); renderPill(); renderFocus(); };
+
+store.subscribe(renderAll);
+window.addEventListener('hashchange', () => { ui.sideOpen = false; renderMain(); });
+let resizeT;
+window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(renderMain, 200); });
+
+// Timer-Anzeige jede Sekunde aktualisieren (ohne alles neu zu zeichnen)
+setInterval(() => {
+  const r = M.running();
+  document.querySelectorAll('[data-tick]').forEach((el) => {
+    if (!r) return;
+    if (el.dataset.tick === 'task') el.textContent = fmtDur(M.trackedFor(r.taskId));
+    else if (el.dataset.tick) el.textContent = fmtClock(Date.now() - r.start);
+  });
+}, 1000);
+setInterval(() => { if (route().view === 'calendar' && !ui.drag) renderMain(); }, 60000);
+
+// ---------- Toast ----------
+let toastT;
+function toast(msg, action) {
+  clearTimeout(toastT);
+  const root = $('#toast-root');
+  root.innerHTML = `<div class="toast"><span>${esc(msg)}</span>${action ? `<button data-action="toast-action">${esc(action.label)}</button>` : ''}</div>`;
+  root._action = action?.fn;
+  toastT = setTimeout(() => { root.innerHTML = ''; }, action ? 6000 : 2600);
+}
+
+function copy(text) {
+  if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+  fallbackCopy(text);
+}
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text; document.body.append(ta); ta.select(); document.execCommand('copy'); ta.remove();
+}
+
+// ---------- Klick-Aktionen ----------
+const A = {
+  go: (el) => { location.hash = el.dataset.href; },
+  'toast-action': () => { const fn = $('#toast-root')._action; $('#toast-root').innerHTML = ''; fn?.(); },
+
+  toggle: (el) => {
+    const t = store.get('tasks', el.dataset.id);
+    const wasDone = t.status === 'done';
+    M.toggleDone(t.id);
+    if (!wasDone) toast(t.repeat ? 'Erledigt ✓ Nächste Wiederholung ist angelegt.' : 'Erledigt ✓', t.repeat ? null : { label: 'Rückgängig', fn: () => M.toggleDone(t.id) });
+    if (ui.openTask === t.id) renderSheet();
+  },
+  'open-task': (el) => { ui.openTask = el.dataset.id; renderSheet(); },
+  'close-sheet': () => { ui.openTask = null; renderSheet(); },
+  timer: (el) => {
+    const id = el.dataset.id;
+    if (M.running()?.taskId === id) M.stopTimer(); else M.startTimer(id);
+    if (ui.openTask) renderSheet();
+  },
+  'stop-timer': () => M.stopTimer(),
+  focus: (el) => { ui.focusTask = el.dataset.id; ui.openTask = null; renderSheet(); renderFocus(); renderPill(); },
+  'close-focus': () => { ui.focusTask = null; renderFocus(); renderPill(); },
+  'focus-done': (el) => { M.toggleDone(el.dataset.id); ui.focusTask = null; renderFocus(); renderPill(); toast('Stark. Erledigt ✓'); },
+
+  'inbox-tab': (el) => { ui.inboxTab = el.dataset.tab; renderMain(); },
+  sort: (el) => store.saveSettings({ sortMode: el.dataset.mode }),
+  'plan-nav': (el) => { const d = +el.dataset.d; ui.planStart = d ? addDays(ui.planStart, d) : today(); renderMain(); },
+  'cal-nav': (el) => {
+    const d = +el.dataset.d;
+    if (isMobile()) ui.calDay = d ? addDays(ui.calDay, d) : today();
+    else ui.calStart = d ? addDays(ui.calStart, d) : weekStart(today());
+    renderMain();
+  },
+  'review-nav': (el) => { const d = +el.dataset.d; ui.reviewWeek = d ? addDays(ui.reviewWeek, d) : weekStart(today()); renderMain(); },
+  'toggle-side': () => { if (isMobile()) { ui.sideOpen = !ui.sideOpen; renderMain(); } else store.saveSettings({ sidebar: !store.settings.sidebar }); },
+
+  'auto-plan': () => {
+    const res = M.autoPlan(store.settings);
+    if (!res.count) return toast(res.skipped ? 'Keine freien Slots gefunden, die passen.' : 'Nichts zu planen: alle offenen Aufgaben haben schon eine Uhrzeit.');
+    toast(`${res.count} Aufgabe${res.count > 1 ? 'n' : ''} eingeplant${res.skipped ? `, ${res.skipped} passten nicht rein` : ''}.`, { label: 'Rückgängig', fn: () => M.undoPlan(res.undo) });
+  },
+  'claude-plan': () => { ui.modal = { type: 'claude-plan' }; renderModal(); },
+  'copy-plan-prompt': (el) => {
+    copy(M.claudePlanPrompt(store.settings));
+    if (!el.dataset.noopen) window.open('https://claude.ai/new', '_blank');
+    toast('Auftrag kopiert. In Claude einfügen und senden.');
+  },
+  'apply-claude-plan': () => {
+    try {
+      const res = M.applyClaudePlan($('#claude-answer').value);
+      ui.modal = null; renderModal();
+      toast(`${res.count} Aufgaben von Claude eingeplant.`, { label: 'Rückgängig', fn: () => M.undoPlan(res.undo) });
+    } catch (e) { toast('Konnte die Antwort nicht lesen: ' + e.message); }
+  },
+
+  'new-block': () => { ui.modal = { type: 'block', block: { date: isMobile() ? ui.calDay : today(), start: '12:00', end: '13:00', label: '', repeat: '' } }; renderModal(); },
+  'edit-block': (el) => { ui.modal = { type: 'block', block: { ...store.get('blocks', el.dataset.id) } }; renderModal(); },
+  'save-block': () => {
+    const b = ui.modal.block;
+    const v = { date: $('#b-date').value, start: $('#b-start').value, end: $('#b-end').value, label: $('#b-label').value.trim(), repeat: $('#b-repeat').value };
+    if (!v.date || !v.start || !v.end || toMin(v.end) <= toMin(v.start)) return toast('Bitte Datum sowie Start vor Ende angeben.');
+    store.put('blocks', { ...b, ...v });
+    ui.modal = null; renderModal();
+  },
+  'delete-block': (el) => { store.remove('blocks', el.dataset.id); ui.modal = null; renderModal(); },
+  'cal-slot': (el, e) => {
+    const rect = el.getBoundingClientRect();
+    const min = store.settings.dayStart * 60 + Math.floor(((e.clientY - rect.top) / HOUR) * 60 / 15) * 15;
+    ui.modal = { type: 'slot', date: el.dataset.date, time: fromMin(min) };
+    renderModal();
+  },
+  'slot-task': () => {
+    const m = ui.modal, title = $('#slot-title').value;
+    if (!title.trim()) return toast('Bitte einen Titel eingeben.');
+    M.addTask(title, { date: m.date, time: m.time, duration: +$('#slot-dur').value });
+    ui.modal = null; renderModal();
+  },
+  'slot-block': () => {
+    const m = ui.modal;
+    store.put('blocks', { date: m.date, start: m.time, end: fromMin(Math.min(toMin(m.time) + +$('#slot-dur').value, 24 * 60 - 1)), label: $('#slot-title').value.trim() || 'Gesperrt', repeat: '' });
+    ui.modal = null; renderModal();
+  },
+
+  'new-project': (el) => { ui.modal = { type: 'project', colorIdx: M.projects().length % COLORS.length, fromTask: el.dataset.fromTask }; renderModal(); },
+  'pick-color': (el) => {
+    ui.modal.colorIdx = +el.dataset.i;
+    el.parentElement.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === el));
+  },
+  'save-project': () => {
+    const name = $('#p-name').value.trim();
+    if (!name) return toast('Bitte einen Namen eingeben.');
+    const p = store.put('projects', { name, color: COLORS[ui.modal.colorIdx], notes: '', archived: false });
+    const fromTask = ui.modal.fromTask;
+    ui.modal = null; renderModal();
+    if (fromTask) { store.patch('tasks', fromTask, { projectId: p.id }); renderSheet(); }
+  },
+  'project-color': (el) => store.patch('projects', el.dataset.id, { color: el.dataset.color }),
+  'archive-project': (el) => { store.patch('projects', el.dataset.id, { archived: true }); location.hash = '#projects'; toast('Projekt archiviert.'); },
+  'delete-project': (el) => {
+    if (!confirm('Projekt löschen? Die Aufgaben bleiben erhalten, nur ohne Projekt.')) return;
+    const id = el.dataset.id;
+    store.batch(() => {
+      M.tasks().filter((t) => t.projectId === id).forEach((t) => store.patch('tasks', t.id, { projectId: null }));
+      store.remove('projects', id);
+    });
+    location.hash = '#projects';
+  },
+
+  set: (el) => {
+    const id = ui.openTask, k = el.dataset.k, v = el.dataset.v;
+    if (k === 'status' && v === 'done') { if (store.get('tasks', id).status !== 'done') M.toggleDone(id); }
+    else store.patch('tasks', id, { [k]: v, ...(k === 'status' ? { doneAt: null } : {}) });
+    renderSheet();
+  },
+  unschedule: () => { store.patch('tasks', ui.openTask, { date: null, time: null }); renderSheet(); },
+  'delete-task': (el) => {
+    const id = el.dataset.id;
+    if (!confirm('Aufgabe wirklich löschen?')) return;
+    store.batch(() => {
+      if (M.running()?.taskId === id) M.stopTimer();
+      Object.values(store.state.files).filter((f) => f.taskId === id).forEach((f) => store.remove('files', f.id));
+      store.remove('tasks', id);
+    });
+    ui.openTask = null; renderSheet();
+    toast('Aufgabe gelöscht.');
+  },
+  'ai-task': (el) => {
+    const t = store.get('tasks', el.dataset.id);
+    copy(M.claudeTaskPrompt(t));
+    window.open('https://claude.ai/new', '_blank');
+    store.patch('tasks', t.id, { ai: true, status: t.status === 'todo' ? 'waiting' : t.status });
+    renderSheet();
+    toast('Auftrag kopiert. In Claude einfügen und senden.');
+  },
+  'open-file': (el) => {
+    const f = store.get('files', el.dataset.id);
+    const w = window.open();
+    if (!w) return;
+    w.document.write(f.type.startsWith('image/') ? `<title>${esc(f.name)}</title><img src="${f.data}" style="max-width:100%">` : `<a href="${f.data}" download="${esc(f.name)}">${esc(f.name)} herunterladen</a>`);
+  },
+  'del-file': (el) => { if (confirm('Anhang löschen?')) { store.remove('files', el.dataset.id); renderSheet(); } },
+  'del-entry': (el) => { if (confirm('Zeiteintrag löschen?')) store.remove('entries', el.dataset.id); },
+
+  'sign-in': async () => {
+    try { await store.signIn($('#login-email').value.trim(), $('#login-pass').value); toast('Angemeldet. Sync läuft.'); }
+    catch (e) { toast('Anmeldung fehlgeschlagen: ' + (e.code || e.message)); }
+  },
+  'sign-out': async () => { await store.signOutUser(); toast('Abgemeldet.'); },
+  copy: (el) => { copy(el.dataset.text); toast('Kopiert.'); },
+  export: () => {
+    const blob = new Blob([store.exportJSON()], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = `tasks-backup-${today()}.json`; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  },
+  'seed-demo': () => { M.seedDemo(); toast('Beispieldaten geladen.'); },
+  'close-modal': () => { ui.modal = null; renderModal(); },
+};
+
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  // Klick auf ein Kind-Element mit eigener Aktion hat Vorrang (z. B. Haken in einer Zeile)
+  const fn = A[el.dataset.action];
+  if (fn) { e.preventDefault(); fn(el, e); }
+});
+
+// ---------- Tippen ----------
+document.addEventListener('keydown', (e) => {
+  const el = e.target;
+  if (e.key === 'Escape') {
+    if (ui.modal) A['close-modal'](); else if (ui.openTask) A['close-sheet'](); else if (ui.focusTask) A['close-focus']();
+    return;
+  }
+  if (e.key !== 'Enter' || e.isComposing) return;
+  if (el.dataset.add) {
+    e.preventDefault();
+    const extra = el.dataset.add === 'day' ? { date: el.dataset.date } : el.dataset.add === 'project' ? { projectId: el.dataset.project } : {};
+    if (M.addTask(el.value, extra)) el.value = '';
+  } else if (el.id === 'login-pass') A['sign-in']();
+  else if (el.id === 'slot-title') A['slot-task']();
+  else if (el.id === 'p-name') A['save-project']();
+});
+
+const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+const saveNotes = debounce((id, v) => store.patch('tasks', id, { notes: v }), 400);
+const saveProjectField = debounce((id, k, v) => store.patch('projects', id, { [k]: v }), 400);
+
+document.addEventListener('input', (e) => {
+  const el = e.target;
+  if (el.dataset.field === 'notes') saveNotes(ui.openTask, el.value);
+  if (el.dataset.pfield) saveProjectField(el.dataset.id, el.dataset.pfield, el.value);
+});
+
+document.addEventListener('change', async (e) => {
+  const el = e.target;
+  const f = el.dataset.field;
+  if (f && ui.openTask) {
+    const id = ui.openTask;
+    let v = el.value;
+    if (f === 'title') { if (!v.trim()) return; v = v.trim(); }
+    if (f === 'notes') return;
+    if (f === 'projectId' && v === '__new') { el.value = store.get('tasks', id).projectId || ''; return A['new-project']({ dataset: { fromTask: id } }); }
+    if (f === 'duration') v = +v;
+    if (f === 'date' || f === 'time' || f === 'projectId') v = v || null;
+    const changes = { [f]: v };
+    if (f === 'time' && v && !store.get('tasks', id).date) changes.date = today();
+    store.patch('tasks', id, changes);
+    if (f === 'date' || f === 'time') renderSheet();
+    return;
+  }
+  if (el.dataset.setting) {
+    const v = +el.value;
+    if (el.dataset.setting === 'dayEnd' && v <= store.settings.dayStart) return toast('Ende muss nach dem Beginn liegen.');
+    store.saveSettings({ [el.dataset.setting]: v });
+  }
+  if (el.hasAttribute('data-import') && el.files[0]) {
+    try { store.importJSON(await el.files[0].text()); toast('Backup importiert.'); } catch (err) { toast('Import fehlgeschlagen: ' + err.message); }
+  }
+  if (el.hasAttribute('data-attach') && el.files[0]) {
+    const file = el.files[0];
+    try {
+      const data = file.type.startsWith('image/') ? await compressImage(file) : await readSmall(file);
+      store.put('files', { taskId: ui.openTask, name: file.name, type: file.type.startsWith('image/') ? 'image/jpeg' : file.type || 'application/octet-stream', data });
+      renderSheet();
+    } catch (err) { toast(err.message); }
+  }
+});
+
+async function compressImage(file) {
+  const url = URL.createObjectURL(file);
+  const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('Bild konnte nicht gelesen werden.')); i.src = url; });
+  const scale = Math.min(1, 1280 / Math.max(img.width, img.height));
+  const c = document.createElement('canvas');
+  c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  URL.revokeObjectURL(url);
+  return c.toDataURL('image/jpeg', 0.72);
+}
+function readSmall(file) {
+  if (file.size > 700 * 1024) return Promise.reject(new Error('Datei ist zu groß (max. 700 KB). Größere Dateien kommen mit einem späteren Update.'));
+  return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); });
+}
+
+// ---------- Drag & Drop (Mac) ----------
+document.addEventListener('dragstart', (e) => {
+  const el = e.target.closest?.('[data-drag]');
+  if (!el) return;
+  let offsetMin = 0;
+  if (el.classList.contains('ev')) offsetMin = Math.floor((((e.clientY - el.getBoundingClientRect().top) / HOUR) * 60) / 15) * 15;
+  ui.drag = { id: el.dataset.id, offsetMin };
+  e.dataTransfer.setData('text/plain', el.dataset.id);
+  e.dataTransfer.effectAllowed = 'move';
+  requestAnimationFrame(() => el.classList.add('dragging'));
+});
+const dropTarget = (e) => e.target.closest?.('[data-drop-day],[data-drop-cal],[data-drop-inbox]');
+document.addEventListener('dragover', (e) => {
+  const t = dropTarget(e);
+  if (!t || !ui.drag) return;
+  e.preventDefault();
+  document.querySelectorAll('.drag-over').forEach((x) => x !== t && x.classList.remove('drag-over'));
+  t.classList.add('drag-over');
+});
+document.addEventListener('dragleave', (e) => { const t = dropTarget(e); if (t && !t.contains(e.relatedTarget)) t.classList.remove('drag-over'); });
+document.addEventListener('drop', (e) => {
+  const t = dropTarget(e);
+  if (!t || !ui.drag) return;
+  e.preventDefault();
+  const id = ui.drag.id;
+  if (t.dataset.dropDay) store.patch('tasks', id, { date: t.dataset.dropDay });
+  else if (t.dataset.dropCal) {
+    const rect = t.getBoundingClientRect();
+    let min = store.settings.dayStart * 60 + Math.round(((((e.clientY - rect.top) / HOUR) * 60) - ui.drag.offsetMin) / 15) * 15;
+    min = Math.max(0, Math.min(min, 24 * 60 - 15));
+    store.patch('tasks', id, { date: t.dataset.dropCal, time: fromMin(min) });
+  } else if (t.dataset.dropInbox) store.patch('tasks', id, { date: null, time: null });
+});
+document.addEventListener('dragend', () => {
+  ui.drag = null;
+  document.querySelectorAll('.drag-over,.dragging').forEach((x) => x.classList.remove('drag-over', 'dragging'));
+});
+
+// ---------- Start ----------
+if (!location.hash) location.replace('#plan');
+renderAll();
+store.initSync();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+if (navigator.storage?.persist) navigator.storage.persist();
+window.__app = { store, M, ui }; // zum Ausprobieren in der Browser-Konsole

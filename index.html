@@ -4,96 +4,27 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Tasks</title>
-  <!-- Diese Zeilen machen aus der Webseite eine "App" auf dem iPhone -->
   <link rel="manifest" href="manifest.json">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Tasks">
   <link rel="apple-touch-icon" href="icon-180.png">
-  <meta name="theme-color" content="#ffffff">
-  <style>
-    :root { --bg:#f2f2f7; --card:#fff; --text:#111; --muted:#8e8e93; --accent:#007aff; --danger:#ff3b30; }
-    @media (prefers-color-scheme: dark) {
-      :root { --bg:#000; --card:#1c1c1e; --text:#f2f2f7; --muted:#8e8e93; --accent:#0a84ff; --danger:#ff453a; }
-    }
-    * { box-sizing: border-box; }
-    body { margin:0; font-family:-apple-system, system-ui, sans-serif; background:var(--bg); color:var(--text);
-           padding: calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 16px); }
-    h1 { font-size: 32px; margin: 8px 0 16px; }
-    form { display:flex; gap:8px; margin-bottom:16px; }
-    input[type=text] { flex:1; font-size:17px; padding:12px; border-radius:12px; border:none; background:var(--card); color:var(--text); }
-    button.add { font-size:17px; padding:0 16px; border:none; border-radius:12px; background:var(--accent); color:#fff; }
-    ul { list-style:none; padding:0; margin:0; background:var(--card); border-radius:12px; overflow:hidden; }
-    li { display:flex; align-items:center; gap:12px; padding:12px; border-bottom:1px solid var(--bg); }
-    li:last-child { border-bottom:none; }
-    li input[type=checkbox] { width:22px; height:22px; accent-color:var(--accent); }
-    li span { flex:1; font-size:17px; word-break:break-word; }
-    li.done span { color:var(--muted); text-decoration:line-through; }
-    li button { border:none; background:none; color:var(--danger); font-size:15px; }
-    .empty { color:var(--muted); text-align:center; padding:24px; }
-  </style>
+  <meta name="theme-color" content="#f4f3ef" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#121211" media="(prefers-color-scheme: dark)">
+  <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
-  <h1>Tasks</h1>
-  <form id="form">
-    <input id="input" type="text" placeholder="Neue Aufgabe…" autocomplete="off">
-    <button class="add" type="submit">+</button>
-  </form>
-  <ul id="list"></ul>
-
-  <script>
-    // 1) Daten: alle Tasks liegen als Liste im localStorage des Browsers (nur auf DIESEM Gerät)
-    const KEY = 'tasks-v1';
-    let tasks = JSON.parse(localStorage.getItem(KEY) || '[]');
-    const save = () => localStorage.setItem(KEY, JSON.stringify(tasks));
-
-    // 2) Anzeigen: Liste jedes Mal neu zeichnen
-    const list = document.getElementById('list');
-    function render() {
-      list.innerHTML = '';
-      if (tasks.length === 0) {
-        list.innerHTML = '<li class="empty">Keine Tasks. Leg los 👆</li>';
-        return;
-      }
-      tasks.forEach(task => {
-        const li = document.createElement('li');
-        if (task.done) li.className = 'done';
-
-        const box = document.createElement('input');
-        box.type = 'checkbox';
-        box.checked = task.done;
-        box.onchange = () => { task.done = box.checked; save(); render(); };
-
-        const text = document.createElement('span');
-        text.textContent = task.text; // textContent = sicher, kein HTML-Einschleusen möglich
-
-        const del = document.createElement('button');
-        del.textContent = 'Löschen';
-        del.onclick = () => { tasks = tasks.filter(t => t.id !== task.id); save(); render(); };
-
-        li.append(box, text, del);
-        list.append(li);
-      });
-    }
-
-    // 3) Hinzufügen
-    document.getElementById('form').onsubmit = (e) => {
-      e.preventDefault();
-      const input = document.getElementById('input');
-      const text = input.value.trim();
-      if (!text) return;
-      tasks.unshift({ id: Date.now(), text, done: false });
-      input.value = '';
-      save(); render();
-    };
-
-    render();
-
-    // 4) Offline: Service Worker registrieren (speichert die App-Dateien zwischen)
-    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
-
-    // 5) Safari bitten, die Daten nicht automatisch zu löschen
-    if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
-  </script>
+  <div class="app">
+    <aside class="sidebar" id="sidebar"></aside>
+    <main id="main"></main>
+  </div>
+  <nav class="tabbar" id="tabbar"></nav>
+  <div id="pill-root"></div>
+  <div id="sheet-root"></div>
+  <div id="modal-root"></div>
+  <div id="focus-root"></div>
+  <div id="toast-root"></div>
+  <script type="module" src="js/app.js"></script>
 </body>
 </html>
