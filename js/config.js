@@ -1,17 +1,11 @@
-// Firebase-Sync: Hier kommt dein Config-Block aus der Firebase Console rein (siehe FIREBASE.md).
-// Solange hier null steht, läuft die App rein lokal (ohne Sync).
-//
-// Das ist KEIN Geheimnis: Diese Werte sind dafür gedacht, öffentlich im Code zu stehen.
+// Firebase-Sync-Config. KEIN Geheimnis: Diese Werte dürfen öffentlich im Code stehen.
 // Geschützt werden deine Daten durch Login + Security Rules in Firebase.
 
-export const firebaseConfig = null;
-
-// Beispiel, wie es danach aussieht:
-// export const firebaseConfig = {
-//   apiKey: "AIza...",
-//   authDomain: "deine-app.firebaseapp.com",
-//   projectId: "deine-app",
-//   storageBucket: "deine-app.firebasestorage.app",
-//   messagingSenderId: "123456789",
-//   appId: "1:123456789:web:abc123",
-// };
+export const firebaseConfig = {
+  apiKey: "AIzaSyDaLRS8RcPFzzHxih1-ys3rgUGvh-qOk9U",
+  authDomain: "tasks-8ea15.firebaseapp.com",
+  projectId: "tasks-8ea15",
+  storageBucket: "tasks-8ea15.firebasestorage.app",
+  messagingSenderId: "178453462991",
+  appId: "1:178453462991:web:237df2f43a07e0d7589cba",
+};
