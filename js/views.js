@@ -283,7 +283,7 @@ export function viewCalendar() {
     <div class="cal-wrap">
       ${side}
       <section class="cal-main">
-        ${head('Kalender', mobile ? longDate(days[0]) : rangeLabel(days[0]), actions)}
+        ${head('Kalender', mobile ? longDate(days[0]) : rangeLabel(days[0], days.length), actions)}
         <div class="cal-grid">
           <div class="cal-header"><div class="gutter"></div>${header}</div>
           <div class="cal-scroll" id="cal-scroll">

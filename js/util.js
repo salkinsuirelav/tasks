@@ -32,8 +32,8 @@ export const dayLabel = (s) => {
 export const longDate = (s) => fmtLong.format(parseDate(s));
 export const shortWeekday = (s) => fmtWd.format(parseDate(s)).replace('.', '');
 export const dayNum = (s) => parseDate(s).getDate();
-export const rangeLabel = (start) => {
-  const a = parseDate(start), b = parseDate(addDays(start, 6));
+export const rangeLabel = (start, len = 7) => {
+  const a = parseDate(start), b = parseDate(addDays(start, len - 1));
   const m = new Intl.DateTimeFormat('de-DE', { month: 'short' });
   return a.getMonth() === b.getMonth() ? `${a.getDate()}.–${b.getDate()}. ${m.format(b)}` : `${a.getDate()}. ${m.format(a)} – ${b.getDate()}. ${m.format(b)}`;
 };
