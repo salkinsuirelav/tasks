@@ -26,6 +26,16 @@ function nextDate(date, repeat) {
   return null;
 }
 
+// Fällt eine wiederkehrende (offene) Aufgabe an diesem Datum an? Nur Tage NACH ihrem Datum (das Datum selbst ist die echte Aufgabe).
+export function repeatsOn(t, date) {
+  if (!t.repeat || !t.date || t.status === 'done' || date <= t.date) return false;
+  if (t.repeat === 'daily') return true;
+  if (t.repeat === 'weekdays') return weekday(date) < 5;
+  if (t.repeat === 'weekly') return weekday(date) === weekday(t.date);
+  if (t.repeat === 'monthly') return date.slice(8) === t.date.slice(8);
+  return false;
+}
+
 // Abhaken. Bei Wiederholung wird automatisch die nächste Instanz angelegt.
 export function toggleDone(id) {
   const t = store.get('tasks', id);
@@ -86,9 +96,11 @@ export function segmentsOn(date, A = 0, B = DAY) {
   const push = (kind, x, s, e) => { if (e > A && s < B) out.push({ kind, ...x, s: Math.max(s, A), e: Math.min(e, B), cont: s < A, spill: e > B }); };
   for (const [d, off] of [[addDays(date, -1), -DAY], [date, 0], [addDays(date, 1), DAY]]) {
     for (const t of tasks()) {
-      if (t.date !== d || !t.time) continue;
+      if (!t.time) continue;
+      const rep = t.date !== d;
+      if (rep && !repeatsOn(t, d)) continue; // rep = Vorschau einer Wiederholung
       const s = toMin(t.time) + off;
-      push('task', { t }, s, s + (t.duration || 30));
+      push('task', { t, rep }, s, s + (t.duration || 30));
     }
     for (const b of blocksOn(d)) {
       const s = toMin(b.start) + off;

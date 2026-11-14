@@ -225,6 +225,8 @@ main.full { padding: 0; overflow: hidden; display: flex; flex-direction: column;
 .ev.short .tm { display: inline; margin-left: 4px; }
 .ev.block .nm { color: var(--text); opacity: .75; }
 .ev.done { opacity: 0.5; text-decoration: line-through; }
+.ev.rep { opacity: 0.6; border-style: dashed; border-left-style: solid; }
+.ev.rep .nm svg { width: 11px; height: 11px; vertical-align: -1px; }
 .ev.block {
   background: repeating-linear-gradient(135deg, var(--hatch) 0 6px, transparent 6px 12px), var(--line-soft);
   border: 1px dashed var(--faint); border-left: 1px dashed var(--faint); color: var(--muted); box-shadow: none;

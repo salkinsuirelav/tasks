@@ -249,9 +249,9 @@ export function viewCalendar() {
           ${h < 36 ? `${name} ${tm}` : `${tm}${name}`}</div>`;
       }
       const t = it.t, p = M.project(t.projectId);
-      return `<div class="ev ${t.status === 'done' ? 'done' : ''} ${h < 36 ? 'short' : ''}" style="${pos};border-left-color:${p?.color || 'var(--accent)'}"
-        data-action="open-task" data-id="${t.id}" draggable="true" data-drag="task" title="${esc(t.title)}">
-        ${(() => { const tm = `<span class="tm">${it.cont ? '↳ ' : ''}${t.time}–${fromMin((toMin(t.time) + (t.duration || 30)) % (24 * 60))}${t.priority === 'frog' ? ' 🐸' : ''}</span>`, nm = `<span class="nm">${esc(t.title)}</span>`;
+      return `<div class="ev ${t.status === 'done' ? 'done' : ''} ${it.rep ? 'rep' : ''} ${h < 36 ? 'short' : ''}" style="${pos};border-left-color:${p?.color || 'var(--accent)'}"
+        data-action="open-task" data-id="${t.id}" ${it.rep ? '' : 'draggable="true" data-drag="task"'} title="${esc(t.title)}${it.rep ? ' (Wiederholung)' : ''}">
+        ${(() => { const tm = `<span class="tm">${it.cont ? '↳ ' : ''}${t.time}–${fromMin((toMin(t.time) + (t.duration || 30)) % (24 * 60))}${t.priority === 'frog' ? ' 🐸' : ''}</span>`, nm = `<span class="nm">${it.rep ? icon('repeat') + ' ' : ''}${esc(t.title)}</span>`;
           return h < 36 ? `${nm} ${tm}` : `${tm}${nm}`; })()}</div>`;
     }).join('');
     const m = ui.modal?.type === 'slot' ? ui.modal : null;
@@ -264,7 +264,7 @@ export function viewCalendar() {
   };
 
   const header = days.map((d) => {
-    const planned = M.tasks().filter((t) => t.date === d && t.time && t.status !== 'done').reduce((a, t) => a + (t.duration || 30), 0);
+    const planned = M.tasks().filter((t) => t.time && t.status !== 'done' && (t.date === d || M.repeatsOn(t, d))).reduce((a, t) => a + (t.duration || 30), 0);
     return `<div class="dh ${d === t0 ? 'today' : ''}"><b>${shortWeekday(d)}</b> <span class="n">${dayNum(d)}</span><span class="h">${planned ? fmtMinutes(planned) : '–'}</span></div>`;
   }).join('');
 
@@ -491,7 +491,7 @@ export function viewSettings() {
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.4.7</p>
+      <p class="mono muted">Version 0.4.8</p>
     </div>`;
 }
 
