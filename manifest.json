@@ -1,7 +1,7 @@
 {
   "name": "Tasks",
   "short_name": "Tasks",
-  "start_url": "./#plan",
+  "start_url": "./#inbox",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f4f3ef",

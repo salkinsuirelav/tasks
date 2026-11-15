@@ -20,7 +20,7 @@ const NAV = [
   { href: '#projects', label: 'Projekte', icon: 'folder' },
   { href: '#review', label: 'Rückblick', icon: 'chart' },
 ];
-const route = () => { const [view, param] = (location.hash.slice(1) || 'plan').split('/'); return { view, param }; };
+const route = () => { const [view, param] = (location.hash.slice(1) || 'inbox').split('/'); return { view, param }; };
 
 function renderNav() {
   const { view, param } = route();
@@ -143,6 +143,9 @@ function applyFinishedPlans() {
     } catch (e) { toast('Claudes Plan konnte nicht gelesen werden: ' + e.message); }
   }
 }
+
+// iPhone: kein Zoomen per Zwei-Finger-Geste (Safari ignoriert user-scalable=no)
+['gesturestart', 'gesturechange'].forEach((ev) => document.addEventListener(ev, (e) => e.preventDefault(), { passive: false }));
 
 store.subscribe(() => { applyTheme(); renderAll(); });
 window.addEventListener('hashchange', () => { ui.sideOpen = false; renderMain(); });
@@ -555,7 +558,8 @@ document.addEventListener('change', async (e) => {
     const changes = { [f]: v };
     if (f === 'time' && v && !store.get('tasks', id).date) changes.date = today();
     store.patch('tasks', id, changes);
-    if (f === 'date' || f === 'time') renderSheet();
+    // Neu zeichnen erst, wenn die Auswahl zu ist (sonst schließt iOS den Datums-/Uhrzeit-Picker sofort wieder)
+    if (f === 'date' || f === 'time') { if (document.activeElement === el) el.addEventListener('blur', () => { if (ui.openTask === id) renderSheet(); }, { once: true }); else renderSheet(); }
     return;
   }
   if (el.dataset.setting) {
@@ -632,7 +636,10 @@ document.addEventListener('dragend', () => {
 });
 
 // ---------- Start ----------
-if (!location.hash) location.replace('#plan');
+// Beim Start als Home-Bildschirm-App immer in der Inbox öffnen (ältere Installationen haben noch #plan als Startadresse gespeichert)
+const standalone = navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+let launched = false; try { launched = !!sessionStorage.getItem('launched'); sessionStorage.setItem('launched', '1'); } catch {}
+if (!location.hash || (standalone && !launched)) location.replace('#inbox');
 applyTheme();
 renderAll();
 store.initSync();
