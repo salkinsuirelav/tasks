@@ -396,6 +396,16 @@ kbd { font-family: var(--mono); font-size: 12px; background: var(--card); border
   input, select, textarea { font-size: 16px; }
   input, select { min-width: 0; max-width: 100%; }
   .sheet { overflow-x: hidden; touch-action: pan-y; }
+  /* Detail-Ansicht: zwei saubere Spalten, alle Felder gleich hoch, Datum/Uhrzeit linksbündig wie die übrigen Felder */
+  .sheet .inline { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .sheet .inline > * { min-width: 0; }
+  .sheet input:not([type="checkbox"]):not(.title-in), .sheet select { height: 46px; }
+  input[type="date"], input[type="time"] {
+    -webkit-appearance: none; appearance: none; display: block; width: 100%; min-width: 0;
+    text-align: left; line-height: 26px; background: var(--card);
+  }
+  input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
+  input[type="date"]:invalid::before, input[type="time"]:invalid::before { color: var(--muted); }
   .app, .app.nav-collapsed { grid-template-columns: 1fr; }
   .sidebar { display: none; }
   main { padding: 18px 16px 110px; padding-top: max(18px, env(safe-area-inset-top)); }
