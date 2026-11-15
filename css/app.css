@@ -428,3 +428,5 @@ kbd { font-family: var(--mono); font-size: 12px; background: var(--card); border
   .hbar { grid-template-columns: 100px 1fr 46px; }
   .desktop-only { display: none; }
 }
+.col.flash { animation: flash 0.9s ease-out; }
+@keyframes flash { 0% { box-shadow: 0 0 0 2px var(--accent); } 100% { box-shadow: 0 0 0 2px transparent; } }

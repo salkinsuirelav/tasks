@@ -216,7 +216,15 @@ const A = {
 
   'inbox-tab': (el) => { ui.inboxTab = el.dataset.tab; renderMain(); },
   sort: (el) => store.saveSettings({ sortMode: el.dataset.mode }),
-  'plan-nav': (el) => { const d = +el.dataset.d; ui.planStart = d ? addDays(ui.planStart, d) : today(); renderMain(); },
+  'plan-nav': (el) => {
+    const d = +el.dataset.d;
+    ui.planStart = d ? addDays(ui.planStart, d) : today();
+    renderMain();
+    // Board-Scroll wird beim Neuzeichnen beibehalten, deshalb hier gezielt springen: an den Anfang bzw. zur Heute-Spalte
+    const board = $('.board'), col = $('.col.today');
+    if (board) board.scrollTo({ left: !d && col ? col.offsetLeft - board.offsetLeft : 0, behavior: 'smooth' });
+    if (!d && col) { col.classList.remove('flash'); void col.offsetWidth; col.classList.add('flash'); }
+  },
   'cal-nav': (el) => {
     const d = +el.dataset.d;
     if (isMobile()) ui.calDay = skipWeekend(d ? addDays(ui.calDay, d) : today(), d < 0 ? -1 : 1);
