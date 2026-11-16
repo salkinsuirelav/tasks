@@ -64,6 +64,7 @@ In der App unter **Einstellungen → Claude** steht jetzt **🟢 Online**.
 | `status.command` | Läuft er? Letzte Meldungen anzeigen |
 | `uninstall.command` | Komplett entfernen (inkl. gespeichertem Passwort) |
 | `start.command` | Nur zum Ausprobieren im Terminal-Fenster |
+| `menubar.command` | Anzeige in der Mac-Menüleiste einrichten (braucht SwiftBar) |
 
 Das Protokoll liegt unter `~/Library/Logs/tasks-helper.log`.
 
@@ -88,6 +89,18 @@ Der Helfer nimmt auf deinem Mac neue Aufgaben an (`http://127.0.0.1:7777/add`, n
 
 Die Aufgabe landet in der Inbox (auf Mac und iPhone). Funktioniert, solange der Helfer läuft (bei dir automatisch im Hintergrund).
 
+## Anzeige in der Mac-Menüleiste (Timer + nächste Aufgabe)
+
+Oben rechts in der Menüleiste steht dann z. B. **⏱ 12:34 Coden** (Timer läuft) oder **Live Trading · in 25 Min** (nächste Aufgabe). Klick darauf zeigt alle Termine von heute, „Timer stoppen“ und „Tasks öffnen“. Ein-/ausschalten: in der App **Einstellungen → Mac-Menüleiste**.
+
+Dafür brauchst du die kostenlose App **SwiftBar** (Open Source, zeigt kleine Skripte in der Menüleiste an).
+
+**Einmalig einrichten (ca. 5 Min):**
+1. Zuerst den Helfer updaten (Befehl unter „Updates“ unten). Der alte Helfer kennt die Menüleiste noch nicht.
+2. SwiftBar laden: [github.com/swiftbar/SwiftBar/releases/latest](https://github.com/swiftbar/SwiftBar/releases/latest) → unter „Assets“ die `.zip` laden → entpacken → `SwiftBar.app` in **Programme** ziehen → einmal öffnen. Fragt SwiftBar nach einem Plugin-Ordner: einfach abbrechen, das macht der nächste Schritt.
+3. Im Finder `Dokumente/tasks-main/helper` öffnen und **`menubar.command`** doppelklicken.
+4. In SwiftBar (Symbol in der Menüleiste → Einstellungen) **Launch at Login** anhaken.
+
 ## Wenn etwas nicht klappt
 | Problem | Lösung |
 |---|---|
@@ -96,6 +109,7 @@ Die Aufgabe landet in der Inbox (auf Mac und iPhone). Funktioniert, solange der 
 | App zeigt „Offline“ | `status.command` doppelklicken und Screenshot an Claude schicken. |
 | „Claude Code ist nicht angemeldet“ | Im Terminal `claude` starten, anmelden, dann `install.command` nochmal. |
 | Kurzbefehl meldet „Verbindung fehlgeschlagen“ | Helfer läuft nicht oder ist alt. Update-Befehl unten ausführen. |
+| Menüleiste zeigt ⓘ / „Mac-Helfer läuft nicht“ | Helfer updaten bzw. `status.command` doppelklicken. |
 | Aufgabe bleibt auf „Claude arbeitet…“ | Mac neu starten oder `install.command` nochmal. Hängende Aufträge werden automatisch neu gestartet. |
 
 ## Updates

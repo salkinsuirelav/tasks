@@ -231,6 +231,7 @@ const A = {
     else ui.calStart = d ? addDays(ui.calStart, d) : weekStart(today());
     renderMain();
   },
+  'menubar': (el) => { M.setMenubar(el.dataset.k, el.dataset.v === '1'); renderMain(); },
   'plan-weekends': (el) => store.saveSettings({ planWeekends: el.dataset.v === '1' }),
   'cal-weekdays': (el) => {
     store.saveSettings({ calWeekdays: el.dataset.v === '1' });
@@ -412,7 +413,13 @@ const A = {
     toast(`${n} Aufgaben gelöscht. Backup liegt in deinen Downloads.`);
   },
   'seed-demo': () => { M.seedDemo(); toast('Beispieldaten geladen.'); },
-  'close-modal': () => { ui.modal = null; renderModal(); },
+  'close-modal': () => { const m = ui.modal; ui.modal = null; renderModal(); if (m?.type === 'repeat-move') { renderMain(); renderSheet(); } },
+  'repeat-move': (el) => {
+    const m = ui.modal; ui.modal = null; renderModal();
+    if (el.dataset.mode === 'one') { const c = M.moveOneOccurrence(m.id, m.occ, m.changes); if (ui.openTask === m.id && c) ui.openTask = c.id; toast('Nur dieser Termin wurde verschoben.'); }
+    else { M.moveSeries(m.id, m.occ, m.changes); toast('Alle Termine wurden verschoben.'); }
+    renderSheet();
+  },
   'close-modal-go': (el) => { ui.modal = null; renderModal(); location.hash = el.getAttribute('href'); },
   'quick-save': () => {
     const v = $('#quick-title').value;
@@ -565,6 +572,12 @@ document.addEventListener('change', async (e) => {
     if (f === 'date' || f === 'time' || f === 'projectId') v = v || null;
     const changes = { [f]: v };
     if (f === 'time' && v && !store.get('tasks', id).date) changes.date = today();
+    // Wiederkehrend + Datum/Uhrzeit: erst fragen (nach dem Schließen des Pickers), ob nur dieser Termin oder alle
+    if ((f === 'date' || f === 'time') && v && store.get('tasks', id).repeat) {
+      const ask = () => { const val = el.value || null; if (val) scheduleChange(id, null, { ...changes, [f]: val }); else renderSheet(); };
+      if (document.activeElement === el) { if (!el.dataset.pending) { el.dataset.pending = '1'; el.addEventListener('blur', ask, { once: true }); } } else ask();
+      return;
+    }
     store.patch('tasks', id, changes);
     // Neu zeichnen erst, wenn die Auswahl zu ist (sonst schließt iOS den Datums-/Uhrzeit-Picker sofort wieder)
     if (f === 'date' || f === 'time') { if (document.activeElement === el) el.addEventListener('blur', () => { if (ui.openTask === id) renderSheet(); }, { once: true }); else renderSheet(); }
@@ -604,13 +617,24 @@ function readSmall(file) {
   return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); });
 }
 
+// Termin ändern. Bei wiederkehrenden Aufgaben erst fragen: nur diesen Termin oder alle?
+function scheduleChange(id, occ, changes) {
+  const t = store.get('tasks', id);
+  if (!t) return;
+  occ = occ || t.date;
+  const moved = Object.keys(changes).some((k) => (k === 'date' ? changes.date !== occ : changes[k] !== t[k]));
+  if (!t.repeat || !moved || !changes.date && !changes.time) return store.patch('tasks', id, changes);
+  ui.modal = { type: 'repeat-move', id, occ, changes };
+  renderModal();
+}
+
 // ---------- Drag & Drop (Mac) ----------
 document.addEventListener('dragstart', (e) => {
   const el = e.target.closest?.('[data-drag]');
   if (!el) return;
   let offsetMin = 0;
   if (el.classList.contains('ev')) offsetMin = Math.floor((((e.clientY - el.getBoundingClientRect().top) / HOUR) * 60) / 15) * 15;
-  ui.drag = { id: el.dataset.id, offsetMin };
+  ui.drag = { id: el.dataset.id, offsetMin, occ: el.dataset.occ || null };
   e.dataTransfer.setData('text/plain', el.dataset.id);
   e.dataTransfer.effectAllowed = 'move';
   requestAnimationFrame(() => el.classList.add('dragging'));
@@ -628,14 +652,14 @@ document.addEventListener('drop', (e) => {
   const t = dropTarget(e);
   if (!t || !ui.drag) return;
   e.preventDefault();
-  const id = ui.drag.id;
-  if (t.dataset.dropDay) store.patch('tasks', id, { date: t.dataset.dropDay });
+  const id = ui.drag.id, occ = ui.drag.occ;
+  if (t.dataset.dropDay) scheduleChange(id, occ, { date: t.dataset.dropDay });
   else if (t.dataset.dropCal) {
     const rect = t.getBoundingClientRect();
     let min = store.settings.dayStart * 60 + Math.round(((((e.clientY - rect.top) / HOUR) * 60) - ui.drag.offsetMin) / 15) * 15;
     min = Math.max(0, Math.min(min, store.settings.dayEnd * 60 - 15));
     const [date, m] = norm(t.dataset.dropCal, min);
-    store.patch('tasks', id, { date, time: fromMin(m) });
+    scheduleChange(id, occ, { date, time: fromMin(m) });
   } else if (t.dataset.dropInbox) store.patch('tasks', id, { date: null, time: null });
 });
 document.addEventListener('dragend', () => {

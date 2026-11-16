@@ -142,12 +142,27 @@ async function main() {
   }, (e) => log('Fehler beim Zuhören:', e.message));
   log('Warte auf Aufträge …');
 
+  // ---------- Mac-Menüleiste (SwiftBar) ----------
+  // Der Helfer hält Aufgaben + Zeiteinträge live im Speicher. Das SwiftBar-Plugin fragt alle paar Sekunden
+  // http://127.0.0.1:7777/menubar ab und zeigt den Text oben in der Menüleiste.
+  const live = { tasks: new Map(), entries: new Map(), menubar: { timer: true, next: true } };
+  const mirror = (name) => onSnapshot(collection(db, ...base, name), (snap) => {
+    snap.docChanges().forEach((c) => (c.type === 'removed' ? live[name].delete(c.doc.id) : live[name].set(c.doc.id, c.doc.data())));
+  }, (e) => log(`Fehler beim Zuhören (${name}):`, e.message));
+  mirror('tasks'); mirror('entries');
+  onSnapshot(doc(db, ...base, 'meta', 'menubar'), (d) => { live.menubar = { timer: true, next: true, ...(d.data() || {}) }; }, () => {});
+  const stopRunning = async () => {
+    for (const [id, e] of live.entries) if (!e.end) await updateDoc(doc(db, ...base, 'entries', id), { end: Date.now(), updatedAt: Date.now() });
+  };
+
   // Schnell-Eingabe für den Mac-Kurzbefehl: POST http://127.0.0.1:7777/add  {"title": "..."}
   // Nur von diesem Mac erreichbar (127.0.0.1). Der Header "X-Tasks" muss gesetzt sein: Webseiten im Browser
   // können so einen Header nicht ohne Erlaubnis mitschicken, damit kann keine fremde Seite Aufgaben anlegen.
   const server = http.createServer((req, res) => {
     const reply = (code, text) => { res.writeHead(code, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end(text); };
     if (req.method === 'GET' && req.url === '/ping') return reply(200, 'ok');
+    if (req.method === 'GET' && req.url.startsWith('/menubar')) return reply(200, menubarText(live));
+    if (req.method === 'POST' && req.url.startsWith('/stop') && req.headers['x-tasks']) { stopRunning().then(() => reply(200, 'Timer gestoppt'), (e) => reply(500, e.message)); return; }
     // Erlaubt: Header X-Tasks ODER JSON-Body. Beides kann eine fremde Webseite nicht ohne Erlaubnis schicken.
     const okHeader = !!req.headers['x-tasks'] || /application\/json/i.test(req.headers['content-type'] || '');
     if (req.method !== 'POST' || !req.url.startsWith('/add') || !okHeader) {
@@ -195,6 +210,57 @@ async function main() {
       log(`✗ Fehler bei ${label}: ${e.message}`);
     }
   }
+}
+
+// ---------- Text für die Menüleiste (SwiftBar-Format: erste Zeile oben, nach "---" das Ausklapp-Menü) ----------
+const APP_URL = 'https://salkinsuirelav.github.io/tasks/';
+const pad2 = (n) => String(n).padStart(2, '0');
+const dateStr = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const wd = (s) => (new Date(s + 'T12:00').getDay() + 6) % 7; // 0 = Montag
+const short = (s, n = 22) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
+const clean = (s) => String(s || '').replace(/\|/g, '/').replace(/\n/g, ' '); // "|" hat in SwiftBar eine Bedeutung
+function onDay(t, day) {
+  if (t.date === day) return true;
+  if (!t.repeat || !t.date || t.status === 'done' || day <= t.date || t.skip?.includes(day)) return false;
+  if (t.repeat === 'daily') return true;
+  if (t.repeat === 'weekdays') return wd(day) < 5;
+  if (t.repeat === 'weekly') return wd(day) === wd(t.date);
+  if (t.repeat === 'monthly') return day.slice(8) === t.date.slice(8);
+  return false;
+}
+function menubarText(live) {
+  const now = new Date(), day = dateStr(now), nowMin = now.getHours() * 60 + now.getMinutes();
+  const toMin = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+  const tasks = [...live.tasks.values()];
+  const run = [...live.entries.values()].find((e) => !e.end);
+  const runTask = run && live.tasks.get(run.taskId);
+  const todays = tasks.filter((t) => t.time && t.status !== 'done' && onDay(t, day)).sort((a, b) => a.time.localeCompare(b.time));
+  const next = todays.find((t) => toMin(t.time) + (t.duration || 30) > nowMin && t.id !== run?.taskId);
+  const lines = [];
+  if (run && live.menubar.timer) {
+    const sec = Math.floor((Date.now() - run.start) / 1000);
+    const clock = sec >= 3600 ? `${Math.floor(sec / 3600)}:${pad2(Math.floor(sec / 60) % 60)}:${pad2(sec % 60)}` : `${pad2(Math.floor(sec / 60))}:${pad2(sec % 60)}`;
+    lines.push(`⏱ ${clock} ${clean(short(runTask?.title || 'Timer'))} | sfimage=timer`);
+  } else if (next && live.menubar.next) {
+    const diff = toMin(next.time) - nowMin;
+    const when = diff <= 0 ? 'jetzt' : diff < 60 ? `in ${diff} Min` : next.time;
+    lines.push(`${clean(short(next.title))} · ${when} | sfimage=calendar`);
+  } else lines.push('| sfimage=checkmark.circle');
+  lines.push('---');
+  if (run) {
+    lines.push(`Läuft: ${clean(runTask?.title || 'Timer')} | sfimage=timer`);
+    lines.push(`Timer stoppen | sfimage=stop.circle bash=/usr/bin/curl param1=-s param2=-X param3=POST param4=-H param5=X-Tasks:1 param6=http://127.0.0.1:7777/stop terminal=false refresh=true`);
+    lines.push('---');
+  }
+  lines.push('Heute | size=12');
+  if (!todays.length) lines.push('Keine Termine mehr | color=gray');
+  for (const t of todays) {
+    const past = toMin(t.time) + (t.duration || 30) <= nowMin;
+    lines.push(`${t.time}  ${clean(short(t.title, 40))} | href=${APP_URL} ${past ? 'color=gray' : ''}`);
+  }
+  lines.push('---');
+  lines.push(`Tasks öffnen | href=${APP_URL} sfimage=arrow.up.forward.app`);
+  return lines.join('\n') + '\n';
 }
 
 // "--check": prüft, ob Claude Code gefunden wird und antwortet

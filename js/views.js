@@ -250,7 +250,7 @@ export function viewCalendar() {
       }
       const t = it.t, p = M.project(t.projectId);
       return `<div class="ev ${t.status === 'done' ? 'done' : ''} ${it.rep ? 'rep' : ''} ${h < 36 ? 'short' : ''}" style="${pos};border-left-color:${p?.color || 'var(--accent)'}"
-        data-action="open-task" data-id="${t.id}" ${it.rep ? '' : 'draggable="true" data-drag="task"'} title="${esc(t.title)}${it.rep ? ' (Wiederholung)' : ''}">
+        data-action="open-task" data-id="${t.id}" draggable="true" data-drag="task" data-occ="${it.occ}" title="${esc(t.title)}${it.rep ? ' (Wiederholung)' : ''}">
         ${(() => { const tm = `<span class="tm">${it.cont ? '↳ ' : ''}${t.time}–${fromMin((toMin(t.time) + (t.duration || 30)) % (24 * 60))}${t.priority === 'frog' ? ' 🐸' : ''}</span>`, nm = `<span class="nm">${it.rep ? icon('repeat') + ' ' : ''}${esc(t.title)}</span>`;
           return h < 36 ? `${nm} ${tm}` : `${tm}${nm}`; })()}</div>`;
     }).join('');
@@ -481,6 +481,12 @@ export function viewSettings() {
       <div class="panel"><h4>Claude (Mac-Helfer)</h4>
         ${(() => { const h = M.helperInfo(); return M.helperOnline() ? `<p style="margin-top:0">🟢 Online auf <b>${esc(h.host || 'deinem Mac')}</b></p>` : `<p style="margin-top:0" class="muted">⚪️ Offline${h ? ` · zuletzt gesehen ${new Date(h.lastSeen).toLocaleString('de-DE')}` : ' · noch nie verbunden'}. Einrichtung: Ordner <span class="mono">helper/</span> im Repo, Anleitung in <span class="mono">helper/README.md</span>.</p>`; })()}
       </div>
+      <div class="panel desktop-only"><h4>Mac-Menüleiste</h4>
+        <p class="muted" style="margin-top:0;font-size:13px">Zeigt oben in der Menüleiste deines Macs den laufenden Timer bzw. die nächste Aufgabe. Klick darauf öffnet die Liste für heute. Braucht den Mac-Helfer und die kostenlose App SwiftBar (Anleitung in <span class="mono">helper/README.md</span>).</p>
+        ${(() => { const mb = M.menubarSettings(); const seg = (k, on) => `<div class="seg"><button class="${on ? 'on' : ''}" data-action="menubar" data-k="${k}" data-v="1">An</button><button class="${on ? '' : 'on'}" data-action="menubar" data-k="${k}" data-v="0">Aus</button></div>`;
+          return `<div class="field"><label>Laufenden Timer anzeigen</label>${seg('timer', mb.timer)}</div>
+          <div class="field"><label>Nächste Aufgabe mit Uhrzeit anzeigen</label>${seg('next', mb.next)}</div>`; })()}
+      </div>
       <div class="panel desktop-only"><h4>Tastenkürzel</h4>
         <p class="muted" style="margin-top:0;font-size:13px">Funktionieren, wenn du nicht gerade in einem Textfeld tippst. Zum Ändern auf die Taste klicken und die neue drücken (Entf = keine Taste).</p>
         ${keysList(true)}
@@ -491,7 +497,7 @@ export function viewSettings() {
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.4.11</p>
+      <p class="mono muted">Version 0.5.0</p>
     </div>`;
 }
 
@@ -693,6 +699,14 @@ export function modalHTML(m) {
       <div class="foot"><button class="btn" data-action="close-modal">Abbrechen</button>
         <button class="btn" data-action="slot-block">${icon('lock')} Zeit sperren</button>
         <button class="btn primary" data-action="slot-task">${icon('plus')} Aufgabe anlegen</button></div>`;
+  } else if (m.type === 'repeat-move') {
+    const t = store.get('tasks', m.id);
+    inner = `
+      <h2>${icon('repeat')} Wiederkehrende Aufgabe verschieben</h2>
+      <p><b>${esc(t?.title || '')}</b> wiederholt sich. Was möchtest du verschieben?</p>
+      <div class="foot"><button class="btn" data-action="close-modal">Abbrechen</button>
+        <button class="btn" data-action="repeat-move" data-mode="all">Alle Termine</button>
+        <button class="btn primary" data-action="repeat-move" data-mode="one" autofocus>Nur diesen Termin</button></div>`;
   } else if (m.type === 'project') {
     inner = `
       <h2>Neues Projekt</h2>

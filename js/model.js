@@ -17,6 +17,43 @@ export function addTask(title, extra = {}) {
   });
 }
 
+// Nächster Termin einer Serie nach `date`, ohne einzeln verschobene Tage (skip)
+function nextOccurrence(t, date) {
+  let d = nextDate(date, t.repeat);
+  for (let i = 0; d && t.skip?.includes(d) && i < 400; i++) d = nextDate(d, t.repeat);
+  return d;
+}
+
+// Nur EINEN Termin einer Serie verschieben: Kopie ohne Wiederholung an der neuen Stelle, in der Serie fällt der Tag aus.
+export function moveOneOccurrence(id, occDate, changes) {
+  const t = store.get('tasks', id);
+  if (!t) return;
+  let copy;
+  store.batch(() => {
+    const { id: _o, createdAt, updatedAt, doneAt, skip, ...rest } = t;
+    copy = store.put('tasks', { ...rest, repeat: '', seriesId: t.id, date: occDate, ...changes });
+    if (occDate === t.date) {
+      const next = nextOccurrence(t, t.date);
+      store.patch('tasks', id, { date: next, skip: (t.skip || []).filter((d) => d > next) });
+    } else store.patch('tasks', id, { skip: [...(t.skip || []), occDate].filter((d) => d > t.date) });
+  });
+  return copy;
+}
+
+// Alle Termine einer Serie verschieben. Von einem späteren Termin aus: Datum um dieselbe Anzahl Tage verschieben.
+export function moveSeries(id, occDate, changes) {
+  const t = store.get('tasks', id);
+  if (!t) return;
+  const patch = { ...changes };
+  if (changes.date) {
+    // Datum um dieselbe Anzahl Tage verschieben; einzeln verschobene Tage wandern mit
+    const delta = Math.round((new Date(changes.date) - new Date(occDate)) / 864e5);
+    patch.date = addDays(t.date, delta);
+    if (t.skip?.length) patch.skip = t.skip.map((d) => addDays(d, delta));
+  }
+  store.patch('tasks', id, patch);
+}
+
 function nextDate(date, repeat) {
   const base = date || today();
   if (repeat === 'daily') return addDays(base, 1);
@@ -29,6 +66,7 @@ function nextDate(date, repeat) {
 // Fällt eine wiederkehrende (offene) Aufgabe an diesem Datum an? Nur Tage NACH ihrem Datum (das Datum selbst ist die echte Aufgabe).
 export function repeatsOn(t, date) {
   if (!t.repeat || !t.date || t.status === 'done' || date <= t.date) return false;
+  if (t.skip?.includes(date)) return false; // einzeln verschoben
   if (t.repeat === 'daily') return true;
   if (t.repeat === 'weekdays') return weekday(date) < 5;
   if (t.repeat === 'weekly') return weekday(date) === weekday(t.date);
@@ -46,7 +84,7 @@ export function toggleDone(id) {
     store.patch('tasks', id, { status: 'done', doneAt: Date.now() });
     if (t.repeat) {
       const { id: _old, createdAt, updatedAt, doneAt, ...rest } = t;
-      store.put('tasks', { ...rest, status: 'todo', date: nextDate(t.date, t.repeat) });
+      store.put('tasks', { ...rest, status: 'todo', date: nextOccurrence(t, t.date), skip: (t.skip || []).filter((d) => d > t.date) });
     }
   });
 }
@@ -100,7 +138,7 @@ export function segmentsOn(date, A = 0, B = DAY) {
       const rep = t.date !== d;
       if (rep && !repeatsOn(t, d)) continue; // rep = Vorschau einer Wiederholung
       const s = toMin(t.time) + off;
-      push('task', { t, rep }, s, s + (t.duration || 30));
+      push('task', { t, rep, occ: d }, s, s + (t.duration || 30));
     }
     for (const b of blocksOn(d)) {
       const s = toMin(b.start) + off;
@@ -283,6 +321,9 @@ export function seedDemo() {
 // Die App legt einen "Auftrag" (job) in Firebase ab. Der Helfer auf deinem Mac holt ihn ab,
 // lässt Claude Code laufen (über dein Abo) und schreibt das Ergebnis zurück.
 export const helperInfo = () => store.get('meta', 'helper');
+// Einstellungen für die Mac-Menüleiste liegen im Sync (meta/menubar), damit der Mac-Helfer sie lesen kann
+export const menubarSettings = () => ({ timer: true, next: true, ...(store.get('meta', 'menubar') || {}) });
+export const setMenubar = (k, v) => store.put('meta', { ...menubarSettings(), id: 'menubar', [k]: v });
 export const helperOnline = () => { const h = helperInfo(); return !!h && Date.now() - h.lastSeen < 150000; };
 export const canUseHelper = () => !!store.sync.user;
 export const jobsFor = (taskId) => store.all('jobs').filter((j) => j.taskId === taskId).sort((a, b) => b.createdAt - a.createdAt);
