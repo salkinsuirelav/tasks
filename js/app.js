@@ -421,10 +421,16 @@ const A = {
     renderSheet();
   },
   'close-modal-go': (el) => { ui.modal = null; renderModal(); location.hash = el.getAttribute('href'); },
+  // Dauer wählen, ohne neu zu zeichnen (sonst wäre der getippte Titel weg)
+  'quick-dur': (el) => {
+    ui.modal.dur = +el.dataset.v;
+    el.parentNode.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === el));
+    $('#quick-title')?.focus();
+  },
   'quick-save': () => {
     const v = $('#quick-title').value;
     if (!v.trim()) return toast('Bitte einen Titel eingeben.');
-    M.addTask(v);
+    M.addTask(v, { duration: ui.modal?.dur || 30 });
     ui.modal = null; renderModal();
     toast('In der Inbox ✓');
   },
