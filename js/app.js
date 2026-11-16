@@ -430,7 +430,7 @@ const A = {
   'quick-save': () => {
     const v = $('#quick-title').value;
     if (!v.trim()) return toast('Bitte einen Titel eingeben.');
-    M.addTask(v, { duration: ui.modal?.dur || 30 });
+    M.addTask(v, { duration: ui.modal?.dur || 30, projectId: $('#quick-proj')?.value || null });
     ui.modal = null; renderModal();
     toast('In der Inbox ✓');
   },

@@ -497,7 +497,7 @@ export function viewSettings() {
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.5.1</p>
+      <p class="mono muted">Version 0.5.2</p>
     </div>`;
 }
 
@@ -721,6 +721,7 @@ export function modalHTML(m) {
       <h2>Neue Aufgabe</h2>
       <p>Enter legt sie in die Inbox${m.date ? ` für <b>${dayLabel(m.date)}</b>` : ''}. Esc bricht ab.</p>
       <div class="field"><input id="quick-title" placeholder="Was steht an?" autofocus autocomplete="off"></div>
+      <div class="field"><label>Projekt</label><select id="quick-proj"><option value="">Kein Projekt</option>${M.projects().map((p) => `<option value="${p.id}" ${p.id === m.projectId ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div>
       <div class="field"><label>Dauer</label><div class="seg" id="quick-dur">${[[30, '30 Min'], [60, '1h'], [90, '1,5h']].map(([v, l]) => `<button class="${v === (m.dur || 30) ? 'on' : ''}" data-action="quick-dur" data-v="${v}">${l}</button>`).join('')}</div></div>
       <div class="foot"><button class="btn" data-action="close-modal">Abbrechen</button><button class="btn primary" data-action="quick-save">Anlegen</button></div>`;
   } else if (m.type === 'keys') {
