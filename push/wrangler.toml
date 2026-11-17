@@ -1,0 +1,11 @@
+# Tasks · Erinnerungs-Dienst. Wird von setup.command auf Cloudflare hochgeladen.
+name = "tasks-reminders"
+main = "src/index.js"
+compatibility_date = "2025-06-01"
+workers_dev = false   # keine öffentliche Adresse nötig, läuft nur per Zeitplan
+
+[triggers]
+crons = ["* * * * *"] # jede Minute
+
+[vars]
+APP_URL = "https://salkinsuirelav.github.io/tasks/"

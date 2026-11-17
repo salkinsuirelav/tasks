@@ -326,6 +326,14 @@ export const menubarSettings = () => ({ timer: true, next: true, ...(store.get('
 export const setMenubar = (k, v) => store.put('meta', { ...menubarSettings(), id: 'menubar', [k]: v });
 export const helperOnline = () => { const h = helperInfo(); return !!h && Date.now() - h.lastSeen < 150000; };
 export const canUseHelper = () => !!store.sync.user;
+
+// ---------- Erinnerungen (Push) ----------
+export const pushConfig = () => store.get('meta', 'pushconfig');
+export const pushServiceOnline = () => { const c = pushConfig(); return !!c && Date.now() - c.lastRun < 20 * 60000; };
+export const pushPrefs = () => ({ enabled: true, lead: 10, ...(store.get('meta', 'pushprefs') || {}) });
+export const setPushPrefs = (patch) => store.put('meta', { ...pushPrefs(), id: 'pushprefs', ...patch });
+export const pushDevices = () => store.all('meta').filter((d) => d.id.startsWith('push-') && d.endpoint);
+export const LEADS = [[0, 'Zur Startzeit'], [5, '5 Min vorher'], [10, '10 Min vorher'], [15, '15 Min vorher'], [30, '30 Min vorher'], [60, '1 Std vorher']];
 export const jobsFor = (taskId) => store.all('jobs').filter((j) => j.taskId === taskId).sort((a, b) => b.createdAt - a.createdAt);
 
 // Claude-Status einer Aufgabe für Listen/Karten: queued | running | new (fertig, noch nicht angesehen) | seen | error | manual

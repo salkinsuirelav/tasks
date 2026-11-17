@@ -2,6 +2,7 @@
 import { today, weekStart } from './util.js';
 
 export const ui = {
+  pushId: (() => { try { return localStorage.getItem('push-id'); } catch { return null; } })(), // Erinnerungen: Kennung dieses Geräts
   inboxTab: 'open',      // open | planned | done
   planStart: today(),    // erster Tag im Kanban
   calStart: weekStart(today()), // Montag der angezeigten Kalenderwoche

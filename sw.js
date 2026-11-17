@@ -1,6 +1,6 @@
 // Service Worker: macht die App offline-fähig.
 // Bei jeder Änderung an den Dateien: VERSION hochzählen, damit iPhone/Mac die neue Version holen.
-const VERSION = 'v0.5.2';
+const VERSION = 'v0.6.0';
 const SHELL = [
   './', 'index.html', 'manifest.json', 'css/app.css',
   'js/app.js', 'js/store.js', 'js/model.js', 'js/views.js', 'js/ui.js', 'js/util.js', 'js/icons.js', 'js/config.js', 'js/md.js', 'js/keys.js',
@@ -31,4 +31,20 @@ self.addEventListener('fetch', (e) => {
     fetch(req, { cache: 'no-cache' }).then((res) => { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(req, copy)); return res; })
       .catch(() => caches.match(req, { ignoreSearch: true }).then((hit) => hit || caches.match('index.html')))
   );
+});
+
+// ---------- Erinnerungen (Push vom Erinnerungs-Dienst, siehe push/) ----------
+self.addEventListener('push', (e) => {
+  let m = {};
+  try { m = e.data ? e.data.json() : {}; } catch { m = { title: 'Tasks', body: e.data?.text() || '' }; }
+  e.waitUntil(self.registration.showNotification(m.title || 'Tasks', {
+    body: m.body || '', tag: m.tag, icon: 'icon-192.png', badge: 'icon-192.png', data: { url: m.url || './' },
+  }));
+});
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+    const win = list.find((c) => 'focus' in c);
+    return win ? win.focus() : self.clients.openWindow(e.notification.data?.url || './');
+  }));
 });

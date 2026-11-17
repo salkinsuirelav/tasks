@@ -481,6 +481,7 @@ export function viewSettings() {
       <div class="panel"><h4>Claude (Mac-Helfer)</h4>
         ${(() => { const h = M.helperInfo(); return M.helperOnline() ? `<p style="margin-top:0">🟢 Online auf <b>${esc(h.host || 'deinem Mac')}</b></p>` : `<p style="margin-top:0" class="muted">⚪️ Offline${h ? ` · zuletzt gesehen ${new Date(h.lastSeen).toLocaleString('de-DE')}` : ' · noch nie verbunden'}. Einrichtung: Ordner <span class="mono">helper/</span> im Repo, Anleitung in <span class="mono">helper/README.md</span>.</p>`; })()}
       </div>
+      <div class="panel"><h4>Erinnerungen</h4>${remindersPanel()}</div>
       <div class="panel desktop-only"><h4>Mac-Menüleiste</h4>
         <p class="muted" style="margin-top:0;font-size:13px">Zeigt oben in der Menüleiste deines Macs den laufenden Timer bzw. die nächste Aufgabe. Klick darauf öffnet die Liste für heute. Braucht den Mac-Helfer und die kostenlose App SwiftBar (Anleitung in <span class="mono">helper/README.md</span>).</p>
         ${(() => { const mb = M.menubarSettings(); const seg = (k, on) => `<div class="seg"><button class="${on ? 'on' : ''}" data-action="menubar" data-k="${k}" data-v="1">An</button><button class="${on ? '' : 'on'}" data-action="menubar" data-k="${k}" data-v="0">Aus</button></div>`;
@@ -497,11 +498,29 @@ export function viewSettings() {
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.5.2</p>
+      <p class="mono muted">Version 0.6.0</p>
     </div>`;
 }
 
 // ---------- Task-Details ----------
+// Einstellungen → Erinnerungen
+function remindersPanel() {
+  const pp = M.pushPrefs(), devs = M.pushDevices(), mine = devs.find((d) => d.id === ui.pushId);
+  const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  const service = M.pushServiceOnline()
+    ? '<p style="margin-top:0">🟢 Erinnerungs-Dienst läuft (auch wenn dein Mac aus ist).</p>'
+    : '<p style="margin-top:0" class="muted">⚪️ Erinnerungs-Dienst noch nicht eingerichtet. Anleitung: <span class="mono">push/ANLEITUNG.md</span> im Repo.</p>';
+  const device = !store.sync.user ? '<p class="muted">Erst unter Sync anmelden.</p>'
+    : !supported ? `<p class="muted">${/iPhone|iPad/.test(navigator.userAgent) ? 'Auf dem iPhone gehen Erinnerungen nur, wenn du die App vom Home-Bildschirm aus öffnest (nicht in Safari).' : 'Dieser Browser kann keine Mitteilungen empfangen.'}</p>`
+    : mine ? `<p>✓ Dieses Gerät bekommt Erinnerungen.</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn small" data-action="push-test">Test schicken</button><button class="btn small ghost" data-action="push-off">Auf diesem Gerät ausschalten</button></div>`
+    : `<button class="btn primary small" data-action="push-on" ${M.pushConfig() ? '' : 'disabled title="Erst den Erinnerungs-Dienst einrichten"'}>${icon('bell')} Auf diesem Gerät aktivieren</button>`;
+  return `${service}
+    <div class="field"><label>Erinnerungen</label><div class="seg"><button class="${pp.enabled ? 'on' : ''}" data-action="push-enabled" data-v="1">An</button><button class="${pp.enabled ? '' : 'on'}" data-action="push-enabled" data-v="0">Aus</button></div></div>
+    <div class="field"><label>Standard für Aufgaben mit Uhrzeit</label><select id="push-lead">${M.LEADS.map(([v, l]) => `<option value="${v}" ${v === pp.lead ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+    <div class="field"><label>Dieses Gerät</label>${device}</div>
+    ${devs.length ? `<p class="muted" style="font-size:12.5px;margin:0">Aktiv auf: ${devs.map((d) => esc(d.device || 'Gerät')).join(', ')}</p>` : ''}`;
+}
+
 export function sheetHTML(t) {
   const files = Object.values(store.state.files).filter((f) => f.taskId === t.id);
   const tracked = M.trackedFor(t.id);
@@ -538,6 +557,10 @@ export function sheetHTML(t) {
           <div class="field"><label>Geschätzte Dauer</label><select data-field="duration">${durs.sort((a, b) => a - b).map((d) => `<option value="${d}" ${d === t.duration ? 'selected' : ''}>${fmtMinutes(d)}</option>`).join('')}</select></div>
           <div class="field"><label>Wiederholen</label><select data-field="repeat">${REPEATS.map((r) => `<option value="${r.id}" ${r.id === (t.repeat || '') ? 'selected' : ''}>${r.label}</option>`).join('')}</select></div>
         </div>
+        ${t.time ? (() => { const pp = M.pushPrefs(), r = t.remind ?? ''; return `<div class="field"><label>Erinnerung</label><select data-field="remind">
+          <option value="" ${r === '' ? 'selected' : ''}>Standard (${pp.enabled ? M.LEADS.find((l) => l[0] === pp.lead)?.[1] || pp.lead + ' Min vorher' : 'aus'})</option>
+          <option value="-1" ${r === -1 ? 'selected' : ''}>Keine</option>
+          ${M.LEADS.map(([v, l]) => `<option value="${v}" ${r === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`; })() : ''}
         ${t.date || t.time ? `<button class="btn small ghost" data-action="unschedule" style="margin:-4px 0 12px -8px">Termin entfernen (zurück in die Inbox)</button>` : ''}
 
         <div class="field"><label>Notizen</label><textarea data-field="notes" placeholder="Details, Links, Gedanken…">${esc(t.notes || '')}</textarea></div>

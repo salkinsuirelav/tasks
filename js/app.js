@@ -231,6 +231,35 @@ const A = {
     else ui.calStart = d ? addDays(ui.calStart, d) : weekStart(today());
     renderMain();
   },
+  // ---- Erinnerungen ----
+  'push-on': async () => {
+    try {
+      if (await Notification.requestPermission() !== 'granted') return toast('Mitteilungen sind nicht erlaubt. In den Systemeinstellungen für die App erlauben.');
+      const reg = await navigator.serviceWorker.ready;
+      const key = M.pushConfig()?.vapidPublic;
+      if (!key) return toast('Erst den Erinnerungs-Dienst einrichten.');
+      const bin = Uint8Array.from(atob(key.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+      let sub = await reg.pushManager.getSubscription();
+      if (sub) await sub.unsubscribe().catch(() => {}); // frisch mit aktuellem Schlüssel
+      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: bin });
+      const j = sub.toJSON();
+      const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(j.endpoint)))).slice(0, 8).map((b) => b.toString(16).padStart(2, '0')).join('');
+      const id = 'push-' + hash;
+      const ua = navigator.userAgent;
+      const device = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Mac/.test(ua) ? 'Mac' : 'Browser';
+      store.put('meta', { id, endpoint: j.endpoint, keys: j.keys, device, tz: Intl.DateTimeFormat().resolvedOptions().timeZone });
+      ui.pushId = id; try { localStorage.setItem('push-id', id); } catch {}
+      renderMain(); toast('Erinnerungen auf diesem Gerät aktiv ✓');
+    } catch (e) { toast('Hat nicht geklappt: ' + e.message); }
+  },
+  'push-off': async () => {
+    try { const sub = await (await navigator.serviceWorker.ready).pushManager.getSubscription(); await sub?.unsubscribe(); } catch {}
+    if (ui.pushId) store.remove('meta', ui.pushId);
+    ui.pushId = null; try { localStorage.removeItem('push-id'); } catch {}
+    renderMain(); toast('Auf diesem Gerät ausgeschaltet.');
+  },
+  'push-test': () => { store.put('meta', { id: 'pushtest', at: Date.now() }); toast('Test kommt in ca. 1 Minute auf allen aktiven Geräten.'); },
+  'push-enabled': (el) => { M.setPushPrefs({ enabled: el.dataset.v === '1' }); renderMain(); },
   'menubar': (el) => { M.setMenubar(el.dataset.k, el.dataset.v === '1'); renderMain(); },
   'plan-weekends': (el) => store.saveSettings({ planWeekends: el.dataset.v === '1' }),
   'cal-weekdays': (el) => {
@@ -575,6 +604,7 @@ document.addEventListener('change', async (e) => {
     if (f === 'notes') return;
     if (f === 'projectId' && v === '__new') { el.value = store.get('tasks', id).projectId || ''; return A['new-project']({ dataset: { fromTask: id } }); }
     if (f === 'duration') v = +v;
+    if (f === 'remind') v = v === '' ? null : +v;
     if (f === 'date' || f === 'time' || f === 'projectId') v = v || null;
     const changes = { [f]: v };
     if (f === 'time' && v && !store.get('tasks', id).date) changes.date = today();
@@ -589,6 +619,7 @@ document.addEventListener('change', async (e) => {
     if (f === 'date' || f === 'time') { if (document.activeElement === el) el.addEventListener('blur', () => { if (ui.openTask === id) renderSheet(); }, { once: true }); else renderSheet(); }
     return;
   }
+  if (el.id === 'push-lead') { M.setPushPrefs({ lead: +el.value }); return; }
   if (el.dataset.setting) {
     const v = +el.value;
     const st = el.dataset.setting === 'dayStart' ? v : store.settings.dayStart, en = el.dataset.setting === 'dayEnd' ? v : store.settings.dayEnd;
