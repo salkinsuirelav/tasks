@@ -498,7 +498,7 @@ export function viewSettings() {
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.6.0</p>
+      <p class="mono muted">Version 0.6.1</p>
     </div>`;
 }
 
@@ -516,7 +516,7 @@ function remindersPanel() {
     : `<button class="btn primary small" data-action="push-on" ${M.pushConfig() ? '' : 'disabled title="Erst den Erinnerungs-Dienst einrichten"'}>${icon('bell')} Auf diesem Gerät aktivieren</button>`;
   return `${service}
     <div class="field"><label>Erinnerungen</label><div class="seg"><button class="${pp.enabled ? 'on' : ''}" data-action="push-enabled" data-v="1">An</button><button class="${pp.enabled ? '' : 'on'}" data-action="push-enabled" data-v="0">Aus</button></div></div>
-    <div class="field"><label>Standard für Aufgaben mit Uhrzeit</label><select id="push-lead">${M.LEADS.map(([v, l]) => `<option value="${v}" ${v === pp.lead ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+    <div class="field"><label>Standard für Aufgaben mit Uhrzeit</label><select id="push-lead"><option value="-1" ${pp.lead === -1 ? 'selected' : ''}>Keine (nur bei Aufgaben, wo du es einstellst)</option>${M.LEADS.map(([v, l]) => `<option value="${v}" ${v === pp.lead ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
     <div class="field"><label>Dieses Gerät</label>${device}</div>
     ${devs.length ? `<p class="muted" style="font-size:12.5px;margin:0">Aktiv auf: ${devs.map((d) => esc(d.device || 'Gerät')).join(', ')}</p>` : ''}`;
 }
@@ -558,7 +558,7 @@ export function sheetHTML(t) {
           <div class="field"><label>Wiederholen</label><select data-field="repeat">${REPEATS.map((r) => `<option value="${r.id}" ${r.id === (t.repeat || '') ? 'selected' : ''}>${r.label}</option>`).join('')}</select></div>
         </div>
         ${t.time ? (() => { const pp = M.pushPrefs(), r = t.remind ?? ''; return `<div class="field"><label>Erinnerung</label><select data-field="remind">
-          <option value="" ${r === '' ? 'selected' : ''}>Standard (${pp.enabled ? M.LEADS.find((l) => l[0] === pp.lead)?.[1] || pp.lead + ' Min vorher' : 'aus'})</option>
+          <option value="" ${r === '' ? 'selected' : ''}>Standard (${pp.enabled && pp.lead >= 0 ? M.LEADS.find((l) => l[0] === pp.lead)?.[1] || pp.lead + ' Min vorher' : 'keine'})</option>
           <option value="-1" ${r === -1 ? 'selected' : ''}>Keine</option>
           ${M.LEADS.map(([v, l]) => `<option value="${v}" ${r === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`; })() : ''}
         ${t.date || t.time ? `<button class="btn small ghost" data-action="unschedule" style="margin:-4px 0 12px -8px">Termin entfernen (zurück in die Inbox)</button>` : ''}
