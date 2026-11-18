@@ -12,7 +12,7 @@ export function addTask(title, extra = {}) {
   title = title.trim();
   if (!title) return null;
   return store.put('tasks', {
-    title, notes: '', projectId: null, date: null, time: null, duration: 30,
+    title, notes: '', projectId: null, date: null, time: null, duration: 60,
     priority: '', status: 'todo', repeat: '', ai: false, ...extra,
   });
 }

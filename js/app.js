@@ -4,7 +4,7 @@ import * as M from './model.js';
 import * as V from './views.js';
 import { ui, isMobile } from './ui.js';
 import { icon } from './icons.js';
-import { esc, toDateStr, today, addDays, weekStart, toMin, fromMin, nowMin, fmtClock, fmtDur, fmtHours, COLORS } from './util.js';
+import { esc, toDateStr, today, addDays, weekStart, toMin, fromMin, nowMin, fmtClock, fmtDur, fmtHours, fmtMinutes, COLORS } from './util.js';
 import { SHORTCUTS, actionFor } from './keys.js';
 import { splitSources } from './md.js';
 
@@ -501,7 +501,7 @@ const A = {
   'quick-save': () => {
     const v = $('#quick-title').value;
     if (!v.trim()) return toast('Bitte einen Titel eingeben.');
-    M.addToday(v, { duration: ui.modal?.dur || 30, projectId: $('#quick-proj')?.value || null }, 'bottom');
+    M.addToday(v, { duration: ui.modal?.dur || 60, projectId: $('#quick-proj')?.value || null }, 'bottom');
     ui.modal = null; renderModal();
     toast('Für heute eingetragen ✓');
   },
@@ -600,6 +600,36 @@ const slotMin = (dayEl, y, round = Math.round) => {
   const min = s.dayStart * 60 + round((((y - dayEl.getBoundingClientRect().top) / HOUR) * 60) / 15) * 15;
   return Math.max(s.dayStart * 60, Math.min(min, s.dayEnd * 60));
 };
+// Termin / Eintrag im Kalender am unteren Rand länger oder kürzer ziehen
+document.addEventListener('pointerdown', (e) => {
+  const h = e.target.closest?.('[data-resize]');
+  if (!h || e.button !== 0) return;
+  e.preventDefault(); e.stopPropagation();
+  const ev = h.closest('.ev'), kind = h.dataset.resize, id = h.dataset.id;
+  ev.draggable = false; ev.classList.add('resizing');
+  const en = kind === 'entry' ? store.get('entries', id) : null;
+  const base = kind === 'entry' ? Math.round((en.end - en.start) / 60000) : (store.get('tasks', id)?.duration || 60);
+  const y0 = e.clientY, h0 = ev.offsetHeight;
+  let dur = base;
+  const lbl = document.createElement('div'); lbl.className = 'rs-lbl'; lbl.textContent = fmtMinutes(base); ev.appendChild(lbl);
+  const move = (m) => {
+    dur = Math.max(15, Math.round((base + ((m.clientY - y0) / HOUR) * 60) / 15) * 15);
+    ev.style.height = `${Math.max(22, h0 + ((dur - base) * HOUR) / 60)}px`;
+    lbl.textContent = fmtMinutes(dur);
+  };
+  const up = () => {
+    document.removeEventListener('pointermove', move);
+    document.removeEventListener('pointerup', up);
+    const stop = (c) => { c.stopPropagation(); c.preventDefault(); };
+    window.addEventListener('click', stop, { capture: true, once: true });
+    setTimeout(() => window.removeEventListener('click', stop, { capture: true }), 300);
+    if (dur === base) return renderMain();
+    if (kind === 'entry') store.patch('entries', id, { end: en.start + dur * 60000 });
+    else store.patch('tasks', id, { duration: dur });
+  };
+  document.addEventListener('pointermove', move);
+  document.addEventListener('pointerup', up);
+});
 document.addEventListener('pointerdown', (e) => {
   const day = e.target.closest?.('.cal-day');
   if (!day || e.pointerType !== 'mouse' || e.button !== 0 || e.target.closest('.ev') || ui.modal) return;
@@ -739,7 +769,7 @@ document.addEventListener('dragover', (e) => {
   document.querySelectorAll('.drag-over').forEach((x) => x !== t && x.classList.remove('drag-over'));
   t.classList.add('drag-over');
   if (t.dataset.dropCal) {
-    const min = dropMin(t, e), dur = store.get('tasks', ui.drag.id)?.duration || 30;
+    const min = dropMin(t, e), dur = store.get('tasks', ui.drag.id)?.duration || 60;
     let g = t.querySelector('.drop-ghost');
     if (!g) { clearGhost(); g = document.createElement('div'); g.className = 'ev ghost drop-ghost'; t.appendChild(g); }
     g.style.cssText = `top:${((min - store.settings.dayStart * 60) * HOUR) / 60}px;height:${Math.max(18, (dur * HOUR) / 60 - 2)}px;left:3px;right:3px`;

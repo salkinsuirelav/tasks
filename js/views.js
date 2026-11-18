@@ -125,7 +125,6 @@ export function viewToday() {
       <div class="title"><span class="t">${esc(t.title)}</span>
         <div class="meta">${chipProject(t.projectId)}${chipPrio(t.priority)}${t.date < t0 ? chipWhen(t) : ''}${t.repeat ? `<span class="chip">${icon('repeat')}</span>` : ''}${on ? `<button class="chip linkish" data-action="focus" data-id="${t.id}">Fokus</button>` : ''}</div></div>
       <span class="mono tm ${ms || on ? '' : 'faint'}" ${on ? 'data-tick="task"' : ''}>${fmtDur(ms)}</span>
-      ${i > 0 ? `<button class="icon-btn up" data-action="today-top" data-id="${t.id}" title="Als Nächstes">${icon('up')}</button>` : ''}
       ${playBtn(t)}
     </div>`;
   };
@@ -338,13 +337,13 @@ export function dayColumn(d) {
       const t = it.t, p = M.project(t?.projectId ?? it.en.projectId);
       const a = fromMin(((Math.round(it.s) % 1440) + 1440) % 1440), b = it.live ? 'jetzt' : fromMin(Math.round(it.e) % 1440);
       const tm = `<span class="tm">${it.cont ? '↳ ' : ''}${a}–${b}</span>`, nm = `<span class="nm">${esc(t?.title || 'Gelöschte Aufgabe')}</span>`;
-      return `<div class="ev log ${it.live ? 'live' : ''} ${h < 36 ? 'short' : ''}" style="${pos};--pc:${p?.color || 'var(--accent)'}" data-action="edit-entry" data-id="${it.en.id}" title="${esc(t?.title || '')} ${a}–${b}">${h < 36 ? `${nm} ${tm}` : `${tm}${nm}`}</div>`;
+      return `<div class="ev log ${it.live ? 'live' : ''} ${h < 36 ? 'short' : ''}" style="${pos};--pc:${p?.color || 'var(--accent)'}" data-action="edit-entry" data-id="${it.en.id}" title="${esc(t?.title || '')} ${a}–${b}">${h < 36 ? `${nm} ${tm}` : `${tm}${nm}`}${it.live || it.cont ? '' : `<div class="rs" data-resize="entry" data-id="${it.en.id}" title="Ziehen: länger/kürzer"></div>`}</div>`;
     }
     const t = it.t, p = M.project(t.projectId);
     return `<div class="ev appt ${t.status === 'done' ? 'done' : ''} ${it.rep ? 'rep' : ''} ${h < 36 ? 'short' : ''}" style="${pos};--pc:${p?.color || 'var(--accent)'}"
       data-action="open-task" data-id="${t.id}" draggable="true" data-drag="task" data-occ="${it.occ}" title="${esc(t.title)}${it.rep ? ' (Wiederholung)' : ''}">
       ${(() => { const tm = `<span class="tm">${it.cont ? '↳ ' : ''}${t.time}–${fromMin((toMin(t.time) + (t.duration || 30)) % (24 * 60))}${t.priority === 'frog' ? ' 🐸' : ''}</span>`, nm = `<span class="nm">${it.rep ? icon('repeat') + ' ' : ''}${esc(t.title)}</span>`;
-        return h < 36 ? `${nm} ${tm}` : `${tm}${nm}`; })()}</div>`;
+        return h < 36 ? `${nm} ${tm}` : `${tm}${nm}`; })()}${it.cont ? '' : `<div class="rs" data-resize="appt" data-id="${t.id}" title="Ziehen: länger/kürzer"></div>`}</div>`;
   }).join('');
   const m = ui.modal?.type === 'slot' ? ui.modal : null;
   const sel = m && (m.colDate || m.date) === d ? { s: m.colMin ?? toMin(m.time), e: (m.colMin ?? toMin(m.time)) + m.dur } : ui.select?.date === d ? ui.select : null;
@@ -619,7 +618,7 @@ export function viewSettings() {
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.8.2</p>
+      <p class="mono muted">Version 0.8.3</p>
     </div>`;
 }
 
@@ -879,7 +878,7 @@ export function modalHTML(m) {
       <p>Enter trägt sie für heute ein. Esc bricht ab.</p>
       <div class="field"><input id="quick-title" placeholder="Was steht an?" autofocus autocomplete="off"></div>
       <div class="field"><label>Projekt</label><select id="quick-proj"><option value="">Kein Projekt</option>${M.projects().map((p) => `<option value="${p.id}" ${p.id === m.projectId ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div>
-      <div class="field"><label>Dauer</label><div class="seg" id="quick-dur">${[[30, '30 Min'], [60, '1h'], [90, '1,5h']].map(([v, l]) => `<button class="${v === (m.dur || 30) ? 'on' : ''}" data-action="quick-dur" data-v="${v}">${l}</button>`).join('')}</div></div>
+      <div class="field"><label>Dauer</label><div class="seg" id="quick-dur">${[[30, '30 Min'], [60, '1h'], [90, '1,5h']].map(([v, l]) => `<button class="${v === (m.dur || 60) ? 'on' : ''}" data-action="quick-dur" data-v="${v}">${l}</button>`).join('')}</div></div>
       <div class="foot"><button class="btn" data-action="close-modal">Abbrechen</button><button class="btn primary" data-action="quick-save">Anlegen</button></div>`;
   } else if (m.type === 'keys') {
     inner = `
