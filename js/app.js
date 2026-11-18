@@ -16,8 +16,7 @@ const HOUR = 56;
 const NAV = [
   { href: '#today', label: 'Heute', icon: 'sun' },
   { href: '#plan', label: 'Plan', icon: 'board' },
-  { href: '#inbox', label: 'Inbox', icon: 'inbox' },
-  { href: '#calendar', label: 'Logbuch', icon: 'calendar' },
+  { href: '#calendar', label: 'Kalender', icon: 'calendar' },
   { href: '#projects', label: 'Projekte', icon: 'folder' },
   { href: '#review', label: 'Rückblick', icon: 'chart' },
 ];
@@ -55,9 +54,15 @@ function renderMain() {
   const sel = key && 'selectionStart' in act ? [act.selectionStart, act.selectionEnd] : null;
   const scroll = { board: $('.board')?.scrollLeft, cal: $('#cal-scroll')?.scrollTop, side: $('.side-list')?.scrollTop };
 
-  const views = { today: V.viewToday, inbox: V.viewInbox, plan: V.viewPlan, calendar: V.viewCalendar, projects: V.viewProjects, project: () => V.viewProject(param), review: V.viewReview, settings: V.viewSettings };
+  const views = { today: V.viewToday, inbox: V.viewToday, plan: V.viewPlan, calendar: V.viewCalendar, projects: V.viewProjects, project: () => V.viewProject(param), review: V.viewReview, settings: V.viewSettings };
   main.classList.toggle('full', view === 'calendar');
   main.innerHTML = (views[view] || V.viewToday)();
+  // Kalender-Kasten auf Heute: Höhe in ganzen Stunden, damit keine Uhrzeit halb abgeschnitten ist
+  const mini = $('.cal-grid.mini');
+  if (mini) {
+    const k = window.matchMedia('(max-width: 1000px)').matches ? 7 : Math.max(5, Math.floor((window.innerHeight - mini.getBoundingClientRect().top - 20) / HOUR));
+    mini.style.height = `${k * HOUR}px`;
+  }
 
   if (view === lastView) {
     if ($('.board') && scroll.board != null) $('.board').scrollLeft = scroll.board;
@@ -497,9 +502,9 @@ const A = {
   'quick-save': () => {
     const v = $('#quick-title').value;
     if (!v.trim()) return toast('Bitte einen Titel eingeben.');
-    M.addTask(v, { duration: ui.modal?.dur || 30, projectId: $('#quick-proj')?.value || null });
+    M.addToday(v, { duration: ui.modal?.dur || 30, projectId: $('#quick-proj')?.value || null }, store.settings.addPos || 'bottom');
     ui.modal = null; renderModal();
-    toast('In der Inbox ✓');
+    toast('Für heute eingetragen ✓');
   },
   'key-record': (el) => { ui.recordKey = ui.recordKey === el.dataset.id ? null : el.dataset.id; renderMain(); },
   'keys-reset': () => { ui.recordKey = null; store.saveSettings({ keys: {} }); toast('Standard-Kürzel wiederhergestellt.'); },
@@ -752,7 +757,7 @@ document.addEventListener('dragend', () => {
 // Beim Start als Home-Bildschirm-App immer in der Inbox öffnen (ältere Installationen haben noch #plan als Startadresse gespeichert)
 const standalone = navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
 let launched = false; try { launched = !!sessionStorage.getItem('launched'); sessionStorage.setItem('launched', '1'); } catch {}
-if (!location.hash || (standalone && !launched)) location.replace('#today');
+if (!location.hash || location.hash === '#inbox' || (standalone && !launched)) location.replace('#today');
 applyTheme();
 renderAll();
 store.initSync();

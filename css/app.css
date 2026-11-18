@@ -521,3 +521,7 @@ details.pull[open] summary::before { content: "▾"; }
 .pcard .pfoot span { white-space: nowrap; }
 .goalbar .goal-txt { font-size: 14px; }
 .goalbar .goal-txt b { font-size: 15px; }
+/* Uhrzeiten oben/unten nicht abschneiden */
+.cal-scroll { padding: 8px 0; }
+.cal-grid.mini { min-height: 0; }
+.empty a { color: var(--accent); }

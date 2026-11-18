@@ -4,7 +4,6 @@ export const SHORTCUTS = [
   { id: 'new', label: 'Neue Aufgabe', key: 'n' },
   { id: 'heute', label: 'Heute öffnen', key: '1' },
   { id: 'plan', label: 'Plan öffnen', key: '2' },
-  { id: 'inbox', label: 'Inbox öffnen', key: '6' },
   { id: 'calendar', label: 'Kalender öffnen', key: '3' },
   { id: 'projects', label: 'Projekte öffnen', key: '4' },
   { id: 'review', label: 'Rückblick öffnen', key: '5' },

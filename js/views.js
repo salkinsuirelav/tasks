@@ -181,15 +181,14 @@ export function viewToday() {
         ${st.hideOther
           ? section('Sonstiges', [], `<div class="empty small">${other.length ? `${other.length} ausgeblendet` : 'Ausgeblendet'}</div>`, eye, other.length)
           : section('Sonstiges', other, otherCap, eye)}
-        ${!list.length && !done.length ? `<p class="muted" style="margin:6px 2px">Tipp: Schreib alles für heute auf und arbeite es von oben nach unten ab. Dein Logbuch rechts füllt sich dabei von selbst.</p>` : ''}
         ${apps.length ? `<div class="group-title">Termine heute</div><div class="list">${apps.map((t) => `<div class="row ${t.status === 'done' ? 'done' : ''}" data-action="open-task" data-id="${t.id}"><span class="mono" style="min-width:48px">${t.time}</span><div class="title"><span class="t">${esc(t.title)}</span></div>${playBtn(t)}</div>`).join('')}</div>` : ''}
         ${done.length ? `<div class="group-title">Erledigt heute <span class="mono">${done.length}</span></div><div class="list">${done.map(doneRow).join('')}</div>` : ''}
-        ${inbox.length ? `<details class="pull" ${ui.pullOpen ? 'open' : ''}><summary class="group-title">Aus der Inbox holen <span class="mono">${inbox.length}</span></summary>
+        ${inbox.length ? `<details class="pull" ${ui.pullOpen ? 'open' : ''}><summary class="group-title">Ohne Datum <span class="mono">${inbox.length}</span></summary>
           <div class="list">${inbox.map((t) => `<div class="row" data-action="open-task" data-id="${t.id}"><div class="title"><span class="t">${esc(t.title)}</span><div class="meta">${chips(t)}</div></div>
             <button class="btn small" data-action="pull-today" data-id="${t.id}">${icon('plus')} Heute</button></div>`).join('')}</div></details>` : ''}
       </div>
       <aside class="today-log">
-        <div class="tsec-head"><span class="tsec-title">Logbuch heute</span><a href="#calendar" class="muted" style="margin-left:auto;font-size:13px">Woche ›</a></div>
+        <div class="tsec-head"><span class="tsec-title">Kalender heute</span><a href="#calendar" class="muted" style="margin-left:auto;font-size:13px">Woche ›</a></div>
         <div class="cal-grid mini">
           <div class="cal-scroll" id="cal-scroll">${timeAxis()}${dayColumn(t0)}</div>
         </div>
@@ -386,7 +385,7 @@ export function viewCalendar() {
   return `
     <div class="cal-wrap">
       <section class="cal-main">
-        ${head('Logbuch', mobile ? longDate(days[0]) : rangeLabel(days[0], days.length), actions)}
+        ${head('Kalender', mobile ? longDate(days[0]) : rangeLabel(days[0], days.length), actions)}
         ${weekGoalBar(weekStart(days[0]))}
         <div class="cal-grid">
           <div class="cal-header"><div class="gutter"></div>${header}</div>
@@ -624,7 +623,7 @@ export function viewSettings() {
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.8.0</p>
+      <p class="mono muted">Version 0.8.1</p>
     </div>`;
 }
 
@@ -687,7 +686,7 @@ export function sheetHTML(t) {
           <option value="" ${r === '' ? 'selected' : ''}>Standard (${pp.enabled && pp.lead >= 0 ? M.LEADS.find((l) => l[0] === pp.lead)?.[1] || pp.lead + ' Min vorher' : 'keine'})</option>
           <option value="-1" ${r === -1 ? 'selected' : ''}>Keine</option>
           ${M.LEADS.map(([v, l]) => `<option value="${v}" ${r === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`; })() : ''}
-        ${t.date || t.time ? `<button class="btn small ghost" data-action="unschedule" style="margin:-4px 0 12px -8px">Termin entfernen (zurück in die Inbox)</button>` : ''}
+        ${t.date || t.time ? `<button class="btn small ghost" data-action="unschedule" style="margin:-4px 0 12px -8px">Datum entfernen</button>` : ''}
 
         <div class="field"><label>Notizen</label><textarea data-field="notes" placeholder="Details, Links, Gedanken…">${esc(t.notes || '')}</textarea></div>
 
@@ -881,7 +880,7 @@ export function modalHTML(m) {
   } else if (m.type === 'quick') {
     inner = `
       <h2>Neue Aufgabe</h2>
-      <p>Enter legt sie in die Inbox${m.date ? ` für <b>${dayLabel(m.date)}</b>` : ''}. Esc bricht ab.</p>
+      <p>Enter trägt sie für heute ein. Esc bricht ab.</p>
       <div class="field"><input id="quick-title" placeholder="Was steht an?" autofocus autocomplete="off"></div>
       <div class="field"><label>Projekt</label><select id="quick-proj"><option value="">Kein Projekt</option>${M.projects().map((p) => `<option value="${p.id}" ${p.id === m.projectId ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div>
       <div class="field"><label>Dauer</label><div class="seg" id="quick-dur">${[[30, '30 Min'], [60, '1h'], [90, '1,5h']].map(([v, l]) => `<button class="${v === (m.dur || 30) ? 'on' : ''}" data-action="quick-dur" data-v="${v}">${l}</button>`).join('')}</div></div>
