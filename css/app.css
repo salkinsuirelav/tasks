@@ -525,3 +525,8 @@ details.pull[open] summary::before { content: "▾"; }
 .cal-scroll { padding: 8px 0; }
 .cal-grid.mini { min-height: 0; }
 .empty a { color: var(--accent); }
+.tcard.dragging { opacity: 0.4; }
+.tcard[draggable="true"] { -webkit-user-drag: element; }
+.today-main.drag-over { outline: none; }
+.drop-ghost { pointer-events: none; z-index: 5; font-family: var(--mono); font-size: 12px; }
+.tcard.drag-over { outline: none; box-shadow: 0 -3px 0 0 var(--accent); }

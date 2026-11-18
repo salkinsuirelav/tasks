@@ -221,7 +221,6 @@ const A = {
   // Heute
   finish: (el) => { const t = store.get('tasks', el.dataset.id); M.finishTask(el.dataset.id); toast('Erledigt ✓', { label: 'Rückgängig', fn: () => M.toggleDone(el.dataset.id) }); if (ui.openTask) renderSheet(); },
   'today-top': (el) => { M.moveInToday(el.dataset.id, 'top'); },
-  'add-pos': (el) => store.saveSettings({ addPos: el.dataset.v }),
   'toggle-other': () => store.saveSettings({ hideOther: !store.settings.hideOther }),
   'pull-today': (el) => { ui.pullOpen = true; store.patch('tasks', el.dataset.id, { date: today(), order: Date.now() }); },
   focus: (el) => { ui.focusTask = el.dataset.id; ui.openTask = null; renderSheet(); renderFocus(); renderPill(); },
@@ -502,7 +501,7 @@ const A = {
   'quick-save': () => {
     const v = $('#quick-title').value;
     if (!v.trim()) return toast('Bitte einen Titel eingeben.');
-    M.addToday(v, { duration: ui.modal?.dur || 30, projectId: $('#quick-proj')?.value || null }, store.settings.addPos || 'bottom');
+    M.addToday(v, { duration: ui.modal?.dur || 30, projectId: $('#quick-proj')?.value || null }, 'bottom');
     ui.modal = null; renderModal();
     toast('Für heute eingetragen ✓');
   },
@@ -532,7 +531,7 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     if (el.dataset.add === 'today-proj' || el.dataset.add === 'today-other') {
       const pid = el.dataset.add === 'today-proj' ? ($('#today-proj')?.value || null) : null;
-      if (M.addToday(el.value, { projectId: pid }, store.settings.addPos || 'bottom')) el.value = '';
+      if (M.addToday(el.value, { projectId: pid }, 'bottom')) el.value = '';
       return;
     }
     const extra = el.dataset.add === 'today' ? { date: today() } : el.dataset.add === 'day' ? { date: el.dataset.date } : el.dataset.add === 'project' ? { projectId: el.dataset.project } : {};
@@ -725,13 +724,27 @@ document.addEventListener('dragstart', (e) => {
   e.dataTransfer.effectAllowed = 'move';
   requestAnimationFrame(() => el.classList.add('dragging'));
 });
-const dropTarget = (e) => e.target.closest?.('[data-drop-day],[data-drop-cal],[data-drop-inbox]');
+const dropTarget = (e) => e.target.closest?.('[data-drop-card],[data-drop-day],[data-drop-cal],[data-drop-inbox],[data-drop-today]');
+// Zielzeit beim Ziehen in eine Kalender-Spalte (auf 15 Min gerastert)
+const dropMin = (t, e) => {
+  const rect = t.getBoundingClientRect();
+  const min = store.settings.dayStart * 60 + Math.round(((((e.clientY - rect.top) / HOUR) * 60) - ui.drag.offsetMin) / 15) * 15;
+  return Math.max(store.settings.dayStart * 60, Math.min(min, store.settings.dayEnd * 60 - 15));
+};
+const clearGhost = () => document.querySelectorAll('.drop-ghost').forEach((g) => g.remove());
 document.addEventListener('dragover', (e) => {
   const t = dropTarget(e);
   if (!t || !ui.drag) return;
   e.preventDefault();
   document.querySelectorAll('.drag-over').forEach((x) => x !== t && x.classList.remove('drag-over'));
   t.classList.add('drag-over');
+  if (t.dataset.dropCal) {
+    const min = dropMin(t, e), dur = store.get('tasks', ui.drag.id)?.duration || 30;
+    let g = t.querySelector('.drop-ghost');
+    if (!g) { clearGhost(); g = document.createElement('div'); g.className = 'ev ghost drop-ghost'; t.appendChild(g); }
+    g.style.cssText = `top:${((min - store.settings.dayStart * 60) * HOUR) / 60}px;height:${Math.max(18, (dur * HOUR) / 60 - 2)}px;left:3px;right:3px`;
+    g.textContent = `${fromMin(min % 1440)}–${fromMin((min + dur) % 1440)}`;
+  } else clearGhost();
 });
 document.addEventListener('dragleave', (e) => { const t = dropTarget(e); if (t && !t.contains(e.relatedTarget)) t.classList.remove('drag-over'); });
 document.addEventListener('drop', (e) => {
@@ -739,17 +752,21 @@ document.addEventListener('drop', (e) => {
   if (!t || !ui.drag) return;
   e.preventDefault();
   const id = ui.drag.id, occ = ui.drag.occ;
-  if (t.dataset.dropDay) scheduleChange(id, occ, { date: t.dataset.dropDay });
+  if (t.dataset.dropCard) {
+    const task = store.get('tasks', id);
+    if (task?.time) scheduleChange(id, occ, { date: today(), time: null }); // Termin aus dem Kalender zurück in die Liste
+    else M.moveBefore(id, t.dataset.dropCard);
+  } else if (t.dataset.dropDay) scheduleChange(id, occ, { date: t.dataset.dropDay });
   else if (t.dataset.dropCal) {
-    const rect = t.getBoundingClientRect();
-    let min = store.settings.dayStart * 60 + Math.round(((((e.clientY - rect.top) / HOUR) * 60) - ui.drag.offsetMin) / 15) * 15;
-    min = Math.max(0, Math.min(min, store.settings.dayEnd * 60 - 15));
-    const [date, m] = norm(t.dataset.dropCal, min);
+    const [date, m] = norm(t.dataset.dropCal, dropMin(t, e));
     scheduleChange(id, occ, { date, time: fromMin(m) });
+    if (!store.get("tasks", id)?.repeat) toast(`Eingeplant um ${fromMin(m)} Uhr`);
   } else if (t.dataset.dropInbox) store.patch('tasks', id, { date: null, time: null });
+  else if (t.dataset.dropToday && store.get('tasks', id)?.time) scheduleChange(id, occ, { date: today(), time: null }); // aus dem Kalender zurück in die Liste
 });
 document.addEventListener('dragend', () => {
   ui.drag = null;
+  clearGhost();
   document.querySelectorAll('.drag-over,.dragging').forEach((x) => x.classList.remove('drag-over', 'dragging'));
 });
 

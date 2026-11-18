@@ -114,14 +114,13 @@ export function viewToday() {
   const apps = M.appointmentsToday();
   const done = M.doneToday();
   const inbox = M.openTasks().filter((t) => !t.date).sort(byPrio);
-  const pos = st.addPos || 'bottom';
   const selProj = projs.find((p) => p.id === ui.todayProj)?.id || projs[0]?.id || '';
   const sumOf = (arr) => arr.reduce((a, t) => a + M.trackedFor(t.id), 0);
 
   const card = (t, i) => {
     const p = M.project(t.projectId), on = t.id === liveId, ms = M.trackedFor(t.id);
     return `
-    <div class="tcard ${on ? 'live' : ''}" style="--pc:${p?.color || 'var(--faint)'}" data-action="open-task" data-id="${t.id}">
+    <div class="tcard ${on ? 'live' : ''}" style="--pc:${p?.color || 'var(--faint)'}" data-action="open-task" data-id="${t.id}" draggable="true" data-drag="task" data-drop-card="${t.id}" title="Ziehen: in der Liste umsortieren oder rechts in den Kalender">
       ${checkBtn(t)}
       <div class="title"><span class="t">${esc(t.title)}</span>
         <div class="meta">${chipProject(t.projectId)}${chipPrio(t.priority)}${t.date < t0 ? chipWhen(t) : ''}${t.repeat ? `<span class="chip">${icon('repeat')}</span>` : ''}${on ? `<button class="chip linkish" data-action="focus" data-id="${t.id}">Fokus</button>` : ''}</div></div>
@@ -130,9 +129,6 @@ export function viewToday() {
       ${playBtn(t)}
     </div>`;
   };
-  const posSeg = `<div class="seg mini" title="Wo neue Aufgaben landen">
-    <button class="${pos === 'top' ? 'on' : ''}" data-action="add-pos" data-v="top">Oben</button>
-    <button class="${pos === 'bottom' ? 'on' : ''}" data-action="add-pos" data-v="bottom">Unten</button></div>`;
   const projSelect = projs.length
     ? `<select id="today-proj" class="mini-select" aria-label="Projekt">${projs.map((p) => `<option value="${p.id}" ${p.id === selProj ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>`
     : '';
@@ -144,9 +140,9 @@ export function viewToday() {
     </section>`;
 
   const projCap = projs.length
-    ? `<div class="capture tcap"><input data-add="today-proj" data-key="today-add-p" placeholder="Aufgabe für ein Projekt… Enter" autocomplete="off" enterkeyhint="done">${projSelect}${posSeg}</div>`
+    ? `<div class="capture tcap"><input data-add="today-proj" data-key="today-add-p" placeholder="Aufgabe für ein Projekt… Enter" autocomplete="off" enterkeyhint="done">${projSelect}</div>`
     : `<div class="empty small">Noch kein Projekt. <a href="#projects">Projekt anlegen</a>, dann landen hier deine Projekt-Aufgaben.</div>`;
-  const otherCap = `<div class="capture tcap"><input data-add="today-other" data-key="today-add-o" placeholder="Sonstiges: Einkaufen, Mails, Haushalt… Enter" autocomplete="off" enterkeyhint="done">${posSeg}</div>`;
+  const otherCap = `<div class="capture tcap"><input data-add="today-other" data-key="today-add-o" placeholder="Sonstiges: Einkaufen, Mails, Haushalt… Enter" autocomplete="off" enterkeyhint="done"></div>`;
   const eye = `<button class="icon-btn eye" data-action="toggle-other" title="${st.hideOther ? 'Einblenden' : 'Ausblenden'}">${icon(st.hideOther ? 'eyeOff' : 'eye')}</button>`;
 
   // Läuft ein Timer für etwas, das nicht in der Liste steht (z. B. aus der Inbox gestartet)?
@@ -175,7 +171,7 @@ export function viewToday() {
     ${head('Heute', `${longDate(t0)} · ${done.length} erledigt`)}
     ${statsBar}
     <div class="today-grid">
-      <div class="today-main">
+      <div class="today-main" data-drop-today="1">
         ${liveExtra}
         ${section('Projekt-Aufgaben', withProj, projCap)}
         ${st.hideOther
@@ -623,7 +619,7 @@ export function viewSettings() {
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.8.1</p>
+      <p class="mono muted">Version 0.8.2</p>
     </div>`;
 }
 

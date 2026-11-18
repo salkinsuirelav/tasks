@@ -117,6 +117,16 @@ export function moveInToday(id, dir) {
   list.splice(dir === 'top' ? 0 : Math.max(0, Math.min(list.length, i + dir)), 0, item);
   store.batch(() => list.forEach((t, k) => { if (t.order !== k) store.patch('tasks', t.id, { order: k }); }));
 }
+// In der Heute-Liste vor eine andere Aufgabe schieben (Drag & Drop)
+export function moveBefore(id, targetId) {
+  const list = todayList();
+  const i = list.findIndex((t) => t.id === id);
+  if (i < 0 || id === targetId) return;
+  const [item] = list.splice(i, 1);
+  const j = list.findIndex((t) => t.id === targetId);
+  list.splice(j < 0 ? list.length : j, 0, item);
+  store.batch(() => list.forEach((t, k) => { if (t.order !== k) store.patch('tasks', t.id, { order: k }); }));
+}
 // Neue Aufgabe für heute, oben oder unten in die Liste einsortiert
 export function addToday(title, extra = {}, pos = 'bottom') {
   const t = addTask(title, { date: today(), ...extra });
