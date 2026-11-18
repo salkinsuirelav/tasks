@@ -15,6 +15,7 @@ const HOUR = 56;
 // ---------- Navigation ----------
 const NAV = [
   { href: '#today', label: 'Heute', icon: 'sun' },
+  { href: '#plan', label: 'Plan', icon: 'board' },
   { href: '#inbox', label: 'Inbox', icon: 'inbox' },
   { href: '#calendar', label: 'Logbuch', icon: 'calendar' },
   { href: '#projects', label: 'Projekte', icon: 'folder' },

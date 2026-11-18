@@ -226,8 +226,7 @@ export function viewPlan() {
     </div>
     <button class="icon-btn" data-action="plan-nav" data-d="-7">${icon('left')}</button>
     <button class="btn small" data-action="plan-nav" data-d="0">Heute</button>
-    <button class="icon-btn" data-action="plan-nav" data-d="7">${icon('right')}</button>
-    <button class="btn" data-action="auto-plan">${icon('wand')} Auto-Plan</button>`;
+    <button class="icon-btn" data-action="plan-nav" data-d="7">${icon('right')}</button>`;
 
   return `
     ${head('Woche planen', rangeLabel(start), actions)}
@@ -560,7 +559,7 @@ export function viewSettings() {
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.7.0</p>
+      <p class="mono muted">Version 0.7.1</p>
     </div>`;
 }
 
