@@ -4,7 +4,7 @@ import * as M from './model.js';
 import * as V from './views.js';
 import { ui, isMobile } from './ui.js';
 import { icon } from './icons.js';
-import { esc, today, addDays, weekStart, toMin, fromMin, nowMin, fmtClock, fmtDur, COLORS } from './util.js';
+import { esc, toDateStr, today, addDays, weekStart, toMin, fromMin, nowMin, fmtClock, fmtDur, COLORS } from './util.js';
 import { SHORTCUTS, actionFor } from './keys.js';
 import { splitSources } from './md.js';
 
@@ -14,13 +14,13 @@ const HOUR = 56;
 
 // ---------- Navigation ----------
 const NAV = [
+  { href: '#today', label: 'Heute', icon: 'sun' },
   { href: '#inbox', label: 'Inbox', icon: 'inbox' },
-  { href: '#plan', label: 'Plan', icon: 'board' },
-  { href: '#calendar', label: 'Kalender', icon: 'calendar' },
+  { href: '#calendar', label: 'Logbuch', icon: 'calendar' },
   { href: '#projects', label: 'Projekte', icon: 'folder' },
   { href: '#review', label: 'Rückblick', icon: 'chart' },
 ];
-const route = () => { const [view, param] = (location.hash.slice(1) || 'inbox').split('/'); return { view, param }; };
+const route = () => { const [view, param] = (location.hash.slice(1) || 'today').split('/'); return { view, param }; };
 
 function renderNav() {
   const { view, param } = route();
@@ -54,9 +54,9 @@ function renderMain() {
   const sel = key && 'selectionStart' in act ? [act.selectionStart, act.selectionEnd] : null;
   const scroll = { board: $('.board')?.scrollLeft, cal: $('#cal-scroll')?.scrollTop, side: $('.side-list')?.scrollTop };
 
-  const views = { inbox: V.viewInbox, plan: V.viewPlan, calendar: V.viewCalendar, projects: V.viewProjects, project: () => V.viewProject(param), review: V.viewReview, settings: V.viewSettings };
+  const views = { today: V.viewToday, inbox: V.viewInbox, plan: V.viewPlan, calendar: V.viewCalendar, projects: V.viewProjects, project: () => V.viewProject(param), review: V.viewReview, settings: V.viewSettings };
   main.classList.toggle('full', view === 'calendar');
-  main.innerHTML = (views[view] || V.viewPlan)();
+  main.innerHTML = (views[view] || V.viewToday)();
 
   if (view === lastView) {
     if ($('.board') && scroll.board != null) $('.board').scrollLeft = scroll.board;
@@ -65,7 +65,7 @@ function renderMain() {
   } else {
     main.scrollTop = 0;
     const cs = $('#cal-scroll');
-    if (cs) cs.scrollTop = Math.max(0, (Math.max(8, new Date().getHours() - 1) - store.settings.dayStart) * HOUR);
+    if (cs) cs.scrollTop = Math.max(0, (new Date().getHours() - 3 - store.settings.dayStart) * HOUR); // Logbuch: die letzten Stunden im Blick
     if (view === 'plan' && isMobile()) $('.col.today')?.scrollIntoView({ inline: 'start', block: 'nearest' });
   }
   lastView = view;
@@ -102,7 +102,8 @@ const renderFocus = () => {
   const t = ui.focusTask && store.get('tasks', ui.focusTask);
   $('#focus-root').innerHTML = t ? V.focusHTML(t) : '';
 };
-const renderPill = () => { $('#pill-root').innerHTML = V.timerPill(); };
+// Auf „Heute“ steht der Timer schon groß oben, dort keine zweite Anzeige
+const renderPill = () => { $('#pill-root').innerHTML = route().view === 'today' ? '' : V.timerPill(); };
 const renderAll = () => {
   renderMain(); renderPill(); renderFocus();
   // Detail-Ansicht aktualisieren (z. B. wenn Claude fertig ist), aber nicht während du darin tippst
@@ -148,7 +149,7 @@ function applyFinishedPlans() {
 ['gesturestart', 'gesturechange'].forEach((ev) => document.addEventListener(ev, (e) => e.preventDefault(), { passive: false }));
 
 store.subscribe(() => { applyTheme(); renderAll(); });
-window.addEventListener('hashchange', () => { ui.sideOpen = false; renderMain(); });
+window.addEventListener('hashchange', () => { ui.sideOpen = false; renderMain(); renderPill(); });
 let resizeT;
 window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(renderMain, 200); });
 
@@ -210,6 +211,10 @@ const A = {
     if (ui.openTask) renderSheet();
   },
   'stop-timer': () => M.stopTimer(),
+  // Heute
+  finish: (el) => { const t = store.get('tasks', el.dataset.id); M.finishTask(el.dataset.id); toast('Erledigt ✓', { label: 'Rückgängig', fn: () => M.toggleDone(el.dataset.id) }); if (ui.openTask) renderSheet(); },
+  'today-top': (el) => { M.moveInToday(el.dataset.id, 'top'); },
+  'pull-today': (el) => { ui.pullOpen = true; store.patch('tasks', el.dataset.id, { date: today(), order: Date.now() }); },
   focus: (el) => { ui.focusTask = el.dataset.id; ui.openTask = null; renderSheet(); renderFocus(); renderPill(); },
   'close-focus': () => { ui.focusTask = null; renderFocus(); renderPill(); },
   'focus-done': (el) => { M.toggleDone(el.dataset.id); ui.focusTask = null; renderFocus(); renderPill(); toast('Stark. Erledigt ✓'); },
@@ -313,6 +318,33 @@ const A = {
     M.addTask(title, { date: m.date, time: m.time, duration: m.dur });
     ui.modal = null; renderModal();
   },
+  // Nachtragen: Was habe ich in dieser (vergangenen) Zeit gemacht? → erledigte Aufgabe + Zeiteintrag
+  'slot-log': () => {
+    const m = ui.modal, title = $('#slot-title').value.trim();
+    if (!title) return toast('Bitte eintragen, was du gemacht hast.');
+    const start = new Date(m.date + 'T00:00').getTime() + toMin(m.time) * 60000, end = start + m.dur * 60000;
+    store.batch(() => {
+      const t = M.addTask(title, { date: toDateStr(new Date(start)), duration: m.dur, status: 'done', doneAt: end });
+      store.put('entries', { taskId: t.id, projectId: null, start, end });
+    });
+    ui.modal = null; renderModal(); toast('Nachgetragen ✓');
+  },
+  'edit-entry': (el) => { ui.modal = { type: 'entry', id: el.dataset.id }; renderModal(); },
+  'entry-save': () => {
+    const en = store.get('entries', ui.modal.id);
+    if (!en) return;
+    const day = new Date(en.start); day.setHours(0, 0, 0, 0);
+    const at = (v) => day.getTime() + toMin(v) * 60000;
+    const s = $('#en-start').value, e = $('#en-end').value;
+    if (!s) return toast('Bitte eine Startzeit eingeben.');
+    const start = at(s);
+    let end = en.end ? (e ? at(e) : en.end) : null;
+    if (end !== null && end <= start) end += 864e5; // über Mitternacht
+    store.patch('entries', en.id, { start, end });
+    ui.modal = null; renderModal(); toast('Gespeichert ✓');
+  },
+  'entry-del': () => { const id = ui.modal.id; const en = store.get('entries', id); store.remove('entries', id); ui.modal = null; renderModal(); toast('Eintrag gelöscht.', { label: 'Rückgängig', fn: () => store.put('entries', en) }); },
+  'close-modal-open': (el) => { ui.modal = null; renderModal(); ui.openTask = el.dataset.id; renderSheet(); },
   'slot-block': () => {
     const m = ui.modal;
     store.put('blocks', { date: m.date, start: m.time, end: fromMin((toMin(m.time) + m.dur) % (24 * 60)), label: $('#slot-title').value.trim() || 'Gesperrt', repeat: '' });
@@ -487,7 +519,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key !== 'Enter' || e.isComposing) return;
   if (el.dataset.add) {
     e.preventDefault();
-    const extra = el.dataset.add === 'day' ? { date: el.dataset.date } : el.dataset.add === 'project' ? { projectId: el.dataset.project } : {};
+    const extra = el.dataset.add === 'today' ? { date: today() } : el.dataset.add === 'day' ? { date: el.dataset.date } : el.dataset.add === 'project' ? { projectId: el.dataset.project } : {};
     if (M.addTask(el.value, extra)) el.value = '';
   } else if (el.id === 'login-pass') A['sign-in']();
   else if (el.id === 'slot-title') A['slot-task']();
@@ -516,7 +548,7 @@ function shortcut(e) {
   const id = actionFor(store.settings, e.key);
   if (!id) return false;
   const { view } = route();
-  const navTo = { inbox: '#inbox', plan: '#plan', calendar: '#calendar', projects: '#projects', review: '#review', settings: '#settings' };
+  const navTo = { heute: '#today', inbox: '#inbox', plan: '#plan', calendar: '#calendar', projects: '#projects', review: '#review', settings: '#settings' };
   const step = (d) => {
     if (view === 'plan') A['plan-nav']({ dataset: { d: String(d * 7) } });
     else if (view === 'calendar') A['cal-nav']({ dataset: { d: String(d * (isMobile() ? 1 : 7)) } });
@@ -708,7 +740,7 @@ document.addEventListener('dragend', () => {
 // Beim Start als Home-Bildschirm-App immer in der Inbox öffnen (ältere Installationen haben noch #plan als Startadresse gespeichert)
 const standalone = navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
 let launched = false; try { launched = !!sessionStorage.getItem('launched'); sessionStorage.setItem('launched', '1'); } catch {}
-if (!location.hash || (standalone && !launched)) location.replace('#inbox');
+if (!location.hash || (standalone && !launched)) location.replace('#today');
 applyTheme();
 renderAll();
 store.initSync();

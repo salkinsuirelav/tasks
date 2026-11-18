@@ -2,8 +2,8 @@
 // Eigene Belegung wird in den Einstellungen gespeichert (settings.keys).
 export const SHORTCUTS = [
   { id: 'new', label: 'Neue Aufgabe', key: 'n' },
-  { id: 'inbox', label: 'Inbox öffnen', key: '1' },
-  { id: 'plan', label: 'Plan öffnen', key: '2' },
+  { id: 'heute', label: 'Heute öffnen', key: '1' },
+  { id: 'inbox', label: 'Inbox öffnen', key: '2' },
   { id: 'calendar', label: 'Kalender öffnen', key: '3' },
   { id: 'projects', label: 'Projekte öffnen', key: '4' },
   { id: 'review', label: 'Rückblick öffnen', key: '5' },
@@ -13,8 +13,6 @@ export const SHORTCUTS = [
   { id: 'next', label: 'Weiter (Woche/Tag)', key: 'ArrowRight' },
   { id: 'nav', label: 'Seitenleiste ein/aus', key: 'b' },
   { id: 'side', label: 'Offene Aufgaben im Kalender ein/aus', key: 'o' },
-  { id: 'autoplan', label: 'Auto-Plan', key: 'a' },
-  { id: 'claude', label: 'Mit Claude planen', key: 'c' },
   { id: 'weekend', label: 'Kalender: Wochenende ein/aus', key: 'w' },
   { id: 'theme', label: 'Hell/Dunkel wechseln', key: 'd' },
   { id: 'done', label: 'Offene Aufgabe erledigen', key: 'e' },

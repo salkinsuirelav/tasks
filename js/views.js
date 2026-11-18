@@ -99,6 +99,65 @@ const capture = (attrs, placeholder = 'Neue Aufgabe… einfach tippen und Enter'
     <span class="hint">↵ Enter</span>
   </div>`;
 
+// ---------- Heute: eine Aufgabe nach der anderen, die Liste wird abgearbeitet ----------
+const fmtTimeOf = (ts) => new Date(ts).toTimeString().slice(0, 5);
+export function viewToday() {
+  const t0 = today();
+  const list = M.todayList();
+  const r = M.running();
+  const live = r && store.get('tasks', r.taskId);
+  const hero = live || list[0];
+  const rest = list.filter((t) => t.id !== hero?.id);
+  const apps = M.appointmentsToday();
+  const done = M.doneToday();
+  const inbox = M.openTasks().filter((t) => !t.date).sort(byPrio);
+  const worked = M.trackedToday();
+  const p = hero && M.project(hero.projectId);
+
+  const heroHTML = hero ? `
+    <div class="hero ${live ? 'live' : ''}" style="--pc:${p?.color || 'var(--accent)'}">
+      <div class="lbl-sm">${live ? '● Läuft gerade' : 'Als Nächstes'}</div>
+      <div class="hero-title" data-action="open-task" data-id="${hero.id}">${esc(hero.title)}</div>
+      <div class="meta">${chips(hero, false)}</div>
+      ${live ? `<div class="hero-clock mono" data-tick="clock">${fmtClock(Date.now() - r.start)}</div>` : ''}
+      <div class="hero-actions">
+        ${live ? `<button class="btn primary" data-action="finish" data-id="${hero.id}">${icon('check')} Erledigt</button>
+                  <button class="btn" data-action="timer" data-id="${hero.id}">${icon('stop')} Pause</button>`
+               : `<button class="btn primary" data-action="timer" data-id="${hero.id}">${icon('play')} Starten</button>
+                  <button class="btn" data-action="finish" data-id="${hero.id}">${icon('check')} Schon erledigt</button>`}
+        <button class="btn ghost" data-action="focus" data-id="${hero.id}">Fokus</button>
+      </div>
+    </div>`
+    : `<div class="hero empty-hero"><div class="hero-title">${done.length ? 'Liste leer. Stark 💪' : 'Was steht heute an?'}</div>
+        <p class="muted">${inbox.length ? 'Tipp oben etwas ein oder hol dir unten Aufgaben aus der Inbox.' : 'Tipp oben deine erste Aufgabe ein.'}</p></div>`;
+
+  const row = (t) => `
+    <div class="row" data-action="open-task" data-id="${t.id}">
+      ${checkBtn(t)}
+      <div class="title"><span class="t">${esc(t.title)}</span><div class="meta">${chips(t, t.date < t0)}</div></div>
+      <button class="icon-btn" data-action="today-top" data-id="${t.id}" title="Als Nächstes">${icon('up')}</button>
+      ${playBtn(t)}
+    </div>`;
+  const doneRow = (t) => {
+    const ms = M.trackedFor(t.id);
+    return `<div class="row done" data-action="open-task" data-id="${t.id}">${checkBtn(t)}
+      <div class="title"><span class="t">${esc(t.title)}</span><div class="meta">${chipProject(t.projectId)}</div></div>
+      <span class="mono muted" style="font-size:12.5px">${ms ? fmtDur(ms) : ''}${t.doneAt ? ` · ${fmtTimeOf(t.doneAt)}` : ''}</span></div>`;
+  };
+
+  return `
+    ${head('Heute', `${longDate(t0)} · ${done.length} erledigt · ${fmtHours(worked)} gearbeitet`)}
+    ${capture('data-add="today" data-key="today-add"', 'Was steht heute an? Tippen und Enter')}
+    ${heroHTML}
+    ${rest.length ? `<div class="group-title">Danach <span class="mono">${rest.length}</span></div><div class="list">${rest.map(row).join('')}</div>` : ''}
+    ${apps.length ? `<div class="group-title">Termine heute</div><div class="list">${apps.map((t) => `<div class="row ${t.status === 'done' ? 'done' : ''}" data-action="open-task" data-id="${t.id}"><span class="mono" style="min-width:48px">${t.time}</span><div class="title"><span class="t">${esc(t.title)}</span></div>${playBtn(t)}</div>`).join('')}</div>` : ''}
+    <div class="group-title">Erledigt heute <span class="mono">${done.length}</span></div>
+    <div class="list">${done.length ? done.map(doneRow).join('') : '<div class="empty">Hier sammelt sich, was du heute geschafft hast.</div>'}</div>
+    ${inbox.length ? `<details class="pull" ${ui.pullOpen ? 'open' : ''}><summary class="group-title">Aus der Inbox holen <span class="mono">${inbox.length}</span></summary>
+      <div class="list">${inbox.map((t) => `<div class="row" data-action="open-task" data-id="${t.id}"><div class="title"><span class="t">${esc(t.title)}</span><div class="meta">${chips(t)}</div></div>
+        <button class="btn small" data-action="pull-today" data-id="${t.id}">${icon('plus')} Heute</button></div>`).join('')}</div></details>` : ''}`;
+}
+
 // ---------- Inbox ----------
 export function viewInbox() {
   const open = M.openTasks();
@@ -248,8 +307,14 @@ export function viewCalendar() {
         return `<div class="ev block ${h < 36 ? 'short' : ''}" style="${pos}" data-action="edit-block" data-id="${it.b.id}" title="${esc(it.b.label || 'Gesperrt')} ${it.b.start}–${it.b.end}">
           ${h < 36 ? `${name} ${tm}` : `${tm}${name}`}</div>`;
       }
+      if (it.kind === 'entry') {
+        const t = it.t, p = M.project(t?.projectId ?? it.en.projectId);
+        const a = fromMin(((Math.round(it.s) % 1440) + 1440) % 1440), b = it.live ? 'jetzt' : fromMin(Math.round(it.e) % 1440);
+        const tm = `<span class="tm">${it.cont ? '↳ ' : ''}${a}–${b}</span>`, nm = `<span class="nm">${esc(t?.title || 'Gelöschte Aufgabe')}</span>`;
+        return `<div class="ev log ${it.live ? 'live' : ''} ${h < 36 ? 'short' : ''}" style="${pos};--pc:${p?.color || 'var(--accent)'}" data-action="edit-entry" data-id="${it.en.id}" title="${esc(t?.title || '')} ${a}–${b}">${h < 36 ? `${nm} ${tm}` : `${tm}${nm}`}</div>`;
+      }
       const t = it.t, p = M.project(t.projectId);
-      return `<div class="ev ${t.status === 'done' ? 'done' : ''} ${it.rep ? 'rep' : ''} ${h < 36 ? 'short' : ''}" style="${pos};border-left-color:${p?.color || 'var(--accent)'}"
+      return `<div class="ev appt ${t.status === 'done' ? 'done' : ''} ${it.rep ? 'rep' : ''} ${h < 36 ? 'short' : ''}" style="${pos};--pc:${p?.color || 'var(--accent)'}"
         data-action="open-task" data-id="${t.id}" draggable="true" data-drag="task" data-occ="${it.occ}" title="${esc(t.title)}${it.rep ? ' (Wiederholung)' : ''}">
         ${(() => { const tm = `<span class="tm">${it.cont ? '↳ ' : ''}${t.time}–${fromMin((toMin(t.time) + (t.duration || 30)) % (24 * 60))}${t.priority === 'frog' ? ' 🐸' : ''}</span>`, nm = `<span class="nm">${it.rep ? icon('repeat') + ' ' : ''}${esc(t.title)}</span>`;
           return h < 36 ? `${nm} ${tm}` : `${tm}${nm}`; })()}</div>`;
@@ -264,13 +329,13 @@ export function viewCalendar() {
   };
 
   const header = days.map((d) => {
-    const planned = M.tasks().filter((t) => t.time && t.status !== 'done' && (t.date === d || M.repeatsOn(t, d))).reduce((a, t) => a + (t.duration || 30), 0);
-    return `<div class="dh ${d === t0 ? 'today' : ''}"><b>${shortWeekday(d)}</b> <span class="n">${dayNum(d)}</span><span class="h">${planned ? fmtMinutes(planned) : '–'}</span></div>`;
+    const a = new Date(d + 'T00:00').getTime(), b = a + 864e5;
+    const worked = store.all('entries').reduce((sum, e) => sum + Math.max(0, Math.min(e.end || Date.now(), b) - Math.max(e.start, a)), 0);
+    return `<div class="dh ${d === t0 ? 'today' : ''}"><b>${shortWeekday(d)}</b> <span class="n">${dayNum(d)}</span><span class="h" title="Gearbeitet">${worked >= 60000 ? fmtHours(worked) : '–'}</span></div>`;
   }).join('');
 
   const step = mobile ? 1 : 7;
   const actions = `
-    <button class="icon-btn" data-action="toggle-side" title="Offene Aufgaben">${icon('sidebar')}</button>
     <div class="tabs" title="Wochenende ein-/ausblenden (W)">
       <button class="${s.calWeekdays ? 'on' : ''}" data-action="cal-weekdays" data-v="1">Mo–Fr</button>
       <button class="${s.calWeekdays ? '' : 'on'}" data-action="cal-weekdays" data-v="0">7 Tage</button>
@@ -278,15 +343,12 @@ export function viewCalendar() {
     <button class="icon-btn" data-action="cal-nav" data-d="-${step}">${icon('left')}</button>
     <button class="btn small" data-action="cal-nav" data-d="0">Heute</button>
     <button class="icon-btn" data-action="cal-nav" data-d="${step}">${icon('right')}</button>
-    <button class="btn" data-action="auto-plan">${icon('wand')} Auto-Plan</button>
-    <button class="btn" data-action="claude-plan">${icon('sparkle')} Mit Claude planen</button>
     <button class="btn" data-action="new-block">${icon('lock')} Zeit sperren</button>`;
 
   return `
     <div class="cal-wrap">
-      ${side}
       <section class="cal-main">
-        ${head('Kalender', mobile ? longDate(days[0]) : rangeLabel(days[0], days.length), actions)}
+        ${head('Logbuch', mobile ? longDate(days[0]) : rangeLabel(days[0], days.length), actions)}
         <div class="cal-grid">
           <div class="cal-header"><div class="gutter"></div>${header}</div>
           <div class="cal-scroll" id="cal-scroll">
@@ -498,7 +560,7 @@ export function viewSettings() {
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.6.1</p>
+      <p class="mono muted">Version 0.7.0</p>
     </div>`;
 }
 
@@ -716,12 +778,25 @@ export function modalHTML(m) {
   } else if (m.type === 'slot') {
     inner = `
       <h2>${dayLabel(m.date)}, ${m.time}–${fromMin((toMin(m.time) + m.dur) % (24 * 60))}${toMin(m.time) + m.dur > 24 * 60 ? ' <span class="muted" style="font-size:14px">(nächster Tag)</span>' : ''}</h2>
-      <p>Was soll hier passieren?</p>
-      <div class="field"><input id="slot-title" data-key="slot-title" placeholder="Titel (Aufgabe oder Sperrzeit)" value="${esc(m.title || '')}" autofocus></div>
+      <p>${(new Date(m.date + 'T00:00').getTime() + (toMin(m.time) + m.dur) * 60000 <= Date.now()) ? 'Was hast du hier gemacht? Wird als erledigt mit dieser Zeit eingetragen.' : 'Ein fester Termin (z. B. Arzt, Call, Trading-Session).'}</p>
+      <div class="field"><input id="slot-title" data-key="slot-title" placeholder="${(new Date(m.date + 'T00:00').getTime() + (toMin(m.time) + m.dur) * 60000 <= Date.now()) ? 'Was hast du gemacht?' : 'Titel des Termins'}" value="${esc(m.title || '')}" autofocus></div>
       <div class="field"><label>Dauer</label><select id="slot-dur">${[...new Set([15, 30, 45, 60, 90, 120, 180, m.dur])].sort((a, b) => a - b).map((d) => `<option value="${d}" ${d === m.dur ? 'selected' : ''}>${fmtMinutes(d)}</option>`).join('')}</select></div>
       <div class="foot"><button class="btn" data-action="close-modal">Abbrechen</button>
         <button class="btn" data-action="slot-block">${icon('lock')} Zeit sperren</button>
-        <button class="btn primary" data-action="slot-task">${icon('plus')} Aufgabe anlegen</button></div>`;
+        ${(new Date(m.date + 'T00:00').getTime() + (toMin(m.time) + m.dur) * 60000 <= Date.now()) ? `<button class="btn primary" data-action="slot-log">${icon('check')} Nachtragen</button>` : `<button class="btn primary" data-action="slot-task">${icon('plus')} Termin anlegen</button>`}</div>`;
+  } else if (m.type === 'entry') {
+    const en = store.get('entries', m.id), t = en && store.get('tasks', en.taskId);
+    const hm = (ts) => new Date(ts).toTimeString().slice(0, 5);
+    inner = en ? `
+      <h2>${esc(t?.title || 'Eintrag')}</h2>
+      <p>${dayLabel(toDateStr(new Date(en.start)))} · ${fmtDur((en.end || Date.now()) - en.start)} erfasst</p>
+      <div class="inline">
+        <div class="field"><label>Von</label><input type="time" id="en-start" value="${hm(en.start)}"></div>
+        <div class="field"><label>Bis</label><input type="time" id="en-end" value="${en.end ? hm(en.end) : ''}" ${en.end ? '' : 'disabled placeholder="läuft"'}></div>
+      </div>
+      <div class="foot"><button class="btn danger" data-action="entry-del">${icon('trash')} Löschen</button>
+        ${t ? `<button class="btn" data-action="close-modal-open" data-id="${t.id}">Aufgabe öffnen</button>` : ''}
+        <button class="btn primary" data-action="entry-save">Speichern</button></div>` : '<p>Eintrag nicht gefunden.</p>';
   } else if (m.type === 'repeat-move') {
     const t = store.get('tasks', m.id);
     inner = `

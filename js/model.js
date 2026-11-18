@@ -89,6 +89,40 @@ export function toggleDone(id) {
   });
 }
 
+// ---- Heute: Liste abarbeiten ----
+// Die Liste für heute: offene Aufgaben mit Datum heute/überfällig, ohne feste Uhrzeit (Uhrzeit = Termin).
+// Reihenfolge: eigene Reihenfolge (order), dann Priorität.
+export function todayList() {
+  const t0 = today();
+  return openTasks()
+    .filter((t) => t.date && t.date <= t0 && !t.time && t.status !== 'waiting')
+    .sort((a, b) => (a.order ?? 1e15) - (b.order ?? 1e15) || byPrio(a, b));
+}
+export const appointmentsToday = () => tasks().filter((t) => t.time && (t.date === today() || repeatsOn(t, today()))).sort((a, b) => a.time.localeCompare(b.time));
+// Done-Liste: heute erledigt + alles, woran heute gearbeitet wurde
+export function doneToday() {
+  const a = new Date(today() + 'T00:00').getTime();
+  return tasks().filter((t) => t.status === 'done' && (t.doneAt || 0) >= a).sort((x, y) => (y.doneAt || 0) - (x.doneAt || 0));
+}
+export function trackedToday(taskId) {
+  const a = new Date(today() + 'T00:00').getTime();
+  return store.all('entries').filter((e) => (!taskId || e.taskId === taskId) && (e.end || Date.now()) > a).reduce((s, e) => s + (e.end || Date.now()) - Math.max(e.start, a), 0);
+}
+// Ganz nach oben (als Nächstes) bzw. eine Position verschieben
+export function moveInToday(id, dir) {
+  const list = todayList();
+  const i = list.findIndex((t) => t.id === id);
+  if (i < 0) return;
+  const [item] = list.splice(i, 1);
+  list.splice(dir === 'top' ? 0 : Math.max(0, Math.min(list.length, i + dir)), 0, item);
+  store.batch(() => list.forEach((t, k) => { if (t.order !== k) store.patch('tasks', t.id, { order: k }); }));
+}
+// Aufgabe abschließen: Timer stoppen + erledigt
+export function finishTask(id) {
+  const t = store.get('tasks', id);
+  if (t && t.status !== 'done') toggleDone(id);
+}
+
 // ---- Timetracking ----
 export const running = () => store.all('entries').find((e) => !e.end);
 export function startTimer(taskId) {
@@ -147,6 +181,13 @@ export function segmentsOn(date, A = 0, B = DAY) {
       push('block', { b }, s, e);
     }
   }
+  // Logbuch: erfasste Zeiten (Timer) als Einträge, gemessen ab 00:00 dieses Tages
+  const t0 = new Date(date + 'T00:00').getTime();
+  for (const en of store.all('entries')) {
+    const s = (en.start - t0) / 60000, e = ((en.end || Date.now()) - t0) / 60000;
+    if (e - s < 1) continue; // Kürzer als 1 Minute: nicht anzeigen
+    push('entry', { en, t: store.get('tasks', en.taskId) || null, live: !en.end }, s, e);
+  }
   return out;
 }
 
@@ -158,7 +199,7 @@ export function freeSlots(date, settings, extraBusy = []) {
   if (date < today()) return [];
   if (settings.planWeekends === false && weekday(date) >= 5) return []; // Einstellung: am Wochenende nichts einplanen
   const busy = [
-    ...segmentsOn(date).filter((x) => x.kind === 'block' || x.t.status !== 'done').map((x) => [x.s, x.e]),
+    ...segmentsOn(date).filter((x) => x.kind === 'block' || (x.kind === 'task' && x.t.status !== 'done')).map((x) => [x.s, x.e]),
     ...extraBusy,
   ].sort((a, b) => a[0] - b[0]);
   const free = [];

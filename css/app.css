@@ -440,3 +440,22 @@ kbd { font-family: var(--mono); font-size: 12px; background: var(--card); border
 }
 .col.flash { animation: flash 0.9s ease-out; }
 @keyframes flash { 0% { box-shadow: 0 0 0 2px var(--accent); } 100% { box-shadow: 0 0 0 2px transparent; } }
+
+/* ===== Heute ===== */
+.hero { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--pc, var(--accent)); border-radius: var(--r); padding: 22px 24px; margin: 4px 0 8px; }
+.hero.live { box-shadow: 0 0 0 3px color-mix(in srgb, var(--pc, var(--accent)) 18%, transparent); }
+.hero.live .lbl-sm { color: var(--pc, var(--accent)); font-weight: 600; }
+.hero-title { font-size: 26px; font-weight: 650; line-height: 1.2; margin: 6px 0 8px; cursor: pointer; letter-spacing: -0.01em; }
+.hero-clock { font-size: 40px; font-weight: 500; margin: 6px 0 2px; letter-spacing: 0.02em; }
+.hero-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+.empty-hero { border-left-color: var(--line); text-align: center; }
+.empty-hero .hero-title { cursor: default; }
+details.pull summary { cursor: pointer; list-style: none; }
+details.pull summary::-webkit-details-marker { display: none; }
+details.pull summary::before { content: "▸"; color: var(--muted); }
+details.pull[open] summary::before { content: "▾"; }
+
+/* ===== Kalender als Logbuch ===== */
+.ev.log { background: color-mix(in srgb, var(--pc) 16%, var(--card)); border-left: 3px solid var(--pc); }
+.ev.log.live { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--pc) 22%, var(--card)) 0 8px, color-mix(in srgb, var(--pc) 12%, var(--card)) 8px 16px); }
+.ev.appt { background: var(--card); border: 1px dashed var(--line); border-left: 3px solid var(--pc); }
