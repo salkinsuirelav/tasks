@@ -4,7 +4,7 @@ import * as M from './model.js';
 import * as V from './views.js';
 import { ui, isMobile } from './ui.js';
 import { icon } from './icons.js';
-import { esc, toDateStr, today, addDays, weekStart, toMin, fromMin, nowMin, fmtClock, fmtDur, COLORS } from './util.js';
+import { esc, toDateStr, today, addDays, weekStart, toMin, fromMin, nowMin, fmtClock, fmtDur, fmtHours, COLORS } from './util.js';
 import { SHORTCUTS, actionFor } from './keys.js';
 import { splitSources } from './md.js';
 
@@ -160,10 +160,11 @@ setInterval(() => {
   document.querySelectorAll('[data-tick]').forEach((el) => {
     if (!r) return;
     if (el.dataset.tick === 'task') el.textContent = fmtDur(M.trackedFor(r.taskId));
+    else if (el.dataset.tick === 'today') el.textContent = fmtHours(M.trackedToday());
     else if (el.dataset.tick) el.textContent = fmtClock(Date.now() - r.start);
   });
 }, 1000);
-setInterval(() => { if (route().view === 'calendar' && !ui.drag) renderMain(); }, 60000);
+setInterval(() => { if (['calendar', 'today'].includes(route().view) && !ui.drag && !document.activeElement?.matches?.('input,textarea,select')) renderMain(); }, 60000);
 
 // ---------- Toast ----------
 let toastT;
@@ -215,6 +216,8 @@ const A = {
   // Heute
   finish: (el) => { const t = store.get('tasks', el.dataset.id); M.finishTask(el.dataset.id); toast('Erledigt ✓', { label: 'Rückgängig', fn: () => M.toggleDone(el.dataset.id) }); if (ui.openTask) renderSheet(); },
   'today-top': (el) => { M.moveInToday(el.dataset.id, 'top'); },
+  'add-pos': (el) => store.saveSettings({ addPos: el.dataset.v }),
+  'toggle-other': () => store.saveSettings({ hideOther: !store.settings.hideOther }),
   'pull-today': (el) => { ui.pullOpen = true; store.patch('tasks', el.dataset.id, { date: today(), order: Date.now() }); },
   focus: (el) => { ui.focusTask = el.dataset.id; ui.openTask = null; renderSheet(); renderFocus(); renderPill(); },
   'close-focus': () => { ui.focusTask = null; renderFocus(); renderPill(); },
@@ -371,7 +374,9 @@ const A = {
     if (fromTask) { store.patch('tasks', fromTask, { projectId: p.id }); renderSheet(); }
   },
   'project-color': (el) => store.patch('projects', el.dataset.id, { color: el.dataset.color }),
-  'archive-project': (el) => { store.patch('projects', el.dataset.id, { archived: true }); location.hash = '#projects'; toast('Projekt archiviert.'); },
+  'archive-project': (el) => { store.patch('projects', el.dataset.id, { archived: true }); ui.projTab = 'active'; location.hash = '#projects'; toast('Projekt abgeschlossen 🎉', { label: 'Rückgängig', fn: () => store.patch('projects', el.dataset.id, { archived: false }) }); },
+  'unarchive-project': (el) => { store.patch('projects', el.dataset.id, { archived: false }); toast('Projekt ist wieder aktiv.'); },
+  'proj-tab': (el) => { ui.projTab = el.dataset.tab; renderMain(); },
   'delete-project': (el) => {
     if (!confirm('Projekt löschen? Die Aufgaben bleiben erhalten, nur ohne Projekt.')) return;
     const id = el.dataset.id;
@@ -520,6 +525,11 @@ document.addEventListener('keydown', (e) => {
   if (e.key !== 'Enter' || e.isComposing) return;
   if (el.dataset.add) {
     e.preventDefault();
+    if (el.dataset.add === 'today-proj' || el.dataset.add === 'today-other') {
+      const pid = el.dataset.add === 'today-proj' ? ($('#today-proj')?.value || null) : null;
+      if (M.addToday(el.value, { projectId: pid }, store.settings.addPos || 'bottom')) el.value = '';
+      return;
+    }
     const extra = el.dataset.add === 'today' ? { date: today() } : el.dataset.add === 'day' ? { date: el.dataset.date } : el.dataset.add === 'project' ? { projectId: el.dataset.project } : {};
     if (M.addTask(el.value, extra)) el.value = '';
   } else if (el.id === 'login-pass') A['sign-in']();
@@ -629,6 +639,7 @@ document.addEventListener('input', (e) => {
 document.addEventListener('change', async (e) => {
   const el = e.target;
   if (el.id === 'slot-dur' && ui.modal) { ui.modal.dur = +el.value; renderModal(); return; }
+  if (el.id === 'today-proj') { ui.todayProj = el.value; return; }
   const f = el.dataset.field;
   if (f && ui.openTask) {
     const id = ui.openTask;

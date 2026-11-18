@@ -117,6 +117,21 @@ export function moveInToday(id, dir) {
   list.splice(dir === 'top' ? 0 : Math.max(0, Math.min(list.length, i + dir)), 0, item);
   store.batch(() => list.forEach((t, k) => { if (t.order !== k) store.patch('tasks', t.id, { order: k }); }));
 }
+// Neue Aufgabe für heute, oben oder unten in die Liste einsortiert
+export function addToday(title, extra = {}, pos = 'bottom') {
+  const t = addTask(title, { date: today(), ...extra });
+  if (!t) return null;
+  const list = todayList().filter((x) => x.id !== t.id);
+  list.splice(pos === 'top' ? 0 : list.length, 0, t);
+  store.batch(() => list.forEach((x, k) => { if (x.order !== k) store.patch('tasks', x.id, { order: k }); }));
+  return t;
+}
+// Gearbeitete Zeit zwischen zwei Daten (auf den Zeitraum zugeschnitten), optional nur ein Projekt
+export function trackedBetween(fromDate, toDateExcl, pid) {
+  const a = new Date(fromDate + 'T00:00').getTime(), b = new Date(toDateExcl + 'T00:00').getTime();
+  return entriesBetween(fromDate, toDateExcl).filter((e) => pid === undefined || entryProject(e) === pid)
+    .reduce((s, e) => s + Math.max(0, Math.min(e.end || Date.now(), b) - Math.max(e.start, a)), 0);
+}
 // Aufgabe abschließen: Timer stoppen + erledigt
 export function finishTask(id) {
   const t = store.get('tasks', id);

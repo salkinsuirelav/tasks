@@ -103,41 +103,56 @@ const capture = (attrs, placeholder = 'Neue Aufgabe… einfach tippen und Enter'
 const fmtTimeOf = (ts) => new Date(ts).toTimeString().slice(0, 5);
 export function viewToday() {
   const t0 = today();
+  const st = store.settings;
   const list = M.todayList();
   const r = M.running();
-  const live = r && store.get('tasks', r.taskId);
-  const hero = live || list[0];
-  const rest = list.filter((t) => t.id !== hero?.id);
+  const liveId = r?.taskId;
+  const live = r && store.get('tasks', liveId);
+  const projs = M.projects();
+  const withProj = list.filter((t) => t.projectId && M.project(t.projectId));
+  const other = list.filter((t) => !withProj.includes(t));
   const apps = M.appointmentsToday();
   const done = M.doneToday();
   const inbox = M.openTasks().filter((t) => !t.date).sort(byPrio);
-  const worked = M.trackedToday();
-  const p = hero && M.project(hero.projectId);
+  const pos = st.addPos || 'bottom';
+  const selProj = projs.find((p) => p.id === ui.todayProj)?.id || projs[0]?.id || '';
+  const sumOf = (arr) => arr.reduce((a, t) => a + M.trackedFor(t.id), 0);
 
-  const heroHTML = hero ? `
-    <div class="hero ${live ? 'live' : ''}" style="--pc:${p?.color || 'var(--accent)'}">
-      <div class="lbl-sm">${live ? '● Läuft gerade' : 'Als Nächstes'}</div>
-      <div class="hero-title" data-action="open-task" data-id="${hero.id}">${esc(hero.title)}</div>
-      <div class="meta">${chips(hero, false)}</div>
-      ${live ? `<div class="hero-clock mono" data-tick="clock">${fmtClock(Date.now() - r.start)}</div>` : ''}
-      <div class="hero-actions">
-        ${live ? `<button class="btn primary" data-action="finish" data-id="${hero.id}">${icon('check')} Erledigt</button>
-                  <button class="btn" data-action="timer" data-id="${hero.id}">${icon('stop')} Pause</button>`
-               : `<button class="btn primary" data-action="timer" data-id="${hero.id}">${icon('play')} Starten</button>
-                  <button class="btn" data-action="finish" data-id="${hero.id}">${icon('check')} Schon erledigt</button>`}
-        <button class="btn ghost" data-action="focus" data-id="${hero.id}">Fokus</button>
-      </div>
-    </div>`
-    : `<div class="hero empty-hero"><div class="hero-title">${done.length ? 'Liste leer. Stark 💪' : 'Was steht heute an?'}</div>
-        <p class="muted">${inbox.length ? 'Tipp oben etwas ein oder hol dir unten Aufgaben aus der Inbox.' : 'Tipp oben deine erste Aufgabe ein.'}</p></div>`;
-
-  const row = (t) => `
-    <div class="row" data-action="open-task" data-id="${t.id}">
+  const card = (t, i) => {
+    const p = M.project(t.projectId), on = t.id === liveId, ms = M.trackedFor(t.id);
+    return `
+    <div class="tcard ${on ? 'live' : ''}" style="--pc:${p?.color || 'var(--faint)'}" data-action="open-task" data-id="${t.id}">
       ${checkBtn(t)}
-      <div class="title"><span class="t">${esc(t.title)}</span><div class="meta">${chips(t, t.date < t0)}</div></div>
-      <button class="icon-btn" data-action="today-top" data-id="${t.id}" title="Als Nächstes">${icon('up')}</button>
+      <div class="title"><span class="t">${esc(t.title)}</span>
+        <div class="meta">${chipProject(t.projectId)}${chipPrio(t.priority)}${t.date < t0 ? chipWhen(t) : ''}${t.repeat ? `<span class="chip">${icon('repeat')}</span>` : ''}${on ? `<button class="chip linkish" data-action="focus" data-id="${t.id}">Fokus</button>` : ''}</div></div>
+      <span class="mono tm ${ms || on ? '' : 'faint'}" ${on ? 'data-tick="task"' : ''}>${fmtDur(ms)}</span>
+      ${i > 0 ? `<button class="icon-btn up" data-action="today-top" data-id="${t.id}" title="Als Nächstes">${icon('up')}</button>` : ''}
       ${playBtn(t)}
     </div>`;
+  };
+  const posSeg = `<div class="seg mini" title="Wo neue Aufgaben landen">
+    <button class="${pos === 'top' ? 'on' : ''}" data-action="add-pos" data-v="top">Oben</button>
+    <button class="${pos === 'bottom' ? 'on' : ''}" data-action="add-pos" data-v="bottom">Unten</button></div>`;
+  const projSelect = projs.length
+    ? `<select id="today-proj" class="mini-select" aria-label="Projekt">${projs.map((p) => `<option value="${p.id}" ${p.id === selProj ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>`
+    : '';
+  const section = (title, items, cap, extra = '', count = items.length) => `
+    <section class="tsec">
+      <div class="tsec-head"><span class="tsec-title">${title}</span><span class="mono muted">${count}</span><span class="mono muted tsec-sum">${sumOf(items) ? fmtDur(sumOf(items)) : ''}</span>${extra}</div>
+      ${cap}
+      ${items.length ? `<div class="tlist">${items.map(card).join('')}</div>` : ''}
+    </section>`;
+
+  const projCap = projs.length
+    ? `<div class="capture tcap"><input data-add="today-proj" data-key="today-add-p" placeholder="Aufgabe für ein Projekt… Enter" autocomplete="off" enterkeyhint="done">${projSelect}${posSeg}</div>`
+    : `<div class="empty small">Noch kein Projekt. <a href="#projects">Projekt anlegen</a>, dann landen hier deine Projekt-Aufgaben.</div>`;
+  const otherCap = `<div class="capture tcap"><input data-add="today-other" data-key="today-add-o" placeholder="Sonstiges: Einkaufen, Mails, Haushalt… Enter" autocomplete="off" enterkeyhint="done">${posSeg}</div>`;
+  const eye = `<button class="icon-btn eye" data-action="toggle-other" title="${st.hideOther ? 'Einblenden' : 'Ausblenden'}">${icon(st.hideOther ? 'eyeOff' : 'eye')}</button>`;
+
+  // Läuft ein Timer für etwas, das nicht in der Liste steht (z. B. aus der Inbox gestartet)?
+  const liveExtra = live && !list.some((t) => t.id === liveId) ? `
+    <div class="tlist" style="margin-bottom:14px">${card(live, 0)}</div>` : '';
+
   const doneRow = (t) => {
     const ms = M.trackedFor(t.id);
     return `<div class="row done" data-action="open-task" data-id="${t.id}">${checkBtn(t)}
@@ -145,17 +160,41 @@ export function viewToday() {
       <span class="mono muted" style="font-size:12.5px">${ms ? fmtDur(ms) : ''}${t.doneAt ? ` · ${fmtTimeOf(t.doneAt)}` : ''}</span></div>`;
   };
 
+  const ws = weekStart(t0);
+  const goal = Number(st.weeklyGoal) || 20;
+  const weekMs = M.trackedBetween(ws, addDays(ws, 7));
+  const pct = Math.min(100, Math.round((weekMs / 3600000 / goal) * 100));
+  const statsBar = `
+    <div class="daystats">
+      <div><b class="mono" data-tick="today">${fmtHours(M.trackedToday())}</b> <span class="muted">heute</span></div>
+      <div><b class="mono">${fmtHours(weekMs)}</b> <span class="muted">/ ${goal}h diese Woche</span></div>
+      <div class="progress"><div style="width:${pct}%;background:var(--accent)"></div></div>
+    </div>`;
+
   return `
-    ${head('Heute', `${longDate(t0)} · ${done.length} erledigt · ${fmtHours(worked)} gearbeitet`)}
-    ${capture('data-add="today" data-key="today-add"', 'Was steht heute an? Tippen und Enter')}
-    ${heroHTML}
-    ${rest.length ? `<div class="group-title">Danach <span class="mono">${rest.length}</span></div><div class="list">${rest.map(row).join('')}</div>` : ''}
-    ${apps.length ? `<div class="group-title">Termine heute</div><div class="list">${apps.map((t) => `<div class="row ${t.status === 'done' ? 'done' : ''}" data-action="open-task" data-id="${t.id}"><span class="mono" style="min-width:48px">${t.time}</span><div class="title"><span class="t">${esc(t.title)}</span></div>${playBtn(t)}</div>`).join('')}</div>` : ''}
-    <div class="group-title">Erledigt heute <span class="mono">${done.length}</span></div>
-    <div class="list">${done.length ? done.map(doneRow).join('') : '<div class="empty">Hier sammelt sich, was du heute geschafft hast.</div>'}</div>
-    ${inbox.length ? `<details class="pull" ${ui.pullOpen ? 'open' : ''}><summary class="group-title">Aus der Inbox holen <span class="mono">${inbox.length}</span></summary>
-      <div class="list">${inbox.map((t) => `<div class="row" data-action="open-task" data-id="${t.id}"><div class="title"><span class="t">${esc(t.title)}</span><div class="meta">${chips(t)}</div></div>
-        <button class="btn small" data-action="pull-today" data-id="${t.id}">${icon('plus')} Heute</button></div>`).join('')}</div></details>` : ''}`;
+    ${head('Heute', `${longDate(t0)} · ${done.length} erledigt`)}
+    ${statsBar}
+    <div class="today-grid">
+      <div class="today-main">
+        ${liveExtra}
+        ${section('Projekt-Aufgaben', withProj, projCap)}
+        ${st.hideOther
+          ? section('Sonstiges', [], `<div class="empty small">${other.length ? `${other.length} ausgeblendet` : 'Ausgeblendet'}</div>`, eye, other.length)
+          : section('Sonstiges', other, otherCap, eye)}
+        ${!list.length && !done.length ? `<p class="muted" style="margin:6px 2px">Tipp: Schreib alles für heute auf und arbeite es von oben nach unten ab. Dein Logbuch rechts füllt sich dabei von selbst.</p>` : ''}
+        ${apps.length ? `<div class="group-title">Termine heute</div><div class="list">${apps.map((t) => `<div class="row ${t.status === 'done' ? 'done' : ''}" data-action="open-task" data-id="${t.id}"><span class="mono" style="min-width:48px">${t.time}</span><div class="title"><span class="t">${esc(t.title)}</span></div>${playBtn(t)}</div>`).join('')}</div>` : ''}
+        ${done.length ? `<div class="group-title">Erledigt heute <span class="mono">${done.length}</span></div><div class="list">${done.map(doneRow).join('')}</div>` : ''}
+        ${inbox.length ? `<details class="pull" ${ui.pullOpen ? 'open' : ''}><summary class="group-title">Aus der Inbox holen <span class="mono">${inbox.length}</span></summary>
+          <div class="list">${inbox.map((t) => `<div class="row" data-action="open-task" data-id="${t.id}"><div class="title"><span class="t">${esc(t.title)}</span><div class="meta">${chips(t)}</div></div>
+            <button class="btn small" data-action="pull-today" data-id="${t.id}">${icon('plus')} Heute</button></div>`).join('')}</div></details>` : ''}
+      </div>
+      <aside class="today-log">
+        <div class="tsec-head"><span class="tsec-title">Logbuch heute</span><a href="#calendar" class="muted" style="margin-left:auto;font-size:13px">Woche ›</a></div>
+        <div class="cal-grid mini">
+          <div class="cal-scroll" id="cal-scroll">${timeAxis()}${dayColumn(t0)}</div>
+        </div>
+      </aside>
+    </div>`;
 }
 
 // ---------- Inbox ----------
@@ -262,70 +301,70 @@ function layoutLanes(items) {
   return items;
 }
 
+// Wochenstunden gegen dein Wochenziel (Einstellungen → Wochenziel)
+function weekGoalBar(ws, compact = false) {
+  const goal = Number(store.settings.weeklyGoal) || 20;
+  const ms = M.trackedBetween(ws, addDays(ws, 7));
+  const pct = Math.min(100, Math.round((ms / 3600000 / goal) * 100));
+  const isNow = ws === weekStart(today());
+  return `<div class="goalbar ${compact ? 'compact' : ''}">
+    <div class="goal-txt"><b class="mono">${fmtHours(ms)}</b> <span class="muted">/ ${goal}h ${isNow ? 'diese Woche' : 'in dieser Woche'}</span>${!compact && !isNow ? ` <button class="btn small ghost" data-action="cal-nav" data-d="0">Diese Woche</button>` : ''}</div>
+    <div class="progress"><div style="width:${pct}%;background:var(--accent)"></div></div>
+  </div>`;
+}
+
+// Stundenleiste links neben Kalender-Spalten
+export function timeAxis() {
+  const s = store.settings;
+  const hours = [];
+  for (let h = s.dayStart; h < s.dayEnd; h++) hours.push(`<div class="${h >= 24 ? 'next' : ''}">${String(h % 24).padStart(2, '0')}:00</div>`);
+  return `<div class="cal-times">${hours.join('')}</div>`;
+}
+
+// Eine Tages-Spalte mit Logbuch-Einträgen, Terminen und gesperrten Zeiten (Logbuch + Heute)
+export function dayColumn(d) {
+  const s = store.settings, t0 = today();
+  const startMin = s.dayStart * 60, endMin = s.dayEnd * 60;
+  const px = (min) => ((min - startMin) * HOUR) / 60;
+  const items = M.segmentsOn(d, startMin, endMin);
+  layoutLanes(items);
+  const evs = items.map((it) => {
+    const top = Math.max(0, px(it.s));
+    const h = Math.max(22, px(it.e) - px(it.s) - 2);
+    const w = 100 / it.lanes;
+    const pos = `top:${top}px;height:${h}px;left:calc(${it.lane * w}% + 3px);right:auto;width:calc(${w}% - 6px)`;
+    if (it.kind === 'block') {
+      const tm = `<span class="tm">${it.cont ? '↳ ' : ''}${it.b.start}–${it.b.end}</span>`, name = `<span class="nm">${icon('lock')} ${esc(it.b.label || 'Gesperrt')}</span>`;
+      // Kurze Einträge: Name zuerst in einer Zeile, damit er immer lesbar ist
+      return `<div class="ev block ${h < 36 ? 'short' : ''}" style="${pos}" data-action="edit-block" data-id="${it.b.id}" title="${esc(it.b.label || 'Gesperrt')} ${it.b.start}–${it.b.end}">
+        ${h < 36 ? `${name} ${tm}` : `${tm}${name}`}</div>`;
+    }
+    if (it.kind === 'entry') {
+      const t = it.t, p = M.project(t?.projectId ?? it.en.projectId);
+      const a = fromMin(((Math.round(it.s) % 1440) + 1440) % 1440), b = it.live ? 'jetzt' : fromMin(Math.round(it.e) % 1440);
+      const tm = `<span class="tm">${it.cont ? '↳ ' : ''}${a}–${b}</span>`, nm = `<span class="nm">${esc(t?.title || 'Gelöschte Aufgabe')}</span>`;
+      return `<div class="ev log ${it.live ? 'live' : ''} ${h < 36 ? 'short' : ''}" style="${pos};--pc:${p?.color || 'var(--accent)'}" data-action="edit-entry" data-id="${it.en.id}" title="${esc(t?.title || '')} ${a}–${b}">${h < 36 ? `${nm} ${tm}` : `${tm}${nm}`}</div>`;
+    }
+    const t = it.t, p = M.project(t.projectId);
+    return `<div class="ev appt ${t.status === 'done' ? 'done' : ''} ${it.rep ? 'rep' : ''} ${h < 36 ? 'short' : ''}" style="${pos};--pc:${p?.color || 'var(--accent)'}"
+      data-action="open-task" data-id="${t.id}" draggable="true" data-drag="task" data-occ="${it.occ}" title="${esc(t.title)}${it.rep ? ' (Wiederholung)' : ''}">
+      ${(() => { const tm = `<span class="tm">${it.cont ? '↳ ' : ''}${t.time}–${fromMin((toMin(t.time) + (t.duration || 30)) % (24 * 60))}${t.priority === 'frog' ? ' 🐸' : ''}</span>`, nm = `<span class="nm">${it.rep ? icon('repeat') + ' ' : ''}${esc(t.title)}</span>`;
+        return h < 36 ? `${nm} ${tm}` : `${tm}${nm}`; })()}</div>`;
+  }).join('');
+  const m = ui.modal?.type === 'slot' ? ui.modal : null;
+  const sel = m && (m.colDate || m.date) === d ? { s: m.colMin ?? toMin(m.time), e: (m.colMin ?? toMin(m.time)) + m.dur } : ui.select?.date === d ? ui.select : null;
+  const ghost = sel ? `<div class="ev ghost ${px(sel.e) - px(sel.s) < 36 ? 'short' : ''}" style="top:${px(sel.s)}px;height:${Math.max(18, px(Math.min(sel.e, endMin)) - px(sel.s) - 2)}px;left:3px;right:3px"><div class="tm">${fromMin(sel.s % (24 * 60))}–${fromMin(sel.e % (24 * 60))}</div>${esc(ui.modal?.title || '(Neu)')}</div>` : '';
+  // Jetzt-Linie: heute, oder nach Mitternacht noch in der Spalte von gestern (wenn dein Tag bis in die Nacht geht)
+  const nowAt = d === t0 ? nowMin() : d === addDays(t0, -1) ? nowMin() + 24 * 60 : -1;
+  const nowLine = nowAt >= startMin && nowAt <= endMin ? `<div class="now-line" style="top:${px(nowAt)}px"></div>` : '';
+  return `<div class="cal-day ${d === t0 ? 'today' : ''}" data-drop-cal="${d}" data-action="cal-slot" data-date="${d}" style="height:${(s.dayEnd - s.dayStart) * HOUR}px">${endMin > 24 * 60 ? `<div class="midnight" style="top:${px(24 * 60)}px"></div>` : ''}${evs}${ghost}${nowLine}</div>`;
+}
+
 export function viewCalendar() {
   const s = store.settings;
   const mobile = isMobile();
   const days = mobile ? [ui.calDay] : Array.from({ length: s.calWeekdays ? 5 : 7 }, (_, i) => addDays(ui.calStart, i));
   const t0 = today();
-  const startMin = s.dayStart * 60, endMin = s.dayEnd * 60;
-  const px = (min) => ((min - startMin) * HOUR) / 60;
-
-  // Seitenleiste: offene Aufgaben ohne Termin
-  const open = M.openTasks();
-  const noDate = open.filter((t) => !t.date).sort(byPrio);
-  const noTime = open.filter((t) => t.date && !t.time && t.date >= days[0] && t.date <= days[days.length - 1]).sort((a, b) => a.date.localeCompare(b.date) || byPrio(a, b));
-  const side = `
-    <aside class="cal-side ${(mobile ? ui.sideOpen : s.sidebar) ? '' : 'collapsed'}" data-drop-inbox="1">
-      <div class="side-head"><span>Offen <span class="mono muted">${noDate.length + noTime.length}</span></span>
-        <button class="icon-btn" data-action="toggle-side">${icon(mobile ? 'x' : 'sidebar')}</button></div>
-      <div class="side-list">
-        <input class="col-add" data-add="inbox" data-key="side-add" placeholder="+ Aufgabe in die Inbox" enterkeyhint="done">
-        ${noDate.length ? '<div class="lbl-sm" style="margin:6px 2px 8px">Ohne Datum</div>' : ''}
-        ${noDate.map((t) => taskCard(t)).join('')}
-        ${noTime.length ? '<div class="lbl-sm" style="margin:14px 2px 8px">Datum, aber ohne Uhrzeit</div>' : ''}
-        ${noTime.map((t) => taskCard(t, true)).join('')}
-        ${!noDate.length && !noTime.length ? '<div class="empty">Alles eingeplant 🎉</div>' : ''}
-        <p class="muted" style="font-size:12.5px;margin:14px 4px">${mobile ? 'Tipp: Task antippen und Datum + Uhrzeit setzen.' : 'Ziehe Aufgaben in den Kalender. Zurückziehen hierher entfernt den Termin.'}</p>
-      </div>
-    </aside>`;
-
-  const hours = [];
-  for (let h = s.dayStart; h < s.dayEnd; h++) hours.push(`<div class="${h >= 24 ? 'next' : ''}">${String(h % 24).padStart(2, '0')}:00</div>`);
-
-  const dayCol = (d) => {
-    const items = M.segmentsOn(d, startMin, endMin);
-    layoutLanes(items);
-    const evs = items.map((it) => {
-      const top = Math.max(0, px(it.s));
-      const h = Math.max(22, px(it.e) - px(it.s) - 2);
-      const w = 100 / it.lanes;
-      const pos = `top:${top}px;height:${h}px;left:calc(${it.lane * w}% + 3px);right:auto;width:calc(${w}% - 6px)`;
-      if (it.kind === 'block') {
-        const tm = `<span class="tm">${it.cont ? '↳ ' : ''}${it.b.start}–${it.b.end}</span>`, name = `<span class="nm">${icon('lock')} ${esc(it.b.label || 'Gesperrt')}</span>`;
-        // Kurze Einträge: Name zuerst in einer Zeile, damit er immer lesbar ist
-        return `<div class="ev block ${h < 36 ? 'short' : ''}" style="${pos}" data-action="edit-block" data-id="${it.b.id}" title="${esc(it.b.label || 'Gesperrt')} ${it.b.start}–${it.b.end}">
-          ${h < 36 ? `${name} ${tm}` : `${tm}${name}`}</div>`;
-      }
-      if (it.kind === 'entry') {
-        const t = it.t, p = M.project(t?.projectId ?? it.en.projectId);
-        const a = fromMin(((Math.round(it.s) % 1440) + 1440) % 1440), b = it.live ? 'jetzt' : fromMin(Math.round(it.e) % 1440);
-        const tm = `<span class="tm">${it.cont ? '↳ ' : ''}${a}–${b}</span>`, nm = `<span class="nm">${esc(t?.title || 'Gelöschte Aufgabe')}</span>`;
-        return `<div class="ev log ${it.live ? 'live' : ''} ${h < 36 ? 'short' : ''}" style="${pos};--pc:${p?.color || 'var(--accent)'}" data-action="edit-entry" data-id="${it.en.id}" title="${esc(t?.title || '')} ${a}–${b}">${h < 36 ? `${nm} ${tm}` : `${tm}${nm}`}</div>`;
-      }
-      const t = it.t, p = M.project(t.projectId);
-      return `<div class="ev appt ${t.status === 'done' ? 'done' : ''} ${it.rep ? 'rep' : ''} ${h < 36 ? 'short' : ''}" style="${pos};--pc:${p?.color || 'var(--accent)'}"
-        data-action="open-task" data-id="${t.id}" draggable="true" data-drag="task" data-occ="${it.occ}" title="${esc(t.title)}${it.rep ? ' (Wiederholung)' : ''}">
-        ${(() => { const tm = `<span class="tm">${it.cont ? '↳ ' : ''}${t.time}–${fromMin((toMin(t.time) + (t.duration || 30)) % (24 * 60))}${t.priority === 'frog' ? ' 🐸' : ''}</span>`, nm = `<span class="nm">${it.rep ? icon('repeat') + ' ' : ''}${esc(t.title)}</span>`;
-          return h < 36 ? `${nm} ${tm}` : `${tm}${nm}`; })()}</div>`;
-    }).join('');
-    const m = ui.modal?.type === 'slot' ? ui.modal : null;
-    const sel = m && (m.colDate || m.date) === d ? { s: m.colMin ?? toMin(m.time), e: (m.colMin ?? toMin(m.time)) + m.dur } : ui.select?.date === d ? ui.select : null;
-    const ghost = sel ? `<div class="ev ghost ${px(sel.e) - px(sel.s) < 36 ? 'short' : ''}" style="top:${px(sel.s)}px;height:${Math.max(18, px(Math.min(sel.e, endMin)) - px(sel.s) - 2)}px;left:3px;right:3px"><div class="tm">${fromMin(sel.s % (24 * 60))}–${fromMin(sel.e % (24 * 60))}</div>${esc(ui.modal?.title || '(Neu)')}</div>` : '';
-    // Jetzt-Linie: heute, oder nach Mitternacht noch in der Spalte von gestern (wenn dein Tag bis in die Nacht geht)
-    const nowAt = d === t0 ? nowMin() : d === addDays(t0, -1) ? nowMin() + 24 * 60 : -1;
-    const nowLine = nowAt >= startMin && nowAt <= endMin ? `<div class="now-line" style="top:${px(nowAt)}px"></div>` : '';
-    return `<div class="cal-day ${d === t0 ? 'today' : ''}" data-drop-cal="${d}" data-action="cal-slot" data-date="${d}" style="height:${(s.dayEnd - s.dayStart) * HOUR}px">${endMin > 24 * 60 ? `<div class="midnight" style="top:${px(24 * 60)}px"></div>` : ''}${evs}${ghost}${nowLine}</div>`;
-  };
 
   const header = days.map((d) => {
     const a = new Date(d + 'T00:00').getTime(), b = a + 864e5;
@@ -348,11 +387,12 @@ export function viewCalendar() {
     <div class="cal-wrap">
       <section class="cal-main">
         ${head('Logbuch', mobile ? longDate(days[0]) : rangeLabel(days[0], days.length), actions)}
+        ${weekGoalBar(weekStart(days[0]))}
         <div class="cal-grid">
           <div class="cal-header"><div class="gutter"></div>${header}</div>
           <div class="cal-scroll" id="cal-scroll">
-            <div class="cal-times">${hours.join('')}</div>
-            ${days.map(dayCol).join('')}
+            ${timeAxis()}
+            ${days.map(dayColumn).join('')}
           </div>
         </div>
       </section>
@@ -363,26 +403,49 @@ export function viewCalendar() {
 const weekMsForProject = (pid, from) => M.entriesBetween(from, addDays(from, 7)).filter((e) => M.entryProject(e) === pid).reduce((a, e) => a + M.entryMs(e), 0);
 const totalMsForProject = (pid) => store.all('entries').filter((e) => M.entryProject(e) === pid).reduce((a, e) => a + M.entryMs(e), 0);
 
+// Mini-Verlauf: Stunden der letzten Wochen als Linie
+function sparkline(vals, color) {
+  const w = 120, h = 32, max = Math.max(...vals, 0.0001);
+  const pts = vals.map((v, i) => `${((i / (vals.length - 1)) * w).toFixed(1)},${(h - 3 - (v / max) * (h - 6)).toFixed(1)}`);
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
+    <polyline points="0,${h} ${pts.join(' ')} ${w},${h}" fill="${color}" fill-opacity="0.12" stroke="none"/>
+    <polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/></svg>`;
+}
+
 export function viewProjects() {
   const ws = weekStart(today());
-  const cards = M.projects().map((p) => {
+  const all = store.all('projects').sort((a, b) => a.createdAt - b.createdAt);
+  const active = all.filter((p) => !p.archived), closed = all.filter((p) => p.archived);
+  const tab = ui.projTab === 'closed' ? 'closed' : 'active';
+  const shown = tab === 'closed' ? closed : active;
+  const totalAll = all.reduce((a, p) => a + totalMsForProject(p.id), 0);
+  const cards = shown.map((p) => {
     const ts = M.tasks().filter((t) => t.projectId === p.id);
     const done = ts.filter((t) => t.status === 'done').length;
-    const pct = ts.length ? Math.round((done / ts.length) * 100) : 0;
+    const weeks = Array.from({ length: 8 }, (_, i) => weekMsForProject(p.id, addDays(ws, (i - 7) * 7)) / 3600000);
     return `
-      <div class="pcard" data-action="go" data-href="#project/${p.id}">
-        <h3>${projIcon(p, 18)}${esc(p.name)}</h3>
+      <div class="pcard ${p.archived ? 'closed' : ''}" data-action="go" data-href="#project/${p.id}" style="--pc:${p.color}">
+        <h3>${projIcon(p, 18)}<span class="pname">${esc(p.name)}</span>${p.archived ? '<span class="chip">✓ Abgeschlossen</span>' : ''}</h3>
         ${p.goal ? `<div class="pgoal">🎯 ${esc(p.goal)}</div>` : ''}
         <div class="row2">
           <div><div class="big">${fmtHours(weekMsForProject(p.id, ws))}</div><div class="lbl">diese Woche</div></div>
-          <div style="text-align:right"><div class="mono muted">${ts.length - done} offen · ${done} erledigt</div><div class="mono muted">${fmtHours(totalMsForProject(p.id))} gesamt</div></div>
+          ${sparkline(weeks, p.color)}
         </div>
-        <div class="progress"><div style="width:${pct}%;background:${p.color}"></div></div>
+        <div class="pfoot mono muted"><span>${fmtHours(totalMsForProject(p.id))} insgesamt</span><span>${ts.length - done} offen · ${done} erledigt</span></div>
       </div>`;
   }).join('');
   return `
     ${head('Projekte', 'Gib deiner Zeit eine Richtung.', `<button class="btn primary" data-action="new-project">${icon('plus')} Neues Projekt</button>`)}
-    <div class="grid">${cards}<div class="pcard add" data-action="new-project">${icon('plus')} Projekt anlegen</div></div>`;
+    <div class="stats">
+      <div class="stat"><div class="lbl">Projekt-Stunden insgesamt</div><div class="big">${fmtHours(totalAll)}</div></div>
+      <div class="stat"><div class="lbl">In Arbeit</div><div class="big">${active.length}</div></div>
+      <div class="stat"><div class="lbl">Abgeschlossen</div><div class="big">${closed.length}</div></div>
+    </div>
+    <div class="tabs" style="margin:6px 0 16px">
+      <button class="${tab === 'active' ? 'on' : ''}" data-action="proj-tab" data-tab="active">Aktiv<span class="n">${active.length}</span></button>
+      <button class="${tab === 'closed' ? 'on' : ''}" data-action="proj-tab" data-tab="closed">Abgeschlossen<span class="n">${closed.length}</span></button>
+    </div>
+    <div class="grid">${cards}${tab === 'active' ? `<div class="pcard add" data-action="new-project">${icon('plus')} Projekt anlegen</div>` : (closed.length ? '' : '<div class="empty">Noch nichts abgeschlossen. Öffne ein Projekt und tipp auf „Abschließen“, wenn es fertig ist.</div>')}</div>`;
 }
 
 export function viewProject(id) {
@@ -400,7 +463,9 @@ export function viewProject(id) {
         <input class="title-in" style="font-size:28px;font-weight:700;border:0;background:transparent;padding:0" value="${esc(p.name)}" data-pfield="name" data-id="${p.id}">
       </div>
       <div class="actions">
-        <button class="btn small" data-action="archive-project" data-id="${p.id}">Archivieren</button>
+        ${p.archived
+          ? `<button class="btn small" data-action="unarchive-project" data-id="${p.id}">Wieder aktivieren</button>`
+          : `<button class="btn small" data-action="archive-project" data-id="${p.id}">${icon('check')} Abschließen</button>`}
         <button class="btn small danger" data-action="delete-project" data-id="${p.id}">${icon('trash')} Löschen</button>
       </div>
     </div>
@@ -559,7 +624,7 @@ export function viewSettings() {
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.7.1</p>
+      <p class="mono muted">Version 0.8.0</p>
     </div>`;
 }
 
