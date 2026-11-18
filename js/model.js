@@ -117,6 +117,15 @@ export function moveInToday(id, dir) {
   list.splice(dir === 'top' ? 0 : Math.max(0, Math.min(list.length, i + dir)), 0, item);
   store.batch(() => list.forEach((t, k) => { if (t.order !== k) store.patch('tasks', t.id, { order: k }); }));
 }
+// Plan-Board: Aufgabe in einer Tages-Spalte vor eine andere schieben; die sichtbare Reihenfolge wird zur eigenen
+export function reorderDay(date, id, beforeId, mode) {
+  const list = sortTasks(tasks().filter((t) => t.date === date && t.status !== 'done' && t.id !== id), mode);
+  const item = store.get('tasks', id);
+  if (!item) return;
+  const j = list.findIndex((t) => t.id === beforeId);
+  list.splice(j < 0 ? list.length : j, 0, item);
+  store.batch(() => list.forEach((t, k) => { if (t.order !== k) store.patch('tasks', t.id, { order: k }); }));
+}
 // In der Heute-Liste vor eine andere Aufgabe schieben (Drag & Drop)
 export function moveBefore(id, targetId) {
   const list = todayList();
@@ -356,7 +365,7 @@ Meine Antwort/Rückfrage dazu: ${reply}
 Gib mir jetzt die aktualisierte Antwort (gleiche Regeln wie oben).`;
 }
 
-export const sortTasks = (list, mode) => list.sort(mode === 'time' ? (a, b) => (a.time || '99').localeCompare(b.time || '99') || prioRank(a.priority) - prioRank(b.priority) : byPrio);
+export const sortTasks = (list, mode) => list.sort(mode === 'manual' ? (a, b) => (a.order ?? 1e15) - (b.order ?? 1e15) || byPrio(a, b) : mode === 'time' ? (a, b) => (a.time || '99').localeCompare(b.time || '99') || prioRank(a.priority) - prioRank(b.priority) : byPrio);
 
 // ---- Beispieldaten zum Ausprobieren ----
 export function seedDemo() {

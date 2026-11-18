@@ -754,7 +754,7 @@ document.addEventListener('dragstart', (e) => {
   e.dataTransfer.effectAllowed = 'move';
   requestAnimationFrame(() => el.classList.add('dragging'));
 });
-const dropTarget = (e) => e.target.closest?.('[data-drop-card],[data-drop-day],[data-drop-cal],[data-drop-inbox],[data-drop-today]');
+const dropTarget = (e) => e.target.closest?.('[data-drop-card],[data-drop-plan],[data-drop-day],[data-drop-cal],[data-drop-inbox],[data-drop-today]');
 // Zielzeit beim Ziehen in eine Kalender-Spalte (auf 15 Min gerastert)
 const dropMin = (t, e) => {
   const rect = t.getBoundingClientRect();
@@ -786,6 +786,13 @@ document.addEventListener('drop', (e) => {
     const task = store.get('tasks', id);
     if (task?.time) scheduleChange(id, occ, { date: today(), time: null }); // Termin aus dem Kalender zurück in die Liste
     else M.moveBefore(id, t.dataset.dropCard);
+  } else if (t.dataset.dropPlan) {
+    const d = t.dataset.date, task = store.get('tasks', id);
+    if (!task) return;
+    if (occ || (task.repeat && task.date !== d)) return scheduleChange(id, occ, { date: d }); // Wiederholung: erst fragen
+    if (task.date !== d) store.patch('tasks', id, { date: d });
+    M.reorderDay(d, id, t.dataset.dropPlan, store.settings.sortMode);
+    if (store.settings.sortMode !== 'manual') { store.saveSettings({ sortMode: 'manual' }); toast('Eigene Reihenfolge aktiv. Über „Prio“ oder „Zeit“ sortierst du wieder automatisch.'); }
   } else if (t.dataset.dropDay) scheduleChange(id, occ, { date: t.dataset.dropDay });
   else if (t.dataset.dropCal) {
     const [date, m] = norm(t.dataset.dropCal, dropMin(t, e));

@@ -83,12 +83,13 @@ export const taskRow = (t, showDate = true) => `
     ${aiBtn(t)}${playBtn(t)}
   </div>`;
 
-export const taskCard = (t, showDate = false) => {
+// occ = Datum einer Wiederholungs-Vorschau, planDate = Spalte im Plan-Board (zum Umsortieren per Ziehen)
+export const taskCard = (t, showDate = false, { occ = null, planDate = null } = {}) => {
   const p = M.project(t.projectId);
   return `
-  <div class="card ${t.status === 'done' ? 'done' : ''}" data-action="open-task" data-id="${t.id}" draggable="true" data-drag="task">
+  <div class="card ${t.status === 'done' ? 'done' : ''} ${occ ? 'rep' : ''}" data-action="open-task" data-id="${t.id}" draggable="true" data-drag="task"${occ ? ` data-occ="${occ}" title="Wiederholung"` : ''}${planDate && t.status !== 'done' ? ` data-drop-plan="${t.id}" data-date="${planDate}"` : ''}>
     ${p ? `<div class="bar" style="background:${p.color}"></div>` : ''}
-    <div class="ttl">${checkBtn(t)}<span>${esc(t.title)}</span>${playBtn(t)}</div>
+    <div class="ttl">${occ ? `<span class="rep-ic">${icon('repeat')}</span>` : checkBtn(t)}<span>${esc(t.title)}</span>${occ ? '' : playBtn(t)}</div>
     <div class="meta">${chips(t, showDate)}${aiBtn(t)}</div>
   </div>`;
 };
@@ -241,13 +242,16 @@ export function viewPlan() {
   const column = (d) => {
     const list = M.tasks().filter((t) => t.date === d);
     const open = M.sortTasks(list.filter((t) => t.status !== 'done'), s.sortMode);
+    // Wiederholungen: Vorschau an den Folgetagen (echte Aufgabe entsteht beim Erledigen bzw. Verschieben)
+    const reps = d > t0 ? M.tasks().filter((t) => t.repeat && t.date !== d && M.repeatsOn(t, d)) : [];
     const done = list.filter((t) => t.status === 'done');
     const sum = open.reduce((a, t) => a + (t.duration || 0), 0);
     return `
       <div class="col ${d === t0 ? 'today' : ''}" data-drop-day="${d}">
         <div class="col-head"><span class="wd">${d === t0 ? 'Heute' : shortWeekday(d)}</span><span class="num">${dayNum(d)}</span><span class="sum">${sum ? fmtMinutes(sum) : ''}</span></div>
         <input class="col-add" data-add="day" data-date="${d}" data-key="add-${d}" placeholder="+ Aufgabe" enterkeyhint="done">
-        ${open.map((t) => taskCard(t)).join('')}
+        ${open.map((t) => taskCard(t, false, { planDate: d })).join('')}
+        ${reps.map((t) => taskCard(t, false, { occ: d })).join('')}
         ${done.map((t) => taskCard(t)).join('')}
       </div>`;
   };
@@ -256,6 +260,7 @@ export function viewPlan() {
     <div class="tabs">
       <button class="${s.sortMode === 'prio' ? 'on' : ''}" data-action="sort" data-mode="prio">🐸 Prio</button>
       <button class="${s.sortMode === 'time' ? 'on' : ''}" data-action="sort" data-mode="time">Zeit</button>
+      <button class="${s.sortMode === 'manual' ? 'on' : ''}" data-action="sort" data-mode="manual" title="Eigene Reihenfolge: Karten per Ziehen sortieren">Eigene</button>
     </div>
     <button class="icon-btn" data-action="plan-nav" data-d="-7">${icon('left')}</button>
     <button class="btn small" data-action="plan-nav" data-d="0">Heute</button>
@@ -618,7 +623,7 @@ export function viewSettings() {
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.8.4</p>
+      <p class="mono muted">Version 0.8.5</p>
     </div>`;
 }
 
