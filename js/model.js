@@ -192,8 +192,10 @@ export function segmentsOn(date, A = 0, B = DAY) {
   const out = [];
   const push = (kind, x, s, e) => { if (e > A && s < B) out.push({ kind, ...x, s: Math.max(s, A), e: Math.min(e, B), cont: s < A, spill: e > B }); };
   for (const [d, off] of [[addDays(date, -1), -DAY], [date, 0], [addDays(date, 1), DAY]]) {
+    // Geplante Termine, an denen an diesem Tag schon gearbeitet wurde, zeigt der Kalender nur noch als echte Einträge
+    const worked = new Set(entriesBetween(d, addDays(d, 1)).map((e) => e.taskId));
     for (const t of tasks()) {
-      if (!t.time) continue;
+      if (!t.time || worked.has(t.id)) continue;
       const rep = t.date !== d;
       if (rep && !repeatsOn(t, d)) continue; // rep = Vorschau einer Wiederholung
       const s = toMin(t.time) + off;
@@ -210,7 +212,7 @@ export function segmentsOn(date, A = 0, B = DAY) {
   const t0 = new Date(date + 'T00:00').getTime();
   for (const en of store.all('entries')) {
     const s = (en.start - t0) / 60000, e = ((en.end || Date.now()) - t0) / 60000;
-    if (e - s < 1) continue; // Kürzer als 1 Minute: nicht anzeigen
+    if (e - s < 1 && en.end) continue; // Kürzer als 1 Minute: nicht anzeigen (laufende schon)
     push('entry', { en, t: store.get('tasks', en.taskId) || null, live: !en.end }, s, e);
   }
   return out;
