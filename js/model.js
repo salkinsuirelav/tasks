@@ -158,19 +158,37 @@ export function finishTask(id) {
 }
 
 // ---- Timetracking ----
-export const running = () => store.all('entries').find((e) => !e.end);
+// Laufende Einträge (ohne Ende), neuester zuerst. Normal ist es höchstens einer; mehrere können entstehen,
+// wenn z. B. Gym-App und Task-App auf verschiedenen Geräten gleichzeitig einen Timer starten.
+export const openEntries = () => store.all('entries').filter((e) => !e.end).sort((a, b) => b.start - a.start);
+export const running = () => openEntries()[0];
+// Ältere, vergessene laufende Einträge sauber beenden: dort, wo danach der nächste Eintrag begann
+export function repairOpenEntries() {
+  const open = openEntries();
+  if (open.length < 2) return 0;
+  const starts = store.all('entries').map((e) => e.start).sort((a, b) => a - b);
+  store.batch(() => open.slice(1).forEach((e) => {
+    const next = starts.find((s) => s > e.start) ?? Date.now();
+    store.patch('entries', e.id, { end: next });
+  }));
+  return open.length - 1;
+}
 export function startTimer(taskId) {
   const t = store.get('tasks', taskId);
   store.batch(() => {
-    const r = running();
-    if (r) store.patch('entries', r.id, { end: Date.now() });
-    store.put('entries', { taskId, projectId: t?.projectId || null, start: Date.now(), end: null });
+    repairOpenEntries();
+    const now = Date.now();
+    openEntries().forEach((r) => store.patch('entries', r.id, { end: now }));
+    store.put('entries', { taskId, projectId: t?.projectId || null, start: now, end: null });
     if (t && t.status === 'todo') store.patch('tasks', taskId, { status: 'doing' });
   });
 }
 export function stopTimer() {
-  const r = running();
-  if (r) store.patch('entries', r.id, { end: Date.now() });
+  store.batch(() => {
+    repairOpenEntries();
+    const now = Date.now();
+    openEntries().forEach((r) => store.patch('entries', r.id, { end: now }));
+  });
 }
 export const entryMs = (e) => (e.end || Date.now()) - e.start;
 export const trackedFor = (taskId) => store.all('entries').filter((e) => e.taskId === taskId).reduce((s, e) => s + entryMs(e), 0);

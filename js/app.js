@@ -815,6 +815,9 @@ if (!location.hash || location.hash === '#inbox' || (standalone && !launched)) l
 applyTheme();
 renderAll();
 store.initSync();
+// Selbstheilung: mehrere gleichzeitig laufende Timer (z. B. aus der Gym-App) auf einen reduzieren
+let repairT;
+store.subscribe(() => { clearTimeout(repairT); repairT = setTimeout(() => { if (store.sync.status === 'online' && M.repairOpenEntries()) toast('Ein hängengebliebener Timer wurde beendet.'); }, 1500); });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 if (navigator.storage?.persist) navigator.storage.persist();
 window.__app = { store, M, ui }; // zum Ausprobieren in der Browser-Konsole
