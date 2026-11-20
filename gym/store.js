@@ -6,7 +6,7 @@ import { firebaseConfig } from '../js/config.js';
 
 const KEY = 'gym-state-v1';
 const PENDING_KEY = 'gym-pending-v1';
-export const COLLECTIONS = ['gym_exercises', 'gym_sets', 'gym_days'];
+export const COLLECTIONS = ['gym_exercises', 'gym_sets', 'gym_days', 'gym_plans'];
 const FB = '12.19.0';
 
 const empty = () => Object.fromEntries(COLLECTIONS.map((c) => [c, {}]));
