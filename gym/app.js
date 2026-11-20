@@ -8,7 +8,7 @@
 import * as S from './store.js';
 import { LIBRARY, GROUPS, matches, norm } from './exercises.js';
 
-const VERSION = '0.4.1';
+const VERSION = '0.4.2';
 const $ = (sel, el = document) => el.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -169,13 +169,28 @@ function workoutBar(date) {
   return `<button class="wo-start" data-act="wo-start">${ICON.play}<span>Training starten</span>${other ? `<span class="muted small">stoppt „${esc(other.title)}“</span>` : '<span class="muted small">→ Kalender</span>'}</button>`;
 }
 
+// Projekt der Gym-Aufgabe: in „Mehr“ wählbar, sonst automatisch das Projekt „Health“
+const taskProjects = () => S.all('projects').filter((p) => !p.archived).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+function gymProjectId() {
+  const set = S.get('gym_meta', 'settings')?.projectId;
+  if (set !== undefined) return set && S.get('projects', set) ? set : null;
+  return taskProjects().find((p) => /health|gesundheit/i.test(p.name))?.id || null;
+}
+function applyProject(task) {
+  const pid = gymProjectId();
+  if (!task || task.projectId === pid) return task;
+  S.all('entries').filter((e) => e.taskId === task.id).forEach((e) => S.patch('entries', e.id, { projectId: pid }));
+  return S.patch('tasks', task.id, { projectId: pid });
+}
+
 function startWorkout() {
   const d = today();
   let task = gymTaskOf(d);
   if (!task) {
     const plan = planOfDate(d);
-    task = S.put('tasks', { title: `Gym – ${plan?.name || 'Training'}`, notes: '', projectId: null, date: d, time: null, duration: 60, priority: '', status: 'todo', repeat: '', ai: false, gym: true });
+    task = S.put('tasks', { title: `Gym – ${plan?.name || 'Training'}`, notes: '', projectId: gymProjectId(), date: d, time: null, duration: 60, priority: '', status: 'todo', repeat: '', ai: false, gym: true });
   }
+  task = applyProject(task);
   const run = runningEntry();
   if (run) S.patch('entries', run.id, { end: Date.now() });
   S.put('entries', { taskId: task.id, projectId: task.projectId || null, start: Date.now(), end: null });
@@ -185,7 +200,7 @@ function startWorkout() {
 }
 
 function stopWorkout() {
-  const task = gymTaskOf(today()), run = runningEntry();
+  const task = applyProject(gymTaskOf(today())), run = runningEntry();
   if (run && task && run.taskId === task.id) S.patch('entries', run.id, { end: Date.now() });
   if (task && task.status !== 'done') {
     S.patch('tasks', task.id, { status: 'done', doneAt: Date.now() });
@@ -329,6 +344,11 @@ function settingsView() {
       <button class="btn primary" type="submit">Anmelden</button>
     </form>`}
   </section>
+  ${S.sync.user ? `<section class="card">
+    <h2>Trainings-Timer</h2>
+    <p class="muted">Projekt der Gym-Aufgabe in deiner Task-App</p>
+    <select id="gym-project">${[['', 'Kein Projekt'], ...taskProjects().map((p) => [p.id, p.name])].map(([id, n]) => `<option value="${id}" ${(gymProjectId() || '') === id ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
+  </section>` : ''}
   <section class="card">
     <h2>Übungen</h2>
     <div class="list tight">${exercises().map((e) => `<div class="row static"><span>${esc(e.name)}</span><span><button class="link" data-act="rename" data-id="${e.id}">Umbenennen</button></span></div>`).join('') || '<p class="muted">Noch keine.</p>'}</div>
@@ -546,7 +566,11 @@ document.addEventListener('click', (e) => {
 // Plan-Felder (Name, Sätze, Wdh) speichern, sobald man das Feld verlässt
 document.addEventListener('change', (e) => {
   const el = e.target;
-  if (el.id === 'plan-name') { if (el.value.trim()) S.patch('gym_plans', ui.planEdit, { name: el.value.trim() }); }
+  if (el.id === 'gym-project') {
+    S.put('gym_meta', { ...(S.get('gym_meta', 'settings') || {}), id: 'settings', projectId: el.value || null });
+    applyProject(gymTaskOf(today()));
+    toast('Projekt gespeichert');
+  } else if (el.id === 'plan-name') { if (el.value.trim()) S.patch('gym_plans', ui.planEdit, { name: el.value.trim() }); }
   else if (el.dataset.item !== undefined) {
     const i = Number(el.dataset.item), f = el.dataset.field;
     const v = f === 'sets' ? (Math.round(num(el.value)) || null) : el.value.trim().replace('-', '–');

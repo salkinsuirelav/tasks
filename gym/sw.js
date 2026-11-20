@@ -1,6 +1,6 @@
 // Service Worker der Gym-App (eigener Bereich /gym/, unabhängig von der Task-App).
 // Bei jeder Änderung: VERSION hochzählen (und VERSION in app.js).
-const VERSION = 'gym-v0.4.1';
+const VERSION = 'gym-v0.4.2';
 const SHELL = ['./', 'index.html', 'manifest.json', 'app.css', 'app.js', 'store.js', 'exercises.js', '../js/config.js', 'icon-180.png', 'icon-192.png', 'icon-512.png', 'icon.svg'];
 
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL))); self.skipWaiting(); });
