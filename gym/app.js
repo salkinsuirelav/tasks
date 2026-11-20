@@ -6,8 +6,9 @@
 //   gym_sets:      { id, exId, date: 'YYYY-MM-DD', w: kg, r: Wiederholungen, t: Zeitstempel }
 
 import * as S from './store.js';
+import { LIBRARY, GROUPS, matches, norm } from './exercises.js';
 
-const VERSION = '0.2.0';
+const VERSION = '0.3.0';
 const $ = (sel, el = document) => el.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -76,8 +77,6 @@ const isPR = (set) => {
 const setsLine = (sets) => sets.map((s) => `${kg(s.w)}×${s.r}`).join(' · ');
 const targetLine = (t) => (t ? `${t.sets || '?'} × ${t.reps || '?'}` : '');
 
-const SUGGEST = ['Bankdrücken', 'Kniebeuge', 'Kreuzheben', 'Schulterdrücken', 'Langhantelrudern', 'Klimmzüge', 'Latzug', 'Dips',
-  'Schrägbankdrücken', 'Beinpresse', 'Rumänisches Kreuzheben', 'Bizepscurls', 'Trizepsdrücken', 'Seitheben', 'Wadenheben', 'Beinbeuger'];
 
 // ---------- Zustand der Oberfläche ----------
 const ui = { tab: 'train', date: today(), exDetail: null, metric: 'w', histMode: 'ex', planEdit: null };
@@ -331,15 +330,22 @@ function exercisePicker(title, exclude, onPick) {
   const used = new Set(exclude);
   const recent = (id) => { const s = sessions(id)[0]; return s ? s.date : ''; };
   const draw = (q = '') => {
-    const ql = q.trim().toLowerCase();
-    const mine = exercises().filter((e) => !used.has(e.id) && e.name.toLowerCase().includes(ql)).sort((a, b) => recent(b.id).localeCompare(recent(a.id)) || a.name.localeCompare(b.name, 'de'));
-    const names = new Set(S.all('gym_exercises').map((e) => e.name.toLowerCase()));
-    const sugg = SUGGEST.filter((n) => !names.has(n.toLowerCase()) && n.toLowerCase().includes(ql));
-    const exact = ql && (names.has(ql) || SUGGEST.some((n) => n.toLowerCase() === ql));
+    const ql = q.trim();
+    const own = S.all('gym_exercises');
+    const ownNames = new Set(own.map((e) => norm(e.name)));
+    const lib = (e) => LIBRARY.find((l) => norm(l.name) === norm(e.name));
+    const mine = exercises().filter((e) => !used.has(e.id) && (!ql || matches(ql, e.name, lib(e)?.alias || '')))
+      .sort((a, b) => recent(b.id).localeCompare(recent(a.id)) || a.name.localeCompare(b.name, 'de'));
+    const sugg = LIBRARY.filter((l) => !ownNames.has(norm(l.name)) && (!ql || matches(ql, l.name, l.alias, l.group)));
+    const exact = ql && (ownNames.has(norm(ql)) || LIBRARY.some((l) => norm(l.name) === norm(ql)));
+    const newRow = `<button class="row accent" data-act="pick-new" data-name="${esc(ql)}">${ICON.plus}<span>„${esc(ql)}“ neu anlegen</span></button>`;
+    const libRow = (l) => `<button class="row" data-act="pick-new" data-name="${esc(l.name)}"><span>${esc(l.name)}</span>${ql ? `<span class="muted">${esc(l.group)}</span>` : ''}</button>`;
     return `
-      ${ql && !exact ? `<button class="row accent" data-act="pick-new" data-name="${esc(q.trim())}">${ICON.plus}<span>„${esc(q.trim())}“ neu anlegen</span></button>` : ''}
+      ${ql && !exact && !mine.length && !sugg.length ? newRow : ''}
       ${mine.length ? `<div class="label">Deine Übungen</div>${mine.map((e) => `<button class="row" data-act="pick" data-id="${e.id}"><span>${esc(e.name)}</span><span class="muted">${recent(e.id) ? dayLabel(recent(e.id)) : ''}</span></button>`).join('')}` : ''}
-      ${sugg.length ? `<div class="label">Vorschläge</div>${sugg.map((n) => `<button class="row" data-act="pick-new" data-name="${esc(n)}"><span>${esc(n)}</span></button>`).join('')}` : ''}`;
+      ${ql ? (sugg.length ? `<div class="label">Bibliothek</div>${sugg.map(libRow).join('')}` : '')
+        : GROUPS.map((g) => { const items = sugg.filter((l) => l.group === g); return items.length ? `<div class="label">${esc(g)}</div>${items.map(libRow).join('')}` : ''; }).join('')}
+      ${ql && !exact && (mine.length || sugg.length) ? `<div class="label">Nicht dabei?</div>${newRow}` : ''}`;
   };
   sheet(`<div class="sheet-head"><h2>${title}</h2><button class="icon-btn small" data-act="close-sheet">${ICON.x}</button></div>
     <input id="ex-search" placeholder="Suchen oder neu anlegen…" autocomplete="off"><div id="ex-results" class="list tight">${draw()}</div>`, (el) => {
