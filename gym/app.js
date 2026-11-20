@@ -8,7 +8,7 @@
 import * as S from './store.js';
 import { LIBRARY, GROUPS, matches, norm } from './exercises.js';
 
-const VERSION = '0.4.2';
+const VERSION = '0.4.3';
 const $ = (sel, el = document) => el.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -147,7 +147,8 @@ function exCard(exId, date) {
 // Start: eigene Aufgabe "Gym – <Plan>" für den Tag anlegen (Kennzeichen gym: true), Timer darauf starten.
 // Andere Aufgaben der Task-App werden nie angefasst – außer, dass ein laufender Timer gestoppt wird.
 // Beenden: Timer stoppen, Gym-Aufgabe erledigt → erscheint im Kalender als Eintrag.
-const runningEntry = () => S.all('entries').find((e) => !e.end);
+const openEntries = () => S.all('entries').filter((e) => !e.end).sort((a, b) => b.start - a.start);
+const runningEntry = () => openEntries()[0]; // neuester laufender Timer
 const gymTaskOf = (date) => { const id = S.get('gym_days', date)?.taskId; const t = id ? S.get('tasks', id) : null; return t?.gym ? t : null; };
 const gymEntries = (date) => { const t = gymTaskOf(date); if (!t) return []; const a = parseDate(date).getTime(), b = a + 864e5; return S.all('entries').filter((e) => e.taskId === t.id && e.start >= a && e.start < b).sort((x, y) => x.start - y.start); };
 const fmtClock = (ms) => { const sec = Math.max(0, Math.floor(ms / 1000)), h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60); return `${h ? h + ':' + pad(m) : m}:${pad(sec % 60)}`; };
@@ -191,8 +192,8 @@ function startWorkout() {
     task = S.put('tasks', { title: `Gym – ${plan?.name || 'Training'}`, notes: '', projectId: gymProjectId(), date: d, time: null, duration: 60, priority: '', status: 'todo', repeat: '', ai: false, gym: true });
   }
   task = applyProject(task);
-  const run = runningEntry();
-  if (run) S.patch('entries', run.id, { end: Date.now() });
+  const now = Date.now();
+  openEntries().forEach((e) => S.patch('entries', e.id, { end: now })); // alle laufenden Timer stoppen, nicht nur einen
   S.put('entries', { taskId: task.id, projectId: task.projectId || null, start: Date.now(), end: null });
   if (task.status !== 'doing') S.patch('tasks', task.id, { status: 'doing', doneAt: null });
   saveDay(d, { taskId: task.id });
@@ -200,8 +201,8 @@ function startWorkout() {
 }
 
 function stopWorkout() {
-  const task = applyProject(gymTaskOf(today())), run = runningEntry();
-  if (run && task && run.taskId === task.id) S.patch('entries', run.id, { end: Date.now() });
+  const task = applyProject(gymTaskOf(today())), now = Date.now();
+  if (task) openEntries().filter((e) => e.taskId === task.id).forEach((e) => S.patch('entries', e.id, { end: now }));
   if (task && task.status !== 'done') {
     S.patch('tasks', task.id, { status: 'done', doneAt: Date.now() });
   }
