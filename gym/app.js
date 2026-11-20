@@ -8,7 +8,7 @@
 import * as S from './store.js';
 import { LIBRARY, GROUPS, matches, norm } from './exercises.js';
 
-const VERSION = '0.4.0';
+const VERSION = '0.4.1';
 const $ = (sel, el = document) => el.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -144,11 +144,11 @@ function exCard(exId, date) {
 
 // ---------- Trainings-Timer → Kalender der Task-App ----------
 // Die Gym-App schreibt direkt in die Task-App-Daten (tasks + entries, gleiche Firebase).
-// Start: passende offene Aufgabe von heute ("Gym", "Training", "Sport" …) nehmen oder "Gym – <Plan>" anlegen, Timer darauf starten.
-// Beenden: Timer stoppen, Aufgabe erledigt → erscheint im Kalender als Eintrag.
-const GYM_WORDS = /gym|training|workout|sport|fitness|krafttraining|pumpen/i;
+// Start: eigene Aufgabe "Gym – <Plan>" für den Tag anlegen (Kennzeichen gym: true), Timer darauf starten.
+// Andere Aufgaben der Task-App werden nie angefasst – außer, dass ein laufender Timer gestoppt wird.
+// Beenden: Timer stoppen, Gym-Aufgabe erledigt → erscheint im Kalender als Eintrag.
 const runningEntry = () => S.all('entries').find((e) => !e.end);
-const gymTaskOf = (date) => { const id = S.get('gym_days', date)?.taskId; return id ? S.get('tasks', id) : null; };
+const gymTaskOf = (date) => { const id = S.get('gym_days', date)?.taskId; const t = id ? S.get('tasks', id) : null; return t?.gym ? t : null; };
 const gymEntries = (date) => { const t = gymTaskOf(date); if (!t) return []; const a = parseDate(date).getTime(), b = a + 864e5; return S.all('entries').filter((e) => e.taskId === t.id && e.start >= a && e.start < b).sort((x, y) => x.start - y.start); };
 const fmtClock = (ms) => { const sec = Math.max(0, Math.floor(ms / 1000)), h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60); return `${h ? h + ':' + pad(m) : m}:${pad(sec % 60)}`; };
 const fmtDur = (ms) => { const m = Math.round(ms / 60000); return m < 60 ? `${m} min` : `${Math.floor(m / 60)}h ${pad(m % 60)}m`; };
@@ -172,12 +172,9 @@ function workoutBar(date) {
 function startWorkout() {
   const d = today();
   let task = gymTaskOf(d);
-  if (!task || task.status === 'done' && !gymEntries(d).length) {
-    task = S.all('tasks').filter((t) => t.status !== 'done' && t.date && t.date <= d && GYM_WORDS.test(t.title)).sort((a, b) => b.date.localeCompare(a.date))[0];
-    if (!task) {
-      const plan = planOfDate(d);
-      task = S.put('tasks', { title: `Gym – ${plan?.name || 'Training'}`, notes: '', projectId: null, date: d, time: null, duration: 60, priority: '', status: 'todo', repeat: '', ai: false });
-    }
+  if (!task) {
+    const plan = planOfDate(d);
+    task = S.put('tasks', { title: `Gym – ${plan?.name || 'Training'}`, notes: '', projectId: null, date: d, time: null, duration: 60, priority: '', status: 'todo', repeat: '', ai: false, gym: true });
   }
   const run = runningEntry();
   if (run) S.patch('entries', run.id, { end: Date.now() });
@@ -187,25 +184,11 @@ function startWorkout() {
   toast('Training läuft – viel Erfolg! 💪');
 }
 
-function nextDate(date, repeat) {
-  if (repeat === 'daily') return addDays(date, 1);
-  if (repeat === 'weekly') return addDays(date, 7);
-  if (repeat === 'monthly') { const x = parseDate(date); x.setMonth(x.getMonth() + 1); return toDateStr(x); }
-  if (repeat === 'weekdays') { let x = addDays(date, 1); while (weekday(x) > 4) x = addDays(x, 1); return x; }
-  return null;
-}
 function stopWorkout() {
   const task = gymTaskOf(today()), run = runningEntry();
   if (run && task && run.taskId === task.id) S.patch('entries', run.id, { end: Date.now() });
   if (task && task.status !== 'done') {
     S.patch('tasks', task.id, { status: 'done', doneAt: Date.now() });
-    if (task.repeat && !S.get('gym_days', today())?.rolled) { // wie in der Task-App: wiederkehrende Aufgabe springt zum nächsten Termin (nur einmal pro Tag)
-      const { id, createdAt, updatedAt, doneAt, ...rest } = task;
-      let nd = nextDate(task.date, task.repeat);
-      for (let i = 0; nd && task.skip?.includes(nd) && i < 400; i++) nd = nextDate(nd, task.repeat);
-      S.put('tasks', { ...rest, status: 'todo', date: nd, skip: (task.skip || []).filter((x) => x > task.date) });
-      saveDay(today(), { rolled: true });
-    }
   }
   const ms = gymEntries(today()).reduce((a, e) => a + (e.end || Date.now()) - e.start, 0);
   toast(`Training gespeichert: ${fmtDur(ms)}`);
