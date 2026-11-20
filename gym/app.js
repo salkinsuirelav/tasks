@@ -8,7 +8,7 @@
 import * as S from './store.js';
 import { LIBRARY, GROUPS, matches, norm } from './exercises.js';
 
-const VERSION = '0.3.0';
+const VERSION = '0.4.0';
 const $ = (sel, el = document) => el.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -109,6 +109,7 @@ function trainView() {
     <button class="icon-btn" data-act="next" aria-label="Tag vor">${ICON.right}</button>
   </header>
   ${d !== today() ? `<button class="link center" data-act="today">Zurück zu heute</button>` : ''}
+  ${workoutBar(d)}
   <button class="plan-chip" data-act="choose-plan">${ICON.list}<span>${plan ? `Plan: <b>${esc(plan.name)}</b>` : 'Kein Plan'}</span><span class="muted">ändern</span></button>
   <div class="list">${ids.map((id) => exCard(id, d)).join('')}</div>
   ${ids.length ? '' : `<div class="empty">${ICON.dumbbell}<p>${plans().length ? 'Wähle oben einen Plan oder füge einzelne Übungen hinzu.' : 'Füge Übungen hinzu – oder leg unter „Pläne“ eine Vorlage pro Wochentag an.'}</p></div>`}
@@ -139,6 +140,77 @@ function exCard(exId, date) {
     </form>
   </section>`;
 }
+
+
+// ---------- Trainings-Timer → Kalender der Task-App ----------
+// Die Gym-App schreibt direkt in die Task-App-Daten (tasks + entries, gleiche Firebase).
+// Start: passende offene Aufgabe von heute ("Gym", "Training", "Sport" …) nehmen oder "Gym – <Plan>" anlegen, Timer darauf starten.
+// Beenden: Timer stoppen, Aufgabe erledigt → erscheint im Kalender als Eintrag.
+const GYM_WORDS = /gym|training|workout|sport|fitness|krafttraining|pumpen/i;
+const runningEntry = () => S.all('entries').find((e) => !e.end);
+const gymTaskOf = (date) => { const id = S.get('gym_days', date)?.taskId; return id ? S.get('tasks', id) : null; };
+const gymEntries = (date) => { const t = gymTaskOf(date); if (!t) return []; const a = parseDate(date).getTime(), b = a + 864e5; return S.all('entries').filter((e) => e.taskId === t.id && e.start >= a && e.start < b).sort((x, y) => x.start - y.start); };
+const fmtClock = (ms) => { const sec = Math.max(0, Math.floor(ms / 1000)), h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60); return `${h ? h + ':' + pad(m) : m}:${pad(sec % 60)}`; };
+const fmtDur = (ms) => { const m = Math.round(ms / 60000); return m < 60 ? `${m} min` : `${Math.floor(m / 60)}h ${pad(m % 60)}m`; };
+const hm = (ts) => { const d = new Date(ts); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+
+function workoutBar(date) {
+  if (date !== today() && !gymEntries(date).length) return '';
+  const run = runningEntry(), task = gymTaskOf(date);
+  const mine = run && task && run.taskId === task.id;
+  if (mine) return `<div class="wo-bar live"><span class="dot"></span><span class="wo-clock" data-start="${run.start}">${fmtClock(Date.now() - run.start)}</span><span class="muted">seit ${hm(run.start)}</span><button class="btn primary" data-act="wo-stop">Training beenden</button></div>`;
+  const ens = gymEntries(date);
+  if (ens.length) {
+    const ms = ens.reduce((a, e) => a + (e.end || Date.now()) - e.start, 0);
+    return `<div class="wo-bar done">${ICON.check}<span><b>${fmtDur(ms)}</b> <span class="muted">· ${hm(ens[0].start)}–${hm(ens[ens.length - 1].end)} · im Kalender</span></span>${date === today() ? `<button class="link" data-act="wo-start">Fortsetzen</button>` : ''}</div>`;
+  }
+  if (!S.sync.user) return `<div class="wo-bar"><span class="muted">Training-Timer: unter „Mehr“ anmelden, dann landet er im Kalender deiner Task-App.</span></div>`;
+  const other = run && S.get('tasks', run.taskId);
+  return `<button class="wo-start" data-act="wo-start">${ICON.play}<span>Training starten</span>${other ? `<span class="muted small">stoppt „${esc(other.title)}“</span>` : '<span class="muted small">→ Kalender</span>'}</button>`;
+}
+
+function startWorkout() {
+  const d = today();
+  let task = gymTaskOf(d);
+  if (!task || task.status === 'done' && !gymEntries(d).length) {
+    task = S.all('tasks').filter((t) => t.status !== 'done' && t.date && t.date <= d && GYM_WORDS.test(t.title)).sort((a, b) => b.date.localeCompare(a.date))[0];
+    if (!task) {
+      const plan = planOfDate(d);
+      task = S.put('tasks', { title: `Gym – ${plan?.name || 'Training'}`, notes: '', projectId: null, date: d, time: null, duration: 60, priority: '', status: 'todo', repeat: '', ai: false });
+    }
+  }
+  const run = runningEntry();
+  if (run) S.patch('entries', run.id, { end: Date.now() });
+  S.put('entries', { taskId: task.id, projectId: task.projectId || null, start: Date.now(), end: null });
+  if (task.status !== 'doing') S.patch('tasks', task.id, { status: 'doing', doneAt: null });
+  saveDay(d, { taskId: task.id });
+  toast('Training läuft – viel Erfolg! 💪');
+}
+
+function nextDate(date, repeat) {
+  if (repeat === 'daily') return addDays(date, 1);
+  if (repeat === 'weekly') return addDays(date, 7);
+  if (repeat === 'monthly') { const x = parseDate(date); x.setMonth(x.getMonth() + 1); return toDateStr(x); }
+  if (repeat === 'weekdays') { let x = addDays(date, 1); while (weekday(x) > 4) x = addDays(x, 1); return x; }
+  return null;
+}
+function stopWorkout() {
+  const task = gymTaskOf(today()), run = runningEntry();
+  if (run && task && run.taskId === task.id) S.patch('entries', run.id, { end: Date.now() });
+  if (task && task.status !== 'done') {
+    S.patch('tasks', task.id, { status: 'done', doneAt: Date.now() });
+    if (task.repeat && !S.get('gym_days', today())?.rolled) { // wie in der Task-App: wiederkehrende Aufgabe springt zum nächsten Termin (nur einmal pro Tag)
+      const { id, createdAt, updatedAt, doneAt, ...rest } = task;
+      let nd = nextDate(task.date, task.repeat);
+      for (let i = 0; nd && task.skip?.includes(nd) && i < 400; i++) nd = nextDate(nd, task.repeat);
+      S.put('tasks', { ...rest, status: 'todo', date: nd, skip: (task.skip || []).filter((x) => x > task.date) });
+      saveDay(today(), { rolled: true });
+    }
+  }
+  const ms = gymEntries(today()).reduce((a, e) => a + (e.end || Date.now()) - e.start, 0);
+  toast(`Training gespeichert: ${fmtDur(ms)}`);
+}
+setInterval(() => { const c = document.querySelector('.wo-clock'); if (c) c.textContent = fmtClock(Date.now() - Number(c.dataset.start)); }, 1000);
 
 // ---------- Pläne ----------
 function plansView() {
@@ -435,6 +507,8 @@ document.addEventListener('click', (e) => {
       closeSheet(); break;
     }
     case 'choose-plan': choosePlanSheet(); break;
+    case 'wo-start': startWorkout(); break;
+    case 'wo-stop': if (confirm('Training beenden und in den Kalender eintragen?')) stopWorkout(); break;
     case 'set-plan': setPlan(id); break;
     // Pläne
     case 'new-plan': closeSheet(); newPlan(b.dataset.wd); break;
@@ -542,6 +616,8 @@ const ICON = {
   up: svg('<path d="M18 15l-6-6-6 6"/>'),
   down: svg('<path d="M6 9l6 6 6-6"/>'),
   x: svg('<path d="M6 6l12 12M18 6L6 18"/>'),
+  play: svg('<path d="M7 5l12 7-12 7z" fill="currentColor"/>'),
+  check: svg('<path d="M5 12l5 5 9-10"/>'),
   dots: svg('<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>'),
 };
 

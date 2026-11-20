@@ -128,3 +128,17 @@ main { max-width: 560px; margin: 0 auto; padding: calc(env(safe-area-inset-top) 
 .times { color: var(--muted); }
 .btn.wide:not(.primary) { margin-top: 0; }
 .danger-link { color: var(--danger); margin-top: 16px; }
+
+/* ---- Trainings-Timer (v0.4) ---- */
+.wo-start { display: flex; align-items: center; gap: 10px; width: 100%; background: var(--accent); color: #fff; border-radius: 14px; padding: 14px 16px; margin-bottom: 10px; font-weight: 700; font-size: 16px; text-align: left; }
+.wo-start svg { width: 18px; height: 18px; }
+.wo-start span:nth-child(2) { flex: 1; }
+.wo-start .muted { color: rgba(255,255,255,.8); font-weight: 500; }
+.wo-bar { display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; margin-bottom: 10px; }
+.wo-bar.live { border-color: var(--accent); }
+.wo-bar .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); animation: pulse 1.4s infinite; }
+.wo-bar .wo-clock { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.wo-bar .btn { margin-left: auto; padding: 8px 12px; font-size: 14px; }
+.wo-bar.done svg { color: var(--accent); width: 20px; height: 20px; }
+.wo-bar.done > span { flex: 1; }
+@keyframes pulse { 50% { opacity: .3; } }
