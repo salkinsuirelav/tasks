@@ -323,7 +323,7 @@ const A = {
   'slot-task': () => {
     const m = ui.modal, title = $('#slot-title').value;
     if (!title.trim()) return toast('Bitte einen Titel eingeben.');
-    M.addTask(title, { date: m.date, time: m.time, duration: m.dur });
+    M.addTask(title, { date: m.date, time: m.time, duration: m.dur, projectId: $('#slot-proj')?.value || null });
     ui.modal = null; renderModal();
   },
   // Nachtragen: Was habe ich in dieser (vergangenen) Zeit gemacht? → erledigte Aufgabe + Zeiteintrag
@@ -332,8 +332,9 @@ const A = {
     if (!title) return toast('Bitte eintragen, was du gemacht hast.');
     const start = new Date(m.date + 'T00:00').getTime() + toMin(m.time) * 60000, end = start + m.dur * 60000;
     store.batch(() => {
-      const t = M.addTask(title, { date: toDateStr(new Date(start)), duration: m.dur, status: 'done', doneAt: end });
-      store.put('entries', { taskId: t.id, projectId: null, start, end });
+      const pid = $('#slot-proj')?.value || null;
+      const t = M.addTask(title, { date: toDateStr(new Date(start)), duration: m.dur, status: 'done', doneAt: end, projectId: pid });
+      store.put('entries', { taskId: t.id, projectId: pid, start, end });
     });
     ui.modal = null; renderModal(); toast('Nachgetragen ✓');
   },
@@ -672,7 +673,8 @@ document.addEventListener('input', (e) => {
 
 document.addEventListener('change', async (e) => {
   const el = e.target;
-  if (el.id === 'slot-dur' && ui.modal) { ui.modal.dur = +el.value; renderModal(); return; }
+  if (el.id === 'slot-proj' && ui.modal) { ui.modal.projectId = el.value; return; }
+  if (el.id === 'slot-dur' && ui.modal) { ui.modal.dur = +el.value; ui.modal.projectId = $('#slot-proj')?.value || ''; renderModal(); return; }
   if (el.id === 'today-proj') { ui.todayProj = el.value; return; }
   const f = el.dataset.field;
   if (f && ui.openTask) {

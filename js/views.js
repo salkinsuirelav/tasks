@@ -373,14 +373,14 @@ export function viewCalendar() {
 
   const step = mobile ? 1 : 7;
   const actions = `
-    <div class="tabs" title="Wochenende ein-/ausblenden (W)">
+    <div class="tabs desktop-only" title="Wochenende ein-/ausblenden (W)">
       <button class="${s.calWeekdays ? 'on' : ''}" data-action="cal-weekdays" data-v="1">Mo–Fr</button>
       <button class="${s.calWeekdays ? '' : 'on'}" data-action="cal-weekdays" data-v="0">7 Tage</button>
     </div>
     <button class="icon-btn" data-action="cal-nav" data-d="-${step}">${icon('left')}</button>
     <button class="btn small" data-action="cal-nav" data-d="0">Heute</button>
     <button class="icon-btn" data-action="cal-nav" data-d="${step}">${icon('right')}</button>
-    <button class="btn" data-action="new-block">${icon('lock')} Zeit sperren</button>`;
+    <button class="btn" data-action="new-block" title="Zeit sperren">${icon('lock')}<span class="lbl-long"> Zeit sperren</span></button>`;
 
   return `
     <div class="cal-wrap">
@@ -434,15 +434,18 @@ export function viewProjects() {
       </div>`;
   }).join('');
   return `
-    ${head('Projekte', 'Gib deiner Zeit eine Richtung.', `<button class="btn primary" data-action="new-project">${icon('plus')} Neues Projekt</button>`)}
+    ${head('Projekte', 'Gib deiner Zeit eine Richtung.')}
     <div class="stats">
       <div class="stat"><div class="lbl">Projekt-Stunden insgesamt</div><div class="big">${fmtHours(totalAll)}</div></div>
       <div class="stat"><div class="lbl">In Arbeit</div><div class="big">${active.length}</div></div>
       <div class="stat"><div class="lbl">Abgeschlossen</div><div class="big">${closed.length}</div></div>
     </div>
-    <div class="tabs" style="margin:6px 0 16px">
-      <button class="${tab === 'active' ? 'on' : ''}" data-action="proj-tab" data-tab="active">Aktiv<span class="n">${active.length}</span></button>
-      <button class="${tab === 'closed' ? 'on' : ''}" data-action="proj-tab" data-tab="closed">Abgeschlossen<span class="n">${closed.length}</span></button>
+    <div class="tab-row">
+      <div class="tabs">
+        <button class="${tab === 'active' ? 'on' : ''}" data-action="proj-tab" data-tab="active">Aktiv<span class="n">${active.length}</span></button>
+        <button class="${tab === 'closed' ? 'on' : ''}" data-action="proj-tab" data-tab="closed">Abgeschlossen<span class="n">${closed.length}</span></button>
+      </div>
+      <button class="btn primary" data-action="new-project">${icon('plus')} <span class="lbl-long">Neues </span>Projekt</button>
     </div>
     <div class="grid">${cards}${tab === 'active' ? `<div class="pcard add" data-action="new-project">${icon('plus')} Projekt anlegen</div>` : (closed.length ? '' : '<div class="empty">Noch nichts abgeschlossen. Öffne ein Projekt und tipp auf „Abschließen“, wenn es fertig ist.</div>')}</div>`;
 }
@@ -623,7 +626,7 @@ export function viewSettings() {
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.8.8</p>
+      <p class="mono muted">Version 0.8.9</p>
     </div>`;
 }
 
@@ -844,9 +847,10 @@ export function modalHTML(m) {
       <p>${(new Date(m.date + 'T00:00').getTime() + (toMin(m.time) + m.dur) * 60000 <= Date.now()) ? 'Was hast du hier gemacht? Wird als erledigt mit dieser Zeit eingetragen.' : 'Ein fester Termin (z. B. Arzt, Call, Trading-Session).'}</p>
       <div class="field"><input id="slot-title" data-key="slot-title" placeholder="${(new Date(m.date + 'T00:00').getTime() + (toMin(m.time) + m.dur) * 60000 <= Date.now()) ? 'Was hast du gemacht?' : 'Titel des Termins'}" value="${esc(m.title || '')}" autofocus></div>
       <div class="field"><label>Dauer</label><select id="slot-dur">${[...new Set([15, 30, 45, 60, 90, 120, 180, m.dur])].sort((a, b) => a - b).map((d) => `<option value="${d}" ${d === m.dur ? 'selected' : ''}>${fmtMinutes(d)}</option>`).join('')}</select></div>
-      <div class="foot"><button class="btn" data-action="close-modal">Abbrechen</button>
-        <button class="btn" data-action="slot-block">${icon('lock')} Zeit sperren</button>
-        ${(new Date(m.date + 'T00:00').getTime() + (toMin(m.time) + m.dur) * 60000 <= Date.now()) ? `<button class="btn primary" data-action="slot-log">${icon('check')} Nachtragen</button>` : `<button class="btn primary" data-action="slot-task">${icon('plus')} Termin anlegen</button>`}</div>`;
+      <div class="field"><label>Projekt</label><select id="slot-proj"><option value="">Kein Projekt</option>${M.projects().map((p) => `<option value="${p.id}" ${p.id === m.projectId ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div>
+      <div class="foot one-row"><button class="btn" data-action="close-modal">Abbrechen</button>
+        <button class="btn" data-action="slot-block" title="Zeit sperren">${icon('lock')} Sperren</button>
+        ${(new Date(m.date + 'T00:00').getTime() + (toMin(m.time) + m.dur) * 60000 <= Date.now()) ? `<button class="btn primary" data-action="slot-log">${icon('check')} Nachtragen</button>` : `<button class="btn primary" data-action="slot-task">${icon('plus')} Anlegen</button>`}</div>`;
   } else if (m.type === 'entry') {
     const en = store.get('entries', m.id), t = en && store.get('tasks', en.taskId);
     const hm = (ts) => new Date(ts).toTimeString().slice(0, 5);
