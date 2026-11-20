@@ -8,7 +8,7 @@
 import * as S from './store.js';
 import { LIBRARY, GROUPS, matches, norm } from './exercises.js';
 
-const VERSION = '0.4.3';
+const VERSION = '0.4.4';
 const $ = (sel, el = document) => el.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
