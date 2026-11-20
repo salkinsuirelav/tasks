@@ -543,3 +543,15 @@ details.pull[open] summary::before { content: "▾"; }
 .card .ttl .rep-ic { color: var(--muted); display: inline-grid; place-items: center; width: 20px; height: 20px; flex: none; }
 .card .rep-ic svg.i { width: 14px; height: 14px; }
 .card.drag-over { outline: none; box-shadow: 0 -3px 0 0 var(--accent); }
+/* iPhone-Feinschliff v0.8.9 */
+.tab-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 6px 0 16px; }
+.modal .foot.one-row { flex-wrap: nowrap; }
+.modal .foot.one-row .btn { white-space: nowrap; }
+.head .actions .btn svg.i + .lbl-long { margin-left: 0; }
+@media (max-width: 760px) {
+  .timer-pill { left: 50%; right: auto; transform: translateX(-50%); max-width: calc(100% - 24px); }
+  .tab-row .lbl-long, .head .actions .lbl-long { display: none; }
+  .tab-row .btn { padding: 8px 12px; }
+  .modal .foot.one-row .btn { flex: 1; justify-content: center; padding: 10px 6px; }
+  .cal-main .head .actions { flex-wrap: nowrap; }
+}
