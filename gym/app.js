@@ -8,7 +8,7 @@
 import * as S from './store.js';
 import { LIBRARY, GROUPS, matches, norm } from './exercises.js';
 
-const VERSION = '0.4.4';
+const VERSION = '0.5.0';
 const $ = (sel, el = document) => el.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -79,7 +79,7 @@ const targetLine = (t) => (t ? `${t.sets || '?'} × ${t.reps || '?'}` : '');
 
 
 // ---------- Zustand der Oberfläche ----------
-const ui = { tab: 'train', date: today(), exDetail: null, metric: 'w', histMode: 'ex', planEdit: null };
+const ui = { tab: 'train', date: today(), exDetail: null, metric: 'w', histMode: 'cal', calMonth: today().slice(0, 7), sportType: 'fussball', planEdit: null };
 
 function go(tab) { ui.tab = tab; ui.exDetail = null; ui.planEdit = null; render(); window.scrollTo(0, 0); }
 
@@ -211,6 +211,90 @@ function stopWorkout() {
 }
 setInterval(() => { const c = document.querySelector('.wo-clock'); if (c) c.textContent = fmtClock(Date.now() - Number(c.dataset.start)); }, 1000);
 
+
+// ---------- Sport-Kalender (Monatsansicht) ----------
+// Gym-Tage kommen automatisch (Sätze oder Trainings-Timer), andere Sportarten trägt man selbst ein (gym_activities).
+const SPORTS = [
+  ['gym', '🏋️', 'Gym'], ['fussball', '⚽', 'Fußball'], ['laufen', '🏃', 'Laufen'], ['rad', '🚴', 'Radfahren'],
+  ['schwimmen', '🏊', 'Schwimmen'], ['tennis', '🎾', 'Tennis'], ['basketball', '🏀', 'Basketball'], ['wandern', '🥾', 'Wandern'],
+  ['spazieren', '🚶', 'Spazieren'], ['yoga', '🧘', 'Yoga'], ['kampfsport', '🥊', 'Kampfsport'], ['sonst', '⭐', 'Sonstiges'],
+].map(([id, icon, name]) => ({ id, icon, name }));
+const sport = (id) => SPORTS.find((x) => x.id === id) || SPORTS[SPORTS.length - 1];
+const activitiesOf = (date) => S.all('gym_activities').filter((a) => a.date === date).sort((a, b) => (a.t || 0) - (b.t || 0));
+const isGymDay = (date) => setsOfDay(date).length > 0 || gymEntries(date).length > 0;
+// Alle Sport-Einträge eines Tages: [{ type, ... }], Gym zuerst
+function sportsOf(date) {
+  const list = isGymDay(date) ? [{ type: 'gym', gym: true }] : [];
+  return list.concat(activitiesOf(date));
+}
+const fmtMonth = new Intl.DateTimeFormat('de-DE', { month: 'long', year: 'numeric' });
+const addMonth = (ym, n) => { const [y, m] = ym.split('-').map(Number); const d = new Date(y, m - 1 + n, 1); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; };
+const mondayOf = (date) => addDays(date, -weekday(date));
+// Wochen in Folge mit mindestens einem Sport-Tag (laufende Woche zählt, sobald sie einen hat)
+function weekStreak() {
+  const hasSport = (monday) => { for (let i = 0; i < 7; i++) if (sportsOf(addDays(monday, i)).length) return true; return false; };
+  let w = mondayOf(today()), n = 0;
+  if (!hasSport(w)) w = addDays(w, -7);
+  while (hasSport(w) && n < 520) { n++; w = addDays(w, -7); }
+  return n;
+}
+
+function calendarView() {
+  const ym = ui.calMonth, first = `${ym}-01`;
+  const start = mondayOf(first), t = today();
+  const daysInMonth = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0).getDate();
+  const cells = [];
+  for (let d = start; d < addDays(first, daysInMonth) || weekday(d) !== 0; d = addDays(d, 1)) cells.push(d);
+  const monthDays = cells.filter((d) => d.startsWith(ym));
+  const count = {}; let activeDays = 0;
+  monthDays.forEach((d) => { const sp = sportsOf(d); if (sp.length) activeDays++; sp.forEach((x) => { count[x.type] = (count[x.type] || 0) + 1; }); });
+  const streak = weekStreak();
+  return `
+  <div class="cal-stats">
+    <div><span>Diesen Monat</span><b>${activeDays} ${activeDays === 1 ? 'Tag' : 'Tage'}</b></div>
+    <div><span>Serie</span><b>${streak} ${streak === 1 ? 'Woche' : 'Wochen'} 🔥</b></div>
+  </div>
+  <div class="card cal">
+    <div class="cal-head">
+      <button class="icon-btn small" data-act="cal-prev" aria-label="Monat zurück">${ICON.left}</button>
+      <b>${fmtMonth.format(parseDate(first))}</b>
+      <button class="icon-btn small" data-act="cal-next" aria-label="Monat vor" ${ym >= t.slice(0, 7) ? 'disabled' : ''}>${ICON.right}</button>
+    </div>
+    <div class="cal-grid">
+      ${WD.map((w) => `<div class="cal-wd">${w}</div>`).join('')}
+      ${cells.map((d) => {
+        const sp = sportsOf(d), out = !d.startsWith(ym);
+        const icons = [...new Set(sp.map((x) => x.type))].map((ty) => sport(ty).icon);
+        return `<button class="cal-day ${out ? 'out' : ''} ${d === t ? 'today' : ''} ${sp.length ? 'on' : ''} ${d > t ? 'future' : ''}" data-act="cal-day" data-date="${d}" ${d > t ? 'disabled' : ''}>
+          <span class="num">${parseDate(d).getDate()}</span><span class="ic">${icons.slice(0, 3).join('')}${icons.length > 3 ? '+' : ''}</span></button>`;
+      }).join('')}
+    </div>
+    ${Object.keys(count).length ? `<div class="cal-legend">${Object.entries(count).sort((a, b) => b[1] - a[1]).map(([ty, n]) => `<span>${sport(ty).icon} ${esc(sport(ty).name)} <b>${n}×</b></span>`).join('')}</div>` : '<p class="muted center small">Tippe auf einen Tag, um Sport einzutragen. Gym-Tage erscheinen automatisch.</p>'}
+  </div>
+  <button class="btn primary wide" data-act="cal-day" data-date="${t}">${ICON.plus} Sport eintragen</button>`;
+}
+
+function sportDaySheet(date) {
+  const gym = isGymDay(date), acts = activitiesOf(date);
+  const sets = setsOfDay(date).length, ms = gymEntries(date).reduce((a, e) => a + (e.end || Date.now()) - e.start, 0);
+  sheet(`<div class="sheet-head"><h2>${dayLabel(date)}</h2><button class="icon-btn small" data-act="close-sheet">${ICON.x}</button></div>
+    <div class="list tight">
+      ${gym ? `<button class="row" data-act="open-day" data-date="${date}"><span class="sp-ic">🏋️</span><div style="flex:1"><b>Gym</b><div class="muted">${[sets ? `${sets} Sätze` : '', ms ? fmtDur(ms) : ''].filter(Boolean).join(' · ')}</div></div>${ICON.right}</button>` : ''}
+      ${acts.map((a) => `<div class="row static"><span class="sp-ic">${sport(a.type).icon}</span><div style="flex:1"><b>${esc(sport(a.type).name)}</b><div class="muted">${[a.min ? `${a.min} min` : '', a.note ? esc(a.note) : ''].filter(Boolean).join(' · ') || '&nbsp;'}</div></div><button class="icon-btn small faint" data-act="sport-del" data-id="${a.id}" aria-label="Löschen">${ICON.x}</button></div>`).join('')}
+      ${!gym && !acts.length ? '<p class="muted">Noch kein Sport an diesem Tag.</p>' : ''}
+    </div>
+    <div class="label">Sport hinzufügen</div>
+    <div class="sport-grid">${SPORTS.filter((x) => x.id !== 'gym').map((x) => `<button class="sport ${ui.sportType === x.id ? 'on' : ''}" data-act="sport-type" data-type="${x.id}"><span>${x.icon}</span>${esc(x.name)}</button>`).join('')}</div>
+    <form id="sport-form" class="stack" data-date="${date}">
+      <div class="sport-inputs">
+        <label><input name="min" inputmode="numeric" placeholder="60" autocomplete="off"><span>min</span></label>
+        <input name="note" placeholder="Notiz (optional)" autocomplete="off">
+      </div>
+      <button class="btn primary" type="submit">${ICON.plus} Eintragen</button>
+    </form>
+    ${!gym && date === today() ? `<button class="link center" data-act="open-day" data-date="${date}">Gym-Training loggen →</button>` : ''}`);
+}
+
 // ---------- Pläne ----------
 function plansView() {
   const all = plans();
@@ -285,7 +369,8 @@ function patchItems(fn) {
 
 // ---------- Verlauf ----------
 function historyView() {
-  const seg = `<div class="seg"><button data-act="hist-mode" data-mode="ex" class="${ui.histMode === 'ex' ? 'on' : ''}">Übungen</button><button data-act="hist-mode" data-mode="days" class="${ui.histMode === 'days' ? 'on' : ''}">Trainingstage</button></div>`;
+  const seg = `<div class="seg">${[['cal', 'Kalender'], ['ex', 'Übungen'], ['days', 'Trainingstage']].map(([m, l]) => `<button data-act="hist-mode" data-mode="${m}" class="${ui.histMode === m ? 'on' : ''}">${l}</button>`).join('')}</div>`;
+  if (ui.histMode === 'cal') return `<header class="top"><div class="title"><h1>Verlauf</h1></div></header>${seg}${calendarView()}`;
   if (ui.histMode === 'days') {
     const dates = [...new Set(S.all('gym_sets').map((s) => s.date))].sort().reverse();
     return `<header class="top"><div class="title"><h1>Verlauf</h1></div></header>${seg}
@@ -546,7 +631,12 @@ document.addEventListener('click', (e) => {
     case 'back': ui.exDetail = null; render(); break;
     case 'metric': ui.metric = b.dataset.m; render(); break;
     case 'hist-mode': ui.histMode = b.dataset.mode; render(); break;
-    case 'open-day': ui.date = b.dataset.date; go('train'); break;
+    case 'cal-prev': ui.calMonth = addMonth(ui.calMonth, -1); render(); break;
+    case 'cal-next': ui.calMonth = addMonth(ui.calMonth, 1); render(); break;
+    case 'cal-day': sportDaySheet(b.dataset.date); break;
+    case 'sport-type': ui.sportType = b.dataset.type; document.querySelectorAll('.sport').forEach((x) => x.classList.toggle('on', x === b)); break;
+    case 'sport-del': { const a = S.get('gym_activities', id); S.remove('gym_activities', id); sportDaySheet(a.date); break; }
+    case 'open-day': closeSheet(); ui.date = b.dataset.date; go('train'); break;
     // Mehr
     case 'logout': S.signOutUser(); break;
     case 'rename': {
@@ -588,6 +678,13 @@ function showUndo() {
 document.addEventListener('submit', async (e) => {
   e.preventDefault();
   const f = e.target;
+  if (f.id === 'sport-form') {
+    const min = Math.round(num(f.min.value)) || null;
+    S.put('gym_activities', { date: f.dataset.date, type: ui.sportType, min, note: f.note.value.trim(), t: Date.now() });
+    toast(`${sport(ui.sportType).icon} ${sport(ui.sportType).name} eingetragen`);
+    sportDaySheet(f.dataset.date);
+    return;
+  }
   if (f.classList.contains('add-set')) {
     const w = num(f.w.value), r = Math.round(num(f.r.value));
     if (w === null || w < 0) { f.w.focus(); return toast('Gewicht eintragen'); }
