@@ -139,10 +139,12 @@ export function viewToday() {
       ${items.length ? `<div class="tlist">${items.map(card).join('')}</div>` : ''}
     </section>`;
 
+  const dur = ui.todayDur || 60;
+  const durSeg = `<div class="seg mini dur" title="Geschätzte Dauer der neuen Aufgabe">${[[30, '30m'], [60, '1h'], [90, '1,5h']].map(([v, l]) => `<button class="${v === dur ? 'on' : ''}" data-action="today-dur" data-v="${v}">${l}</button>`).join('')}</div>`;
   const projCap = projs.length
-    ? `<div class="capture tcap"><input data-add="today-proj" data-key="today-add-p" placeholder="Aufgabe für ein Projekt… Enter" autocomplete="off" enterkeyhint="done">${projSelect}</div>`
+    ? `<div class="capture tcap"><input data-add="today-proj" data-key="today-add-p" placeholder="Aufgabe für ein Projekt… Enter" autocomplete="off" enterkeyhint="done">${durSeg}${projSelect}</div>`
     : `<div class="empty small">Noch kein Projekt. <a href="#projects">Projekt anlegen</a>, dann landen hier deine Projekt-Aufgaben.</div>`;
-  const otherCap = `<div class="capture tcap"><input data-add="today-other" data-key="today-add-o" placeholder="Sonstiges: Einkaufen, Mails, Haushalt… Enter" autocomplete="off" enterkeyhint="done"></div>`;
+  const otherCap = `<div class="capture tcap"><input data-add="today-other" data-key="today-add-o" placeholder="Sonstiges: Einkaufen, Mails, Haushalt… Enter" autocomplete="off" enterkeyhint="done">${durSeg}</div>`;
   const eye = `<button class="icon-btn eye" data-action="toggle-other" title="${st.hideOther ? 'Einblenden' : 'Ausblenden'}">${icon(st.hideOther ? 'eyeOff' : 'eye')}</button>`;
 
   // Läuft ein Timer für etwas, das nicht in der Liste steht (z. B. aus der Inbox gestartet)?
@@ -595,12 +597,15 @@ export function viewSettings() {
         <p class="muted" style="font-size:13px;margin:10px 0 0">„Wie System“ folgt der Einstellung deines Macs bzw. iPhones (Hell/Dunkel/Automatisch).</p>
       </div>
       <div class="panel"><h4>Planung</h4>
-        <div class="inline">
-          <div class="field"><label>Tag beginnt</label><select data-setting="dayStart">${hourOpts(0, 12, s.dayStart)}</select></div>
-          <div class="field"><label>Tag endet</label><select data-setting="dayEnd">${hourOpts(13, 30, s.dayEnd)}</select></div>
-          <div class="field"><label>Arbeitszeit beginnt (Auslastung im Plan)</label><select data-setting="workStart">${hourOpts(0, 23, s.workStart ?? 9)}</select></div>
-          <div class="field"><label>Arbeitszeit endet</label><select data-setting="workEnd">${hourOpts(1, 24, s.workEnd ?? 17)}</select></div>
-          <div class="field"><label>Wochenziel (Stunden)</label><input type="number" min="1" max="100" data-setting="weeklyGoal" value="${s.weeklyGoal}"></div>
+        <div class="set-grid">
+          <div class="set-lbl">Kalender zeigt</div>
+          <select data-setting="dayStart" aria-label="Tag beginnt">${hourOpts(0, 12, s.dayStart)}</select><span class="muted">bis</span>
+          <select data-setting="dayEnd" aria-label="Tag endet">${hourOpts(13, 30, s.dayEnd)}</select>
+          <div class="set-lbl">Arbeitszeit <span class="muted">(Auslastung im Plan)</span></div>
+          <select data-setting="workStart" aria-label="Arbeitszeit beginnt">${hourOpts(0, 23, s.workStart ?? 9)}</select><span class="muted">bis</span>
+          <select data-setting="workEnd" aria-label="Arbeitszeit endet">${hourOpts(1, 24, s.workEnd ?? 17)}</select>
+          <div class="set-lbl">Wochenziel</div>
+          <div class="set-num"><input type="number" min="1" max="100" data-setting="weeklyGoal" value="${s.weeklyGoal}"><span class="muted">Stunden</span></div>
         </div>
         <div class="field" style="margin:4px 0 0"><label>Am Wochenende einplanen (Auto-Plan + Claude)</label>
           <div class="seg"><button class="${s.planWeekends !== false ? 'on' : ''}" data-action="plan-weekends" data-v="1">Ja</button><button class="${s.planWeekends === false ? 'on' : ''}" data-action="plan-weekends" data-v="0">Nein, nur Mo–Fr</button></div></div>
@@ -632,7 +637,7 @@ export function viewSettings() {
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.9.1</p>
+      <p class="mono muted">Version 0.9.2</p>
     </div>`;
 }
 

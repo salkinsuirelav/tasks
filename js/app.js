@@ -221,6 +221,7 @@ const A = {
   // Heute
   finish: (el) => { const t = store.get('tasks', el.dataset.id); M.finishTask(el.dataset.id); toast('Erledigt ✓', { label: 'Rückgängig', fn: () => M.toggleDone(el.dataset.id) }); if (ui.openTask) renderSheet(); },
   'today-top': (el) => { M.moveInToday(el.dataset.id, 'top'); },
+  'today-dur': (el) => { ui.todayDur = +el.dataset.v; renderMain(); },
   'toggle-other': () => store.saveSettings({ hideOther: !store.settings.hideOther }),
   'pull-today': (el) => { ui.pullOpen = true; store.patch('tasks', el.dataset.id, { date: today(), order: Date.now() }); },
   focus: (el) => { ui.focusTask = el.dataset.id; ui.openTask = null; renderSheet(); renderFocus(); renderPill(); },
@@ -532,7 +533,7 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     if (el.dataset.add === 'today-proj' || el.dataset.add === 'today-other') {
       const pid = el.dataset.add === 'today-proj' ? ($('#today-proj')?.value || null) : null;
-      if (M.addToday(el.value, { projectId: pid }, 'bottom')) el.value = '';
+      if (M.addToday(el.value, { projectId: pid, duration: ui.todayDur || 60 }, 'bottom')) el.value = '';
       return;
     }
     const extra = el.dataset.add === 'today' ? { date: today() } : el.dataset.add === 'day' ? { date: el.dataset.date } : el.dataset.add === 'project' ? { projectId: el.dataset.project } : {};
