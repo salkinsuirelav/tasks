@@ -147,6 +147,8 @@ export function viewToday() {
   const otherCap = `<div class="capture tcap"><input data-add="today-other" data-key="today-add-o" placeholder="Sonstiges: Einkaufen, Mails, Haushalt… Enter" autocomplete="off" enterkeyhint="done">${durSeg}</div>`;
   const eye = `<button class="icon-btn eye" data-action="toggle-other" title="${st.hideOther ? 'Einblenden' : 'Ausblenden'}">${icon(st.hideOther ? 'eyeOff' : 'eye')}</button>`;
 
+  const eyeDone = `<button class="icon-btn eye" data-action="toggle-done" title="${st.hideDone ? 'Erledigte einblenden' : 'Erledigte ausblenden'}">${icon(st.hideDone ? 'eyeOff' : 'eye')}</button>`;
+
   // Läuft ein Timer für etwas, das nicht in der Liste steht (z. B. aus der Inbox gestartet)?
   const liveExtra = live && !list.some((t) => t.id === liveId) ? `
     <div class="tlist" style="margin-bottom:14px">${card(live, 0)}</div>` : '';
@@ -180,7 +182,7 @@ export function viewToday() {
           ? section('Sonstiges', [], `<div class="empty small">${other.length ? `${other.length} ausgeblendet` : 'Ausgeblendet'}</div>`, eye, other.length)
           : section('Sonstiges', other, otherCap, eye)}
         ${apps.length ? `<div class="group-title">Termine heute</div><div class="list">${apps.map((t) => `<div class="row ${t.status === 'done' ? 'done' : ''}" data-action="open-task" data-id="${t.id}"><span class="mono" style="min-width:48px">${t.time}</span><div class="title"><span class="t">${esc(t.title)}</span></div>${playBtn(t)}</div>`).join('')}</div>` : ''}
-        ${done.length ? `<div class="group-title">Erledigt heute <span class="mono">${done.length}</span></div><div class="list">${done.map(doneRow).join('')}</div>` : ''}
+        ${done.length ? `<div class="group-title">Erledigt heute <span class="mono">${done.length}</span>${eyeDone}</div>${st.hideDone ? '' : `<div class="list">${done.map(doneRow).join('')}</div>`}` : ''}
         ${inbox.length ? `<details class="pull" ${ui.pullOpen ? 'open' : ''}><summary class="group-title">Ohne Datum <span class="mono">${inbox.length}</span></summary>
           <div class="list">${inbox.map((t) => `<div class="row" data-action="open-task" data-id="${t.id}"><div class="title"><span class="t">${esc(t.title)}</span><div class="meta">${chips(t)}</div></div>
             <button class="btn small" data-action="pull-today" data-id="${t.id}">${icon('plus')} Heute</button></div>`).join('')}</div></details>` : ''}
@@ -637,7 +639,7 @@ export function viewSettings() {
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.9.2</p>
+      <p class="mono muted">Version 0.9.3</p>
     </div>`;
 }
 

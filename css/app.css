@@ -144,6 +144,7 @@ main.full { padding: 0; overflow: hidden; display: flex; flex-direction: column;
 .group-title { font-weight: 600; font-size: 14px; display: flex; gap: 10px; align-items: center; margin: 22px 0 8px; }
 .group-title::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 .group-title .mono { color: var(--muted); }
+.group-title .eye { order: 1; width: 28px; height: 28px; }
 .row { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-bottom: 1px solid var(--line-soft); cursor: pointer; }
 .row:last-child { border-bottom: 0; }
 .row:hover { background: var(--card); }

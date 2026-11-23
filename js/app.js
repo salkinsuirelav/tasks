@@ -223,6 +223,7 @@ const A = {
   'today-top': (el) => { M.moveInToday(el.dataset.id, 'top'); },
   'today-dur': (el) => { ui.todayDur = +el.dataset.v; renderMain(); },
   'toggle-other': () => store.saveSettings({ hideOther: !store.settings.hideOther }),
+  'toggle-done': () => store.saveSettings({ hideDone: !store.settings.hideDone }),
   'pull-today': (el) => { ui.pullOpen = true; store.patch('tasks', el.dataset.id, { date: today(), order: Date.now() }); },
   focus: (el) => { ui.focusTask = el.dataset.id; ui.openTask = null; renderSheet(); renderFocus(); renderPill(); },
   'close-focus': () => { ui.focusTask = null; renderFocus(); renderPill(); },
