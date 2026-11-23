@@ -825,3 +825,83 @@ store.subscribe(() => { clearTimeout(repairT); repairT = setTimeout(() => { if (
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 if (navigator.storage?.persist) navigator.storage.persist();
 window.__app = { store, M, ui }; // zum Ausprobieren in der Browser-Konsole
+
+// ---------- Rechtsklick-Menü im Kalender ----------
+// Rechtsklick auf Termin, Zeiteintrag oder Sperrzeit: kleine Auswahl an Aktionen direkt am Ereignis.
+function closeCtx() { $('#ctx-menu')?.remove(); }
+function ctxItems(ev) {
+  const id = ev.dataset.id;
+  if (ev.classList.contains('appt')) {
+    const t = store.get('tasks', id);
+    if (!t) return [];
+    if (ev.classList.contains('rep')) {
+      const occ = ev.dataset.occ;
+      return [
+        ['Serie öffnen', 'repeat', () => A['open-task'](ev)],
+        ['Nur diesen Termin auslassen', 'x', () => { store.patch('tasks', id, { skip: [...(t.skip || []), occ] }); toast('Termin ausgelassen.', { label: 'Rückgängig', fn: () => store.patch('tasks', id, { skip: (store.get('tasks', id).skip || []).filter((d) => d !== occ) }) }); }],
+        null,
+        ['Ganze Serie löschen', 'trash', () => deleteTaskUndo(t), true],
+      ];
+    }
+    const on = M.running()?.taskId === id, done = t.status === 'done';
+    return [
+      ['Öffnen', 'sparkle', () => A['open-task'](ev)],
+      [on ? 'Timer stoppen' : 'Timer starten', on ? 'stop' : 'play', () => (on ? M.stopTimer() : M.startTimer(id))],
+      [done ? 'Wieder öffnen' : 'Erledigt', 'check', () => A.toggle(ev)],
+      ['Aus dem Kalender nehmen', 'left', () => { const old = t.time; store.patch('tasks', id, { time: null }); toast('Uhrzeit entfernt, steht wieder in der Liste.', { label: 'Rückgängig', fn: () => store.patch('tasks', id, { time: old }) }); }],
+      null,
+      ['Löschen', 'trash', () => deleteTaskUndo(t), true],
+    ];
+  }
+  if (ev.classList.contains('log')) {
+    const en = store.get('entries', id);
+    if (!en) return [];
+    return [
+      ['Bearbeiten', 'clock', () => A['edit-entry'](ev)],
+      ...(en.taskId && store.get('tasks', en.taskId) ? [['Aufgabe öffnen', 'sparkle', () => A['open-task']({ dataset: { id: en.taskId } })]] : []),
+      null,
+      ['Zeiteintrag löschen', 'trash', () => { store.remove('entries', id); toast('Zeiteintrag gelöscht.', { label: 'Rückgängig', fn: () => store.put('entries', en) }); }, true],
+    ];
+  }
+  if (ev.classList.contains('block')) {
+    const b = store.get('blocks', id);
+    if (!b) return [];
+    return [
+      ['Bearbeiten', 'lock', () => A['edit-block'](ev)],
+      null,
+      [b.repeat ? 'Sperrzeit löschen (alle Tage)' : 'Sperrzeit löschen', 'trash', () => { store.remove('blocks', id); toast('Sperrzeit gelöscht.', { label: 'Rückgängig', fn: () => store.put('blocks', b) }); }, true],
+    ];
+  }
+  return [];
+}
+function deleteTaskUndo(t) {
+  store.batch(() => { if (M.running()?.taskId === t.id) M.stopTimer(); store.remove('tasks', t.id); });
+  if (ui.openTask === t.id) { ui.openTask = null; renderSheet(); }
+  toast('Aufgabe gelöscht.', { label: 'Rückgängig', fn: () => store.put('tasks', t) });
+}
+document.addEventListener('contextmenu', (e) => {
+  const ev = e.target.closest('.ev[data-id]');
+  if (!ev || ev.classList.contains('ghost')) return closeCtx();
+  const items = ctxItems(ev);
+  if (!items.length) return;
+  e.preventDefault();
+  closeCtx();
+  const m = document.createElement('div');
+  m.id = 'ctx-menu'; m.className = 'ctx-menu';
+  m.innerHTML = items.map((it, i) => (it ? `<button data-i="${i}" class="${it[3] ? 'danger' : ''}">${icon(it[1])}<span>${esc(it[0])}</span></button>` : '<hr>')).join('');
+  document.body.append(m);
+  const r = m.getBoundingClientRect();
+  m.style.left = `${Math.min(e.clientX, innerWidth - r.width - 8)}px`;
+  m.style.top = `${Math.min(e.clientY, innerHeight - r.height - 8)}px`;
+  m.addEventListener('click', (ce) => {
+    const b = ce.target.closest('button[data-i]');
+    if (!b) return;
+    ce.stopPropagation();
+    closeCtx();
+    items[b.dataset.i][2]();
+  });
+});
+document.addEventListener('pointerdown', (e) => { if (!e.target.closest('#ctx-menu')) closeCtx(); }, true);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeCtx(); });
+window.addEventListener('scroll', closeCtx, true);
+window.addEventListener('blur', closeCtx);
