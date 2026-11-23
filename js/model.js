@@ -222,9 +222,17 @@ const DAY = 24 * 60;
 // cap = Länge der Arbeitszeit minus fixed.
 export function dayLoad(date, workStart = 9, workEnd = 17) {
   const W0 = workStart * 60, W1 = Math.max(workEnd * 60, W0);
-  const planned = tasks().filter((t) => !t.time && t.status !== 'done' && (t.date === date || (t.repeat && t.date !== date && repeatsOn(t, date))))
+  // Geplant = alle Aufgaben des Tages ohne Uhrzeit, auch erledigte: Abhaken ändert die Tagesplanung nicht
+  const planned = tasks().filter((t) => !t.time && (t.date === date || (t.repeat && t.status !== 'done' && t.date !== date && repeatsOn(t, date))))
     .reduce((a, t) => a + (t.duration || 60), 0);
-  const iv = segmentsOn(date).map((x) => [Math.max(W0, x.s), Math.min(W1, x.e)]).filter(([s, e]) => e > s).sort((a, b) => a[0] - b[0]);
+  // Fest = Termine + Sperrzeiten. Timer-Einträge zählen nicht, sonst würde gearbeitete Zeit doppelt abgezogen
+  const segs = segmentsOn(date).filter((x) => x.kind !== 'entry');
+  for (const t of tasks()) { // gestartete Termine blendet segmentsOn aus, für die Planung zählen sie weiter
+    if (!t.time || segs.some((x) => x.kind === 'task' && x.t.id === t.id)) continue;
+    if (t.date !== date && (t.status === 'done' || !repeatsOn(t, date))) continue;
+    const s = toMin(t.time); segs.push({ s, e: s + (t.duration || 30) });
+  }
+  const iv = segs.map((x) => [Math.max(W0, x.s), Math.min(W1, x.e)]).filter(([s, e]) => e > s).sort((a, b) => a[0] - b[0]);
   let fixed = 0, end = -1;
   for (const [s, e] of iv) { if (e <= end) continue; fixed += e - Math.max(s, end); end = e; }
   fixed = Math.round(fixed);
