@@ -217,16 +217,18 @@ export function blocksOn(date) {
 const DAY = 24 * 60;
 // Auslastung eines Tages fürs Plan-Board (Minuten):
 // planned = geschätzte Dauer der offenen Aufgaben ohne Uhrzeit (inkl. Wiederholungen),
-// fixed = Termine + gesperrte Zeiten (+ schon erfasste Zeit), Überschneidungen nur einmal gezählt,
-// cap = Arbeitszeit pro Tag (Einstellung) minus fixed.
-export function dayLoad(date, capHours = 8) {
+// fixed = Termine + gesperrte Zeiten (+ schon erfasste Zeit), aber nur der Teil INNERHALB deiner Arbeitszeit
+// (Abendroutine, Schlaf, Fußball am Abend zählen also nicht), Überschneidungen nur einmal.
+// cap = Länge der Arbeitszeit minus fixed.
+export function dayLoad(date, workStart = 9, workEnd = 17) {
+  const W0 = workStart * 60, W1 = Math.max(workEnd * 60, W0);
   const planned = tasks().filter((t) => !t.time && t.status !== 'done' && (t.date === date || (t.repeat && t.date !== date && repeatsOn(t, date))))
     .reduce((a, t) => a + (t.duration || 60), 0);
-  const iv = segmentsOn(date).filter((x) => x.e > 0 && x.s < DAY).map((x) => [Math.max(0, x.s), Math.min(DAY, x.e)]).sort((a, b) => a[0] - b[0]);
+  const iv = segmentsOn(date).map((x) => [Math.max(W0, x.s), Math.min(W1, x.e)]).filter(([s, e]) => e > s).sort((a, b) => a[0] - b[0]);
   let fixed = 0, end = -1;
   for (const [s, e] of iv) { if (e <= end) continue; fixed += e - Math.max(s, end); end = e; }
   fixed = Math.round(fixed);
-  const cap = Math.max(0, capHours * 60 - fixed);
+  const cap = Math.max(0, W1 - W0 - fixed);
   return { planned, fixed, cap, pct: cap ? planned / cap : planned ? Infinity : 0 };
 }
 
