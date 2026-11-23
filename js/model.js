@@ -215,6 +215,21 @@ export function blocksOn(date) {
 // B darf über 1440 liegen (Tag endet z. B. 02:00 am nächsten Morgen). Termine vom Vortag/Folgetag werden mit einbezogen.
 // cont = beginnt vor A (läuft vom Vortag weiter), spill = endet nach B.
 const DAY = 24 * 60;
+// Auslastung eines Tages fürs Plan-Board (Minuten):
+// planned = geschätzte Dauer der offenen Aufgaben ohne Uhrzeit (inkl. Wiederholungen),
+// fixed = Termine + gesperrte Zeiten (+ schon erfasste Zeit), Überschneidungen nur einmal gezählt,
+// cap = Arbeitszeit pro Tag (Einstellung) minus fixed.
+export function dayLoad(date, capHours = 8) {
+  const planned = tasks().filter((t) => !t.time && t.status !== 'done' && (t.date === date || (t.repeat && t.date !== date && repeatsOn(t, date))))
+    .reduce((a, t) => a + (t.duration || 60), 0);
+  const iv = segmentsOn(date).filter((x) => x.e > 0 && x.s < DAY).map((x) => [Math.max(0, x.s), Math.min(DAY, x.e)]).sort((a, b) => a[0] - b[0]);
+  let fixed = 0, end = -1;
+  for (const [s, e] of iv) { if (e <= end) continue; fixed += e - Math.max(s, end); end = e; }
+  fixed = Math.round(fixed);
+  const cap = Math.max(0, capHours * 60 - fixed);
+  return { planned, fixed, cap, pct: cap ? planned / cap : planned ? Infinity : 0 };
+}
+
 export function segmentsOn(date, A = 0, B = DAY) {
   const out = [];
   const push = (kind, x, s, e) => { if (e > A && s < B) out.push({ kind, ...x, s: Math.max(s, A), e: Math.min(e, B), cont: s < A, spill: e > B }); };

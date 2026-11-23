@@ -245,10 +245,13 @@ export function viewPlan() {
     // Wiederholungen: Vorschau an den Folgetagen (echte Aufgabe entsteht beim Erledigen bzw. Verschieben)
     const reps = d > t0 ? M.tasks().filter((t) => t.repeat && t.date !== d && M.repeatsOn(t, d)) : [];
     const done = list.filter((t) => t.status === 'done');
-    const sum = open.reduce((a, t) => a + (t.duration || 0), 0);
+    const L = M.dayLoad(d, Number(s.dayCapacity) || 8);
+    const lvl = L.pct > 1 ? 'over' : L.pct >= 0.8 ? 'full' : L.pct >= 0.4 ? 'mid' : 'low';
+    const loadTip = `Geplant ${fmtMinutes(L.planned)} · Frei ${fmtMinutes(L.cap)} (Arbeitszeit ${Number(s.dayCapacity) || 8}h minus ${fmtMinutes(L.fixed)} Termine/Sperrzeiten)`;
     return `
       <div class="col ${d === t0 ? 'today' : ''}" data-drop-day="${d}">
-        <div class="col-head"><span class="wd">${d === t0 ? 'Heute' : shortWeekday(d)}</span><span class="num">${dayNum(d)}</span><span class="sum">${sum ? fmtMinutes(sum) : ''}</span></div>
+        <div class="col-head"><span class="wd">${d === t0 ? 'Heute' : shortWeekday(d)}</span><span class="num">${dayNum(d)}</span><span class="sum" title="${loadTip}">${L.planned ? fmtMinutes(L.planned) : "0h"} / ${L.cap ? fmtMinutes(L.cap) : "0h"}</span></div>
+        <div class="load ${lvl}" title="${loadTip}"><div style="width:${Math.min(100, Math.round((isFinite(L.pct) ? L.pct : 1) * 100))}%"></div></div>
         <input class="col-add" data-add="day" data-date="${d}" data-key="add-${d}" placeholder="+ Aufgabe" enterkeyhint="done">
         ${open.map((t) => taskCard(t, false, { planDate: d })).join('')}
         ${reps.map((t) => taskCard(t, false, { occ: d })).join('')}
@@ -594,6 +597,7 @@ export function viewSettings() {
         <div class="inline">
           <div class="field"><label>Tag beginnt</label><select data-setting="dayStart">${hourOpts(0, 12, s.dayStart)}</select></div>
           <div class="field"><label>Tag endet</label><select data-setting="dayEnd">${hourOpts(13, 30, s.dayEnd)}</select></div>
+          <div class="field"><label>Arbeitszeit pro Tag (Stunden, für die Auslastung im Plan)</label><input type="number" min="1" max="16" data-setting="dayCapacity" value="${s.dayCapacity || 8}"></div>
           <div class="field"><label>Wochenziel (Stunden)</label><input type="number" min="1" max="100" data-setting="weeklyGoal" value="${s.weeklyGoal}"></div>
         </div>
         <div class="field" style="margin:4px 0 0"><label>Am Wochenende einplanen (Auto-Plan + Claude)</label>
@@ -626,7 +630,7 @@ export function viewSettings() {
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.8.9</p>
+      <p class="mono muted">Version 0.9.0</p>
     </div>`;
 }
 

@@ -555,3 +555,13 @@ details.pull[open] summary::before { content: "▾"; }
   .modal .foot.one-row .btn { flex: 1; justify-content: center; padding: 10px 6px; }
   .cal-main .head .actions { flex-wrap: nowrap; }
 }
+/* Plan: Tagesauslastung */
+.col-head { margin-bottom: 6px; }
+.load { height: 5px; border-radius: 3px; background: var(--line-soft); overflow: hidden; margin: 0 6px 10px; }
+.load > div { height: 100%; border-radius: 3px; background: #30a46c; }
+.load.mid > div { background: #46a758; }
+.load.full > div { background: #f5a524; }
+.load.over > div { background: var(--danger); }
+.col-head .sum { white-space: nowrap; }
+.col:has(.load.over) .col-head .sum { color: var(--danger); font-weight: 600; }
+.col:has(.load.full) .col-head .sum { color: #c27c0e; }
