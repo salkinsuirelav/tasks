@@ -9,7 +9,7 @@ import * as S from './store.js';
 import { LIBRARY, GROUPS, matches, norm, kindOfName, KIND_LABEL } from './exercises.js';
 import * as N from './nutrition.js';
 
-const VERSION = '0.8.0';
+const VERSION = '0.9.0';
 const $ = (sel, el = document) => el.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -494,6 +494,11 @@ function settingsView() {
     <select id="gym-project">${[['', 'Kein Projekt'], ...taskProjects().map((p) => [p.id, p.name])].map(([id, n]) => `<option value="${id}" ${(gymProjectId() || '') === id ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
   </section>` : ''}
   <section class="card">
+    <h2>Design</h2>
+    <div class="theme-pick">${[['glass', 'Glass'], ['classic', 'Klassisch']].map(([t, l]) => `<button class="t-${t} ${theme() === t ? 'on' : ''}" data-act="theme" data-t="${t}"><i></i>${l}</button>`).join('')}</div>
+    <p class="muted">Gilt für dieses Gerät.</p>
+  </section>
+  <section class="card">
     <h2>Ernährungsziele</h2>
     <p class="muted">Pro Tag. Startwert für Muskelaufbau + Fettabbau bei 1,89 m / 92 kg. Nach 2–3 Wochen am Gewichtstrend anpassen.</p>
     <div class="n-grid">${[['kcal', 'Kalorien', 'kcal'], ['p', 'Protein', 'g'], ['c', 'Kohlenhydrate', 'g'], ['f', 'Fett', 'g']].map(([k, l, u]) => `<label class="n-in"><small>${l}</small><input data-goal="${k}" inputmode="numeric" value="${N.goals()[k]}"><span>${u}</span></label>`).join('')}</div>
@@ -510,6 +515,9 @@ function settingsView() {
   </section>
   <p class="muted center mono">Health · Version ${VERSION}</p>`;
 }
+// Design: Glass (Standard) oder Klassisch, pro Gerät. index.html setzt es schon vor dem ersten Zeichnen.
+const theme = () => { try { return localStorage.getItem('gym-theme') || 'glass'; } catch { return 'glass'; } };
+function setTheme(t) { try { localStorage.setItem('gym-theme', t); } catch {} document.documentElement.dataset.theme = t; render(); }
 function helperLine() {
   const h = S.get('meta', 'helper');
   if (!h) return 'Läuft über den Mac-Helfer der Task-App (dein Claude-Abo). Noch nicht eingerichtet: Anleitung in helper/README.md.';
@@ -716,6 +724,7 @@ document.addEventListener('click', (e) => {
     case 'open-day': closeSheet(); ui.date = b.dataset.date; go('train'); break;
     // Mehr
     case 'logout': S.signOutUser(); break;
+    case 'theme': setTheme(b.dataset.t); break;
     case 'rename': {
       const ex = S.get('gym_exercises', id);
       const n = prompt('Neuer Name', ex.name);
