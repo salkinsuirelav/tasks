@@ -6,9 +6,9 @@
 //   gym_sets:      { id, exId, date: 'YYYY-MM-DD', w: kg, r: Wiederholungen, t: Zeitstempel }
 
 import * as S from './store.js';
-import { LIBRARY, GROUPS, matches, norm, isCardioName } from './exercises.js';
+import { LIBRARY, GROUPS, matches, norm, kindOfName, KIND_LABEL } from './exercises.js';
 
-const VERSION = '0.6.0';
+const VERSION = '0.7.0';
 const $ = (sel, el = document) => el.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -70,20 +70,43 @@ function sessions(exId) {
 }
 const lastSession = (exId, before) => sessions(exId).find((x) => x.date < before);
 // ---- Cardio (Minuten + Stufe statt kg × Wdh) ----
-const isCardio = (exId) => { const ex = S.get('gym_exercises', exId); return ex ? (ex.kind ? ex.kind === 'cardio' : isCardioName(ex.name)) : false; };
+const kindOf = (exId) => { const ex = S.get('gym_exercises', exId); return ex ? ex.kind || kindOfName(ex.name) : 'weight'; };
+const isCardio = (exId) => kindOf(exId) === 'cardio';
 const isCardioSet = (s) => s.min != null && s.w == null;
+const isTimeSet = (s) => s.sec != null;
+const isRepSet = (s) => s.r != null;                       // kg × Wdh oder Körpergewicht (w = Zusatz-kg, 0 = ohne)
 const lvlLabel = (exId) => (/laufband/i.test(exName(exId)) ? 'km/h' : 'Stufe');
-const setTxt = (s) => (isCardioSet(s) ? `${kg(s.min)} min${s.lvl != null ? ` · ${lvlLabel(s.exId) === 'km/h' ? `${kg(s.lvl)} km/h` : `Stufe ${kg(s.lvl)}`}` : ''}` : `${kg(s.w)}×${s.r}`);
+const fmtSec = (sec) => (sec < 60 ? `${kg(sec)} s` : `${Math.floor(sec / 60)}:${pad(Math.round(sec % 60))} min`);
+const setTxt = (s) => {
+  if (isCardioSet(s)) return `${kg(s.min)} min${s.lvl != null ? ` · ${lvlLabel(s.exId) === 'km/h' ? `${kg(s.lvl)} km/h` : `Stufe ${kg(s.lvl)}`}` : ''}`;
+  if (isTimeSet(s)) return `${fmtSec(s.sec)}${s.w ? ` +${kg(s.w)} kg` : ''}`;
+  if (!s.w) return `${s.r} Wdh`;
+  return kindOf(s.exId) === 'reps' ? `+${kg(s.w)}×${s.r}` : `${kg(s.w)}×${s.r}`;
+};
+const setHtml = (s) => {
+  if (isCardioSet(s)) return `<b>${kg(s.min)}</b> min${s.lvl != null ? (lvlLabel(s.exId) === 'km/h' ? ` · <b>${kg(s.lvl)}</b> km/h` : ` · Stufe <b>${kg(s.lvl)}</b>`) : ''}`;
+  if (isTimeSet(s)) return `<b>${fmtSec(s.sec)}</b>${s.w ? ` · +${kg(s.w)} kg` : ''}`;
+  if (kindOf(s.exId) === 'reps' || !s.w) return `<b>${s.r}</b> Wdh${s.w ? ` · +${kg(s.w)} kg` : ''}`;
+  return `<b>${kg(s.w)}</b> kg × <b>${s.r}</b>`;
+};
 const cardioMin = (sets) => sets.filter(isCardioSet).reduce((a, s) => a + s.min, 0);
-const weightSets = (sets) => sets.filter((s) => !isCardioSet(s));
+const weightSets = (sets) => sets.filter(isRepSet);
+// Eingabefelder je Art: [Feld, Einheit, Tastatur, Pflicht]
+const FORM = {
+  weight: [['w', 'kg', 'decimal', true], ['r', 'Wdh', 'numeric', true]],
+  reps: [['r', 'Wdh', 'numeric', true], ['w', '+kg', 'decimal', false]],
+  time: [['sec', 'Sek', 'numeric', true], ['w', '+kg', 'decimal', false]],
+  cardio: [['min', 'min', 'decimal', true], ['lvl', 'Stufe', 'decimal', false]],
+};
+const sameType = (kind) => (kind === 'cardio' ? isCardioSet : kind === 'time' ? isTimeSet : isRepSet);
 const bestE1rm = (exId) => Math.max(0, ...weightSets(setsOf(exId)).map((s) => e1rm(s.w, s.r)));
 const isPR = (set) => {
-  if (isCardioSet(set)) return false;
+  if (!isRepSet(set) || kindOf(set.exId) !== 'weight') return false;
   const earlier = setsOf(set.exId).filter((s) => s.t < set.t);
   return earlier.length > 0 && e1rm(set.w, set.r) > Math.max(...weightSets(earlier).map((s) => e1rm(s.w, s.r)));
 };
 const setsLine = (sets) => sets.map(setTxt).join(' · ');
-const targetLine = (t, exId) => (!t ? '' : exId && isCardio(exId) ? `${t.reps || '?'} min` : `${t.sets || '?'} × ${t.reps || '?'}`);
+const targetLine = (t, exId) => { if (!t) return ''; const k = exId ? kindOf(exId) : 'weight'; return k === 'cardio' ? `${t.reps || '?'} min` : `${t.sets || '?'} × ${t.reps || '?'}${k === 'time' ? ' s' : ''}`; };
 
 
 // ---------- Zustand der Oberfläche ----------
@@ -108,8 +131,8 @@ function render() {
 function trainView() {
   const d = ui.date, ids = exIdsOfDay(d), plan = planOfDate(d);
   const total = setsOfDay(d);
-  const ws = weightSets(total), vol = ws.reduce((a, s) => a + s.w * s.r, 0), cmin = cardioMin(total);
-  const sub = total.length ? [ws.length ? `${ws.length} ${ws.length === 1 ? 'Satz' : 'Sätze'} · ${kg(vol)} kg Volumen` : '', cmin ? `${kg(cmin)} min Cardio` : ''].filter(Boolean).join(' · ') : d > today() ? 'Geplant' : 'Noch nichts geloggt';
+  const ws = total.filter((x) => !isCardioSet(x)), vol = weightSets(total).reduce((a, x) => a + (x.w || 0) * x.r, 0), cmin = cardioMin(total);
+  const sub = total.length ? [ws.length ? `${ws.length} ${ws.length === 1 ? 'Satz' : 'Sätze'}${vol ? ` · ${kg(vol)} kg Volumen` : ''}` : '', cmin ? `${kg(cmin)} min Cardio` : ''].filter(Boolean).join(' · ') : d > today() ? 'Geplant' : 'Noch nichts geloggt';
   return `
   <header class="top">
     <button class="icon-btn" data-act="prev" aria-label="Tag zurück">${ICON.left}</button>
@@ -128,8 +151,8 @@ function exCard(exId, date) {
   const sets = setsOf(exId, date);
   const last = lastSession(exId, date);
   const tgt = targetOf(date, exId);
-  const ref = sets[sets.length - 1] || last?.sets[0];
-  const cardio = isCardio(exId);
+  const kind = kindOf(exId), cardio = kind === 'cardio', same = sameType(kind);
+  const ref = sets.filter(same).pop() || last?.sets.filter(same)[0];
   const done = cardio ? tgt && sets.length > 0 && cardioMin(sets) >= (parseInt(tgt.reps) || 1) : tgt?.sets && sets.length >= tgt.sets;
   return `
   <section class="card ${done ? 'done' : ''}" data-ex="${exId}">
@@ -140,17 +163,16 @@ function exCard(exId, date) {
     </div>
     ${last ? `<div class="last">Letztes Mal (${dayLabel(last.date)}): ${setsLine(last.sets)}</div>` : '<div class="last">Erstes Mal – viel Erfolg!</div>'}
     ${sets.length ? `<ol class="sets">${sets.map((s, i) => `
-      <li><span class="n">${i + 1}</span><span class="val">${isCardioSet(s) ? `<b>${kg(s.min)}</b> min${s.lvl != null ? (lvlLabel(exId) === 'km/h' ? ` · <b>${kg(s.lvl)}</b> km/h` : ` · Stufe <b>${kg(s.lvl)}</b>`) : ''}` : `<b>${kg(s.w)}</b> kg × <b>${s.r}</b>`}</span>${isPR(s) ? '<span class="pr">PR</span>' : ''}
+      <li><span class="n">${i + 1}</span><span class="val">${setHtml(s)}</span>${isPR(s) ? '<span class="pr">PR</span>' : ''}
       <button class="icon-btn small faint" data-act="del-set" data-id="${s.id}" aria-label="Satz löschen">${ICON.x}</button></li>`).join('')}</ol>` : ''}
-    ${cardio ? `<form class="add-set" data-ex="${exId}" data-kind="cardio">
-      <label><input data-keep="m-${exId}" name="min" inputmode="decimal" autocomplete="off" placeholder="${parseInt(tgt?.reps) || '–'}" value="${ref && isCardioSet(ref) ? kg(ref.min) : ''}"><span>min</span></label>
-      <label><input data-keep="l-${exId}" name="lvl" inputmode="decimal" autocomplete="off" placeholder="–" value="${ref && isCardioSet(ref) && ref.lvl != null ? kg(ref.lvl) : ''}"><span>${lvlLabel(exId)}</span></label>
-      <button class="btn primary" type="submit">${ICON.plus} Eintrag</button>
-    </form>` : `<form class="add-set" data-ex="${exId}">
-      <label><input data-keep="w-${exId}" name="w" inputmode="decimal" autocomplete="off" placeholder="–" value="${ref && !isCardioSet(ref) ? kg(ref.w) : ''}"><span>kg</span></label>
-      <label><input data-keep="r-${exId}" name="r" inputmode="numeric" autocomplete="off" placeholder="${parseInt(tgt?.reps) || '–'}" value="${ref && !isCardioSet(ref) ? ref.r : ''}"><span>Wdh</span></label>
-      <button class="btn primary" type="submit">${ICON.plus} Satz</button>
-    </form>`}
+    <form class="add-set" data-ex="${exId}" data-kind="${kind}">
+      ${FORM[kind].map(([f, unit, mode]) => {
+        const v = ref?.[f], show = v != null && !(f === 'w' && kind !== 'weight' && !v);
+        const ph = (f === 'r' || f === 'sec' || f === 'min') && parseInt(tgt?.reps) ? parseInt(tgt.reps) : f === 'w' && kind !== 'weight' ? '0' : '–';
+        return `<label><input data-keep="${f}-${exId}" name="${f}" inputmode="${mode}" autocomplete="off" placeholder="${ph}" value="${show ? kg(v) : ''}"><span>${f === 'lvl' ? lvlLabel(exId) : unit}</span></label>`;
+      }).join('')}
+      <button class="btn primary" type="submit">${ICON.plus} ${cardio ? 'Eintrag' : 'Satz'}</button>
+    </form>
   </section>`;
 }
 
@@ -354,7 +376,7 @@ function planEditView(id) {
       </div>` : `<div class="target-inputs">
         <label><input data-keep="s-${i}" data-item="${i}" data-field="sets" inputmode="numeric" value="${it.sets ?? ''}" placeholder="3"><span>Sätze</span></label>
         <span class="times">×</span>
-        <label><input data-keep="r-${i}" data-item="${i}" data-field="reps" value="${esc(it.reps ?? '')}" placeholder="8–10"><span>Wdh</span></label>
+        <label><input data-keep="r-${i}" data-item="${i}" data-field="reps" value="${esc(it.reps ?? '')}" placeholder="${kindOf(it.exId) === 'time' ? '30' : '8–10'}"><span>${kindOf(it.exId) === 'time' ? 'Sek' : 'Wdh'}</span></label>
       </div>`}
     </section>`).join('')}</div>` : '<p class="muted">Noch keine Übungen im Plan.</p>'}
   <button class="btn wide" data-act="plan-add-ex">${ICON.plus} Übung zum Plan hinzufügen</button>
@@ -398,22 +420,30 @@ function historyView() {
   const list = exercises().map((ex) => ({ ex, ses: sessions(ex.id) })).filter((x) => x.ses.length).sort((a, b) => b.ses[0].date.localeCompare(a.ses[0].date));
   return `<header class="top"><div class="title"><h1>Verlauf</h1></div></header>${seg}
   ${list.length ? `<div class="list">${list.map(({ ex, ses }) => {
-    const c = isCardio(ex.id);
-    const val = (x) => (c ? cardioMin(x.sets) : Math.max(0, ...weightSets(x.sets).map((s) => s.w)));
+    const [, val, unit] = mainMetric(ex.id);
     const pts = ses.slice(0, 12).reverse().map(val);
     const top = Math.max(...ses.map(val));
-    return `<button class="row" data-act="detail" data-id="${ex.id}"><div><b>${esc(ex.name)}</b><div class="muted">${ses.length}× · zuletzt ${dayLabel(ses[0].date)} · max ${kg(top)} ${c ? 'min' : 'kg'}</div></div>${spark(pts)}</button>`;
+    return `<button class="row" data-act="detail" data-id="${ex.id}"><div><b>${esc(ex.name)}</b><div class="muted">${ses.length}× · zuletzt ${dayLabel(ses[0].date)} · max ${unit === 's' ? fmtSec(top) : `${kg(top)} ${unit}`}</div></div>${spark(pts)}</button>`;
   }).join('')}</div>` : `<div class="empty"><p>Sobald du Sätze loggst, siehst du hier deinen Fortschritt.</p></div>`}`;
 }
+
+// Diagramm-Werte je Erfassungsart: { key: [Label, (Einheit) => Wert, Einheit] }
+function metricsFor(exId) {
+  const k = kindOf(exId);
+  const maxOf = (sets, f) => Math.max(0, ...sets.map(f));
+  if (k === 'cardio') return { w: ['Dauer', (x) => cardioMin(x.sets), 'min'], e: [lvlLabel(exId) === 'km/h' ? 'Tempo' : 'Stufe', (x) => maxOf(x.sets.filter(isCardioSet), (s) => s.lvl || 0), lvlLabel(exId) === 'km/h' ? 'km/h' : ''] };
+  if (k === 'time') return { w: ['Längste Zeit', (x) => maxOf(x.sets.filter(isTimeSet), (s) => s.sec), 's'], v: ['Gesamtzeit', (x) => x.sets.filter(isTimeSet).reduce((a, s) => a + s.sec, 0), 's'] };
+  if (k === 'reps') return { w: ['Meiste Wdh', (x) => maxOf(weightSets(x.sets), (s) => s.r), 'Wdh'], v: ['Gesamt-Wdh', (x) => weightSets(x.sets).reduce((a, s) => a + s.r, 0), 'Wdh'] };
+  return { w: ['Max. Gewicht', (x) => maxOf(weightSets(x.sets), (s) => s.w || 0), 'kg'], e: ['Gesch. 1RM', (x) => maxOf(weightSets(x.sets), (s) => e1rm(s.w || 0, s.r)), 'kg'], v: ['Volumen', (x) => weightSets(x.sets).reduce((a, s) => a + (s.w || 0) * s.r, 0), 'kg'] };
+}
+const mainMetric = (exId) => metricsFor(exId).w;
 
 function exDetailView(exId) {
   const ex = S.get('gym_exercises', exId);
   if (!ex) { ui.exDetail = null; return historyView(); }
   const ses = sessions(exId);
-  const cardio = isCardio(exId);
-  const metrics = cardio
-    ? { w: ['Dauer', (x) => cardioMin(x.sets), 'min'], e: [lvlLabel(exId) === 'km/h' ? 'Tempo' : 'Stufe', (x) => Math.max(0, ...x.sets.filter(isCardioSet).map((s) => s.lvl || 0)), lvlLabel(exId) === 'km/h' ? 'km/h' : ''] }
-    : { w: ['Max. Gewicht', (x) => Math.max(0, ...weightSets(x.sets).map((s) => s.w)), 'kg'], e: ['Gesch. 1RM', (x) => Math.max(0, ...weightSets(x.sets).map((s) => e1rm(s.w, s.r))), 'kg'], v: ['Volumen', (x) => weightSets(x.sets).reduce((a, s) => a + s.w * s.r, 0), 'kg'] };
+  const kind = kindOf(exId), cardio = kind === 'cardio';
+  const metrics = metricsFor(exId);
   if (!metrics[ui.metric]) ui.metric = 'w';
   const [, fn, unit] = metrics[ui.metric];
   const pts = ses.slice().reverse().map((x) => ({ date: x.date, v: fn(x) }));
@@ -428,13 +458,15 @@ function exDetailView(exId) {
   ${ses.length ? `
   <div class="stats">
     ${cardio ? `<div><span>Längste Einheit</span><b>${kg(Math.max(0, ...ses.map((x) => cardioMin(x.sets))))} min</b></div>
-    <div><span>Gesamt</span><b>${kg(cardioMin(cs))} min</b></div>` : best ? `<div><span>Bester Satz</span><b>${kg(best.w)} × ${best.r}</b></div>
+    <div><span>Gesamt</span><b>${kg(cardioMin(cs))} min</b></div>` : kind === 'time' ? `<div><span>Längste Zeit</span><b>${fmtSec(Math.max(0, ...setsOf(exId).filter(isTimeSet).map((x) => x.sec)))}</b></div>
+    <div><span>Gesamt</span><b>${fmtSec(setsOf(exId).filter(isTimeSet).reduce((a, x) => a + x.sec, 0))}</b></div>` : kind === 'reps' ? `<div><span>Meiste Wdh</span><b>${Math.max(0, ...weightSets(setsOf(exId)).map((x) => x.r))}</b></div>
+    <div><span>Gesamt-Wdh</span><b>${weightSets(setsOf(exId)).reduce((a, x) => a + x.r, 0)}</b></div>` : best ? `<div><span>Bester Satz</span><b>${kg(best.w)} × ${best.r}</b></div>
     <div><span>Gesch. 1RM</span><b>${kg(Math.round(e1rm(best.w, best.r) * 2) / 2)} kg</b></div>` : '<div></div><div></div>'}
     <div><span>Einheiten</span><b>${ses.length}</b></div>
   </div>
   <div class="seg">${Object.entries(metrics).map(([k, [l]]) => `<button data-act="metric" data-m="${k}" class="${ui.metric === k ? 'on' : ''}">${l}</button>`).join('')}</div>
   <div class="card chart">${chart(pts, unit)}</div>
-  <div class="list">${ses.map((x) => `<button class="row" data-act="open-day" data-date="${x.date}"><div><b>${dayLabel(x.date)}</b><div class="muted">${setsLine(x.sets)}</div></div><span class="muted">${kg(fn(x))} ${unit}</span></button>`).join('')}</div>`
+  <div class="list">${ses.map((x) => `<button class="row" data-act="open-day" data-date="${x.date}"><div><b>${dayLabel(x.date)}</b><div class="muted">${setsLine(x.sets)}</div></div><span class="muted">${unit === 's' ? fmtSec(fn(x)) : `${kg(fn(x))} ${unit}`}</span></button>`).join('')}</div>`
     : '<div class="empty"><p>Für diese Übung gibt es noch keine Sätze.</p></div>'}`;
 }
 
@@ -573,7 +605,8 @@ function exMenu(exId) {
       ${i > 0 ? `<button class="row" data-act="move" data-id="${exId}" data-dir="-1">Nach oben</button>` : ''}
       ${i < ids.length - 1 ? `<button class="row" data-act="move" data-id="${exId}" data-dir="1">Nach unten</button>` : ''}
       <button class="row" data-act="detail" data-id="${exId}">Verlauf ansehen</button>
-      <button class="row" data-act="toggle-kind" data-id="${exId}">${isCardio(exId) ? 'Mit kg × Wdh erfassen' : 'Als Cardio erfassen (Minuten + Stufe)'}</button>
+      <div class="label">Erfassen als</div>
+      ${Object.entries(KIND_LABEL).map(([k, l]) => `<button class="row" data-act="set-kind" data-id="${exId}" data-kind="${k}"><span>${l}</span>${kindOf(exId) === k ? '<span class="accent-txt">✓</span>' : ''}</button>`).join('')}
       <button class="row danger" data-act="remove-ex" data-id="${exId}">Aus diesem Training entfernen</button>
     </div>`);
 }
@@ -620,7 +653,7 @@ document.addEventListener('click', (e) => {
       closeSheet(); break;
     }
     case 'choose-plan': choosePlanSheet(); break;
-    case 'toggle-kind': S.patch('gym_exercises', id, { kind: isCardio(id) ? 'weight' : 'cardio' }); closeSheet(); break;
+    case 'set-kind': S.patch('gym_exercises', id, { kind: b.dataset.kind }); closeSheet(); break;
     case 'wo-start': startWorkout(); break;
     case 'wo-stop': if (confirm('Training beenden und in den Kalender eintragen?')) stopWorkout(); break;
     case 'set-plan': setPlan(id); break;
@@ -638,8 +671,9 @@ document.addEventListener('click', (e) => {
     case 'plan-add-ex': {
       const p = S.get('gym_plans', ui.planEdit);
       exercisePicker('Übung zum Plan', p.items.map((i) => i.exId), (exId) => {
-        const last = [...p.items].reverse().find((i) => !isCardio(i.exId));
-        patchItems((items) => items.push(isCardio(exId) ? { exId, sets: 1, reps: '20' } : { exId, sets: last?.sets ?? 3, reps: last?.reps ?? '8–10' }));
+        const last = [...p.items].reverse().find((i) => kindOf(i.exId) === 'weight');
+        const k = kindOf(exId);
+        patchItems((items) => items.push(k === 'cardio' ? { exId, sets: 1, reps: '20' } : k === 'time' ? { exId, sets: 3, reps: '30' } : { exId, sets: last?.sets ?? 3, reps: last?.reps ?? '8–10' }));
         closeSheet();
       });
       break;
@@ -710,26 +744,22 @@ document.addEventListener('submit', async (e) => {
     sportDaySheet(f.dataset.date);
     return;
   }
-  if (f.classList.contains('add-set') && f.dataset.kind === 'cardio') {
-    const min = num(f.min.value), lvl = num(f.lvl.value);
-    if (!min || min <= 0) { f.min.focus(); return toast('Minuten eintragen'); }
-    const exId = f.dataset.ex;
-    if (!S.get('gym_days', ui.date)) saveDay(ui.date, {});
-    S.put('gym_sets', { exId, date: ui.date, min, lvl, t: Date.now() });
-    if (!S.get('gym_days', ui.date).exIds.includes(exId)) saveDay(ui.date, {});
-    navigator.vibrate?.(15);
-    document.activeElement?.blur();
-  } else if (f.classList.contains('add-set')) {
-    const w = num(f.w.value), r = Math.round(num(f.r.value));
-    if (w === null || w < 0) { f.w.focus(); return toast('Gewicht eintragen'); }
-    if (!r || r < 1) { f.r.focus(); return toast('Wiederholungen eintragen'); }
-    const exId = f.dataset.ex;
-    const before = bestE1rm(exId);
-    const hadSets = setsOf(exId).length > 0;
+  if (f.classList.contains('add-set')) {
+    const exId = f.dataset.ex, kind = f.dataset.kind || 'weight';
+    const set = { exId, date: ui.date, t: Date.now() };
+    for (const [field, unit, , req] of FORM[kind]) {
+      let v = num(f[field].value);
+      if (v !== null && v < 0) v = null;
+      if (req && (v === null || (field !== 'w' && v <= 0))) { f[field].focus(); return toast({ w: 'Gewicht', r: 'Wiederholungen', sec: 'Sekunden', min: 'Minuten' }[field] + ' eintragen'); }
+      if (field === 'r' || field === 'sec') v = v === null ? null : Math.round(v);
+      if (field === 'w' && kind === 'reps') v = v || 0;           // Körpergewicht: w = Zusatzgewicht
+      if (v !== null) set[field] = v;
+    }
+    const before = bestE1rm(exId), hadSets = setsOf(exId).length > 0;
     if (!S.get('gym_days', ui.date)) saveDay(ui.date, {}); // Plan des Tages festhalten, bevor der erste Satz kommt
-    S.put('gym_sets', { exId, date: ui.date, w, r, t: Date.now() });
+    S.put('gym_sets', set);
     if (!S.get('gym_days', ui.date).exIds.includes(exId)) saveDay(ui.date, {});
-    if (hadSets && e1rm(w, r) > before) toast('Neue Bestleistung! 💪');
+    if (kind === 'weight' && hadSets && e1rm(set.w, set.r) > before) toast('Neue Bestleistung! 💪');
     navigator.vibrate?.(15);
     document.activeElement?.blur();
   }

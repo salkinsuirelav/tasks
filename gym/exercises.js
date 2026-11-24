@@ -179,5 +179,17 @@ export const matches = (q, ...texts) => {
   return norm(q).split(' ').every((w) => hay.includes(short[w] || w) || hayTight.includes(short[w] || w));
 };
 
-// Cardio-Übungen werden mit Minuten + Stufe statt kg × Wdh erfasst
-export const isCardioName = (name) => LIBRARY.some((l) => l.group === 'Cardio' && norm(l.name) === norm(name));
+// Wie wird eine Übung erfasst?
+//   weight = kg × Wdh (Standard) · reps = Körpergewicht: Wdh (+ optional Zusatz-kg)
+//   time   = Sekunden (+ optional kg), z. B. Plank · cardio = Minuten + Stufe
+const REPS = ['Liegestütze', 'Dips', 'Klimmzüge', 'Klimmzüge im Untergriff', 'Bankdips', 'Hyperextensions', 'Nordic Curls', 'Sissy Squat',
+  'Glute Bridge', 'Crunches', 'Hängendes Beinheben', 'Knieheben am Dip-Barren', 'Beinheben liegend', 'Russian Twists', 'Ab Wheel', 'Sit-ups', 'Burpees'];
+const TIME = ['Plank', 'Seitstütz', 'Dead Hang', "Farmer's Walk"];
+export function kindOfName(name) {
+  const n = norm(name);
+  if (LIBRARY.some((l) => l.group === 'Cardio' && norm(l.name) === n)) return 'cardio';
+  if (TIME.some((x) => norm(x) === n)) return 'time';
+  if (REPS.some((x) => norm(x) === n)) return 'reps';
+  return 'weight';
+}
+export const KIND_LABEL = { weight: 'Kraft (kg × Wdh)', reps: 'Körpergewicht (Wdh, optional +kg)', time: 'Auf Zeit (Sekunden)', cardio: 'Cardio (Minuten + Stufe)' };
