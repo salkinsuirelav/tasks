@@ -223,3 +223,103 @@ textarea:focus { border-color: var(--accent); }
 .n-rev .n-rev-name { border: 0; padding: 0; background: none; font-weight: 600; }
 .n-rev .muted { font-size: 12px; }
 .n-check input { width: 20px; height: 20px; accent-color: var(--accent); }
+
+/* ===================================================================
+   Glass-Design (v0.9) – aktiv mit <html data-theme="glass">, umschaltbar in „Mehr“.
+   Klassisch = alles oberhalb dieses Blocks.
+   =================================================================== */
+html[data-theme="glass"] {
+  --bg: #f2efea; --card: rgba(255,255,255,.58); --line: rgba(255,255,255,.75); --hair: rgba(60,50,40,.10);
+  --glass-blur: blur(22px) saturate(180%);
+  --glass-shadow: 0 1px 0 rgba(255,255,255,.9) inset, 0 -1px 0 rgba(255,255,255,.25) inset, 0 8px 28px rgba(60,40,20,.08), 0 1px 2px rgba(60,40,20,.05);
+  --shadow: var(--glass-shadow);
+  --accent-soft: rgba(217,105,43,.14);
+}
+@media (prefers-color-scheme: dark) {
+  html[data-theme="glass"] {
+    --bg: #0f0f12; --card: rgba(48,46,52,.48); --line: rgba(255,255,255,.12); --hair: rgba(255,255,255,.08);
+    --glass-shadow: 0 1px 0 rgba(255,255,255,.14) inset, 0 8px 28px rgba(0,0,0,.35);
+    --accent-soft: rgba(240,149,90,.16);
+  }
+}
+/* farbiger, ruhiger Hintergrund, damit das Glas etwas zum Durchscheinen hat */
+html[data-theme="glass"] body::before {
+  content: ""; position: fixed; inset: -20vh -20vw; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(40vmax 40vmax at 12% 8%, rgba(255,166,102,.55), transparent 60%),
+    radial-gradient(38vmax 38vmax at 92% 22%, rgba(120,170,255,.40), transparent 60%),
+    radial-gradient(42vmax 42vmax at 70% 92%, rgba(255,120,150,.30), transparent 60%),
+    radial-gradient(36vmax 36vmax at 8% 78%, rgba(150,220,180,.35), transparent 60%),
+    var(--bg);
+}
+@media (prefers-color-scheme: dark) {
+  html[data-theme="glass"] body::before {
+    background:
+      radial-gradient(40vmax 40vmax at 12% 8%, rgba(217,105,43,.35), transparent 60%),
+      radial-gradient(38vmax 38vmax at 92% 22%, rgba(70,110,220,.30), transparent 60%),
+      radial-gradient(42vmax 42vmax at 70% 92%, rgba(190,70,110,.22), transparent 60%),
+      radial-gradient(36vmax 36vmax at 8% 78%, rgba(60,150,110,.22), transparent 60%),
+      var(--bg);
+  }
+}
+html[data-theme="glass"], html[data-theme="glass"] body { background: transparent; }
+html[data-theme="glass"] { background: var(--bg); }
+
+/* Glasflächen */
+html[data-theme="glass"] :is(.card, .list:not(.tight) > .row, .stats div, .cal-stats div, .week, .wo-bar, .n-job, .n-rev, .sport, .day, .btn:not(.primary), .n-chips button, .plan-chip, input, select, textarea) {
+  background: var(--card); border: 1px solid var(--line); box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+}
+html[data-theme="glass"] .card { border-radius: 24px; }
+html[data-theme="glass"] .list:not(.tight) > .row, html[data-theme="glass"] .wo-bar, html[data-theme="glass"] .n-job { border-radius: 20px; }
+html[data-theme="glass"] :is(.stats div, .cal-stats div) { border-radius: 18px; }
+html[data-theme="glass"] .week { border-radius: 24px; }
+html[data-theme="glass"] .week-row { border-bottom-color: var(--hair); }
+html[data-theme="glass"] :is(.sets li, .n-item, .list.tight .row) { border-color: var(--hair); }
+html[data-theme="glass"] :is(input, select, textarea) { border-radius: 14px; }
+html[data-theme="glass"] :is(input, select, textarea):focus { border-color: var(--accent); }
+html[data-theme="glass"] .btn { border-radius: 999px; }
+html[data-theme="glass"] .btn.primary { box-shadow: 0 1px 0 rgba(255,255,255,.25) inset, 0 6px 18px rgba(0,0,0,.18); }
+html[data-theme="glass"] .plan-chip { background: color-mix(in srgb, var(--accent) 12%, var(--card)); border-radius: 18px; }
+html[data-theme="glass"] .sport.on, html[data-theme="glass"] .n-job.done { background: color-mix(in srgb, var(--accent) 16%, var(--card)); border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
+html[data-theme="glass"] .day.on { background: var(--accent); border-color: var(--accent); }
+html[data-theme="glass"] .wo-start { border-radius: 20px; box-shadow: 0 1px 0 rgba(255,255,255,.35) inset, 0 8px 24px color-mix(in srgb, var(--accent) 35%, transparent); }
+html[data-theme="glass"] .cal-day { background: color-mix(in srgb, var(--card) 70%, transparent); border-radius: 12px; }
+html[data-theme="glass"] .n-bar { background: var(--hair); }
+html[data-theme="glass"] .n-preview { background: color-mix(in srgb, var(--accent) 12%, var(--card)); border-radius: 14px; }
+html[data-theme="glass"] .icon-btn:active { background: var(--hair); }
+
+/* Segment-Umschalter als Glas-Pille */
+html[data-theme="glass"] .seg { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 4px; box-shadow: var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
+html[data-theme="glass"] .seg button { border-radius: 999px; }
+html[data-theme="glass"] .seg button.on { background: rgba(255,255,255,.85); box-shadow: 0 1px 0 #fff inset, 0 2px 8px rgba(0,0,0,.08); }
+@media (prefers-color-scheme: dark) { html[data-theme="glass"] .seg button.on { background: rgba(255,255,255,.16); box-shadow: 0 1px 0 rgba(255,255,255,.18) inset; } }
+
+/* schwebende Tab-Leiste */
+html[data-theme="glass"] .tabbar {
+  left: 14px; right: 14px; bottom: calc(env(safe-area-inset-bottom) + 6px); max-width: 520px; margin: 0 auto;
+  padding: 6px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--card); box-shadow: var(--glass-shadow), 0 12px 40px rgba(0,0,0,.12);
+  -webkit-backdrop-filter: blur(28px) saturate(190%); backdrop-filter: blur(28px) saturate(190%);
+}
+html[data-theme="glass"] .tabbar button { flex: 1; border-radius: 999px; padding: 6px 4px; min-width: 0; transition: background .2s; }
+html[data-theme="glass"] .tabbar button.on { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+html[data-theme="glass"] main { padding-bottom: calc(env(safe-area-inset-bottom) + 110px); }
+
+/* Sheets + Toast */
+html[data-theme="glass"] .backdrop { background: rgba(0,0,0,.18); }
+html[data-theme="glass"] .sheet {
+  background: color-mix(in srgb, var(--bg) 90%, transparent); border-radius: 30px 30px 0 0;
+  border-top: 1px solid var(--line); box-shadow: 0 1px 0 rgba(255,255,255,.6) inset, 0 -10px 40px rgba(0,0,0,.12);
+  -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%);
+}
+html[data-theme="glass"] .sheet .card, html[data-theme="glass"] .sheet :is(input, select, textarea, .btn:not(.primary)) { -webkit-backdrop-filter: none; backdrop-filter: none; }
+html[data-theme="glass"] #toast { border-radius: 999px; background: color-mix(in srgb, var(--primary) 82%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); bottom: calc(env(safe-area-inset-bottom) + 92px); }
+
+/* Auswahl in „Mehr“ */
+.theme-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.theme-pick button { border: 1.5px solid var(--line); border-radius: 16px; padding: 10px; font-weight: 600; font-size: 14px; display: flex; flex-direction: column; align-items: center; gap: 6px; background: var(--card); }
+.theme-pick button.on { border-color: var(--accent); color: var(--accent); }
+.theme-pick i { width: 100%; height: 38px; border-radius: 10px; display: block; }
+.theme-pick .t-glass i { background: radial-gradient(circle at 20% 20%, rgba(255,166,102,.8), transparent 60%), radial-gradient(circle at 85% 70%, rgba(120,170,255,.7), transparent 60%), #f2efea; box-shadow: inset 0 0 0 6px rgba(255,255,255,.55); }
+.theme-pick .t-classic i { background: #f4f3ef; box-shadow: inset 0 0 0 6px #fff, inset 0 0 0 7px #e6e4de; }
