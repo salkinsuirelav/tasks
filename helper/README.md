@@ -70,6 +70,13 @@ Das Protokoll liegt unter `~/Library/Logs/tasks-helper.log`.
 
 ---
 
+## Ernährung: Foto/Text → Nährwerte (Health-App)
+
+In der Health-App (`/gym/`) unter **Ernährung → ✨ Claude** schickst du ein Foto oder einen Text („200 g Hähnchen, Reis, Kimchi“). Der Helfer lässt Claude die Nährwerte schätzen, du prüfst sie in der App und trägst sie ein.
+- Läuft über dein Abo, keine API-Kosten. Claude darf dafür nur das Foto lesen (Read-Tool, nur im Arbeitsordner `~/.tasks-helper-work`).
+- Das Foto liegt nur kurz in Firebase und wird nach der Auswertung gelöscht, auch auf dem Mac.
+- **Für Fotos braucht es den Helfer ab Version mit Ernährung**: einmal den Update-Befehl unten ausführen. Text geht auch mit dem alten Helfer.
+
 ## Schnell-Eingabe per Tastenkürzel (aus jeder App)
 
 Der Helfer nimmt auf deinem Mac neue Aufgaben an (`http://127.0.0.1:7777/add`, nur von diesem Mac erreichbar). Mit der Kurzbefehle-App legst du dir ein Tastenkürzel dafür an, z. B. **⌃⌥N**. Das funktioniert auch, wenn gerade die Claude-App oder etwas anderes vorne ist.

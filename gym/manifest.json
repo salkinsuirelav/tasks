@@ -1,6 +1,6 @@
 {
-  "name": "Gym",
-  "short_name": "Gym",
+  "name": "Health",
+  "short_name": "Health",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

@@ -1,4 +1,4 @@
-// Gym-Tracker: Training loggen (Gewicht × Wiederholungen pro Satz), Pläne pro Wochentag, Verlauf pro Übung.
+// Health-App (früher Gym): Training + Ernährung (nutrition.js). Training loggen (Gewicht × Wiederholungen pro Satz), Pläne pro Wochentag, Verlauf pro Übung.
 // Datenmodell:
 //   gym_exercises: { id, name, archived? }
 //   gym_plans:     { id, name, days: [0..6] (0 = Montag), items: [{ exId, sets, reps }] }
@@ -7,8 +7,9 @@
 
 import * as S from './store.js';
 import { LIBRARY, GROUPS, matches, norm, kindOfName, KIND_LABEL } from './exercises.js';
+import * as N from './nutrition.js';
 
-const VERSION = '0.7.0';
+const VERSION = '0.8.0';
 const $ = (sel, el = document) => el.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -110,6 +111,7 @@ const targetLine = (t, exId) => { if (!t) return ''; const k = exId ? kindOf(exI
 
 
 // ---------- Zustand der Oberfläche ----------
+const trainSeg = () => `<div class="seg top-seg">${[['train', 'Training'], ['plans', 'Pläne']].map(([t, l]) => `<button data-tab="${t}" class="${ui.tab === t ? 'on' : ''}">${l}</button>`).join('')}</div>`;
 const ui = { tab: 'train', date: today(), exDetail: null, metric: 'w', histMode: 'cal', calMonth: today().slice(0, 7), sportType: 'fussball', planEdit: null };
 
 function go(tab) { ui.tab = tab; ui.exDetail = null; ui.planEdit = null; render(); window.scrollTo(0, 0); }
@@ -121,10 +123,11 @@ function render() {
   const keepVal = document.activeElement?.value;
   if (ui.tab === 'train') main.innerHTML = trainView();
   else if (ui.tab === 'plans') main.innerHTML = ui.planEdit ? planEditView(ui.planEdit) : plansView();
+  else if (ui.tab === 'food') main.innerHTML = N.foodView(ui.date);
   else if (ui.tab === 'history') main.innerHTML = ui.exDetail ? exDetailView(ui.exDetail) : historyView();
   else main.innerHTML = settingsView();
-  $('#tabbar').innerHTML = [['train', 'Training', ICON.dumbbell], ['plans', 'Pläne', ICON.list], ['history', 'Verlauf', ICON.chart], ['settings', 'Mehr', ICON.gear]]
-    .map(([id, label, ic]) => `<button data-tab="${id}" class="${ui.tab === id ? 'on' : ''}">${ic}<span>${label}</span></button>`).join('');
+  $('#tabbar').innerHTML = [['train', 'Training', ICON.dumbbell], ['food', 'Ernährung', ICON.food], ['history', 'Verlauf', ICON.chart], ['settings', 'Mehr', ICON.gear]]
+    .map(([id, label, ic]) => `<button data-tab="${id}" class="${ui.tab === id || (id === 'train' && ui.tab === 'plans') ? 'on' : ''}">${ic}<span>${label}</span></button>`).join('');
   if (keepFocus) { const el = document.querySelector(`[data-keep="${keepFocus}"]`); if (el) { el.value = keepVal; el.focus(); } }
 }
 
@@ -133,7 +136,7 @@ function trainView() {
   const total = setsOfDay(d);
   const ws = total.filter((x) => !isCardioSet(x)), vol = weightSets(total).reduce((a, x) => a + (x.w || 0) * x.r, 0), cmin = cardioMin(total);
   const sub = total.length ? [ws.length ? `${ws.length} ${ws.length === 1 ? 'Satz' : 'Sätze'}${vol ? ` · ${kg(vol)} kg Volumen` : ''}` : '', cmin ? `${kg(cmin)} min Cardio` : ''].filter(Boolean).join(' · ') : d > today() ? 'Geplant' : 'Noch nichts geloggt';
-  return `
+  return `${trainSeg()}
   <header class="top">
     <button class="icon-btn" data-act="prev" aria-label="Tag zurück">${ICON.left}</button>
     <div class="title"><h1>${dayLabel(d)}</h1><div class="sub">${sub}</div></div>
@@ -143,7 +146,7 @@ function trainView() {
   ${workoutBar(d)}
   <button class="plan-chip" data-act="choose-plan">${ICON.list}<span>${plan ? `Plan: <b>${esc(plan.name)}</b>` : 'Kein Plan'}</span><span class="muted">ändern</span></button>
   <div class="list">${ids.map((id) => exCard(id, d)).join('')}</div>
-  ${ids.length ? '' : `<div class="empty">${ICON.dumbbell}<p>${plans().length ? 'Wähle oben einen Plan oder füge einzelne Übungen hinzu.' : 'Füge Übungen hinzu – oder leg unter „Pläne“ eine Vorlage pro Wochentag an.'}</p></div>`}
+  ${ids.length ? '' : `<div class="empty">${ICON.dumbbell}<p>${plans().length ? 'Wähle oben einen Plan oder füge einzelne Übungen hinzu.' : 'Füge Übungen hinzu – oder leg oben unter „Pläne“ eine Vorlage pro Wochentag an.'}</p></div>`}
   <button class="btn primary wide" data-act="add-ex">${ICON.plus} Übung hinzufügen</button>`;
 }
 
@@ -333,7 +336,7 @@ function sportDaySheet(date) {
 // ---------- Pläne ----------
 function plansView() {
   const all = plans();
-  return `<header class="top"><div class="title"><h1>Pläne</h1><div class="sub">Deine Woche</div></div></header>
+  return `${trainSeg()}<header class="top"><div class="title"><h1>Pläne</h1><div class="sub">Deine Woche</div></div></header>
   <div class="week">${WD.map((w, i) => {
     const p = planOfWeekday(i);
     return `<button class="week-row ${weekday(today()) === i ? 'now' : ''}" data-act="${p ? 'edit-plan' : 'new-plan'}" data-id="${p?.id || ''}" data-wd="${i}">
@@ -491,6 +494,13 @@ function settingsView() {
     <select id="gym-project">${[['', 'Kein Projekt'], ...taskProjects().map((p) => [p.id, p.name])].map(([id, n]) => `<option value="${id}" ${(gymProjectId() || '') === id ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
   </section>` : ''}
   <section class="card">
+    <h2>Ernährungsziele</h2>
+    <p class="muted">Pro Tag. Startwert für Muskelaufbau + Fettabbau bei 1,89 m / 92 kg. Nach 2–3 Wochen am Gewichtstrend anpassen.</p>
+    <div class="n-grid">${[['kcal', 'Kalorien', 'kcal'], ['p', 'Protein', 'g'], ['c', 'Kohlenhydrate', 'g'], ['f', 'Fett', 'g']].map(([k, l, u]) => `<label class="n-in"><small>${l}</small><input data-goal="${k}" inputmode="numeric" value="${N.goals()[k]}"><span>${u}</span></label>`).join('')}</div>
+    <h2 style="margin-top:14px">Claude (Foto/Text → Nährwerte)</h2>
+    <p class="muted">${helperLine()}</p>
+  </section>
+  <section class="card">
     <h2>Übungen</h2>
     <div class="list tight">${exercises().map((e) => `<div class="row static"><span>${esc(e.name)}</span><span><button class="link" data-act="rename" data-id="${e.id}">Umbenennen</button></span></div>`).join('') || '<p class="muted">Noch keine.</p>'}</div>
   </section>
@@ -498,7 +508,14 @@ function settingsView() {
     <h2>Backup</h2>
     <button class="btn" data-act="export">Als JSON exportieren</button>
   </section>
-  <p class="muted center mono">Gym · Version ${VERSION}</p>`;
+  <p class="muted center mono">Health · Version ${VERSION}</p>`;
+}
+function helperLine() {
+  const h = S.get('meta', 'helper');
+  if (!h) return 'Läuft über den Mac-Helfer der Task-App (dein Claude-Abo). Noch nicht eingerichtet: Anleitung in helper/README.md.';
+  const on = Date.now() - (h.lastSeen || 0) < 3 * 60000;
+  const img = (h.features || []).includes('nutrition-image');
+  return `${on ? '🟢 Mac-Helfer online' : '⚪️ Mac-Helfer offline'}${h.host ? ` (${esc(h.host)})` : ''}. ${img ? 'Fotos + Text gehen.' : 'Text geht. Für Fotos den Helfer einmal updaten: Update-Befehl aus helper/README.md im Mac-Terminal ausführen.'}`;
 }
 
 // ---------- Mini-Diagramme (SVG) ----------
@@ -537,7 +554,7 @@ function sheet(html, onMount) {
   root.classList.add('open');
   onMount?.(root.querySelector('.sheet'));
 }
-function closeSheet() { const r = $('#sheet-root'); r.classList.remove('open'); r.innerHTML = ''; }
+function closeSheet() { N.stopScan(); const r = $('#sheet-root'); r.classList.remove('open'); r.innerHTML = ''; }
 
 // Übung auswählen (für Training oder Plan). onPick bekommt die Übungs-ID.
 let pickCb = null;
@@ -628,6 +645,7 @@ document.addEventListener('click', (e) => {
   const b = e.target.closest('[data-act]');
   if (!b || b.disabled) return;
   const { act, id } = b.dataset;
+  if (act.startsWith('n-') && N.onClick(act, b)) return;
   switch (act) {
     case 'prev': ui.date = addDays(ui.date, -1); render(); break;
     case 'next': ui.date = addDays(ui.date, 1); render(); break;
@@ -716,6 +734,7 @@ document.addEventListener('click', (e) => {
 // Plan-Felder (Name, Sätze, Wdh) speichern, sobald man das Feld verlässt
 document.addEventListener('change', (e) => {
   const el = e.target;
+  if (el.dataset.goal) { const v = Math.round(num(el.value)); if (v > 0) { N.saveGoal(el.dataset.goal, v); toast('Ziel gespeichert'); } return; }
   if (el.id === 'gym-project') {
     S.put('gym_meta', { ...(S.get('gym_meta', 'settings') || {}), id: 'settings', projectId: el.value || null });
     applyProject(gymTaskOf(today()));
@@ -737,6 +756,7 @@ function showUndo() {
 document.addEventListener('submit', async (e) => {
   e.preventDefault();
   const f = e.target;
+  if (N.onSubmit(f)) return;
   if (f.id === 'sport-form') {
     const min = Math.round(num(f.min.value)) || null;
     S.put('gym_activities', { date: f.dataset.date, type: ui.sportType, min, note: f.note.value.trim(), t: Date.now() });
@@ -787,10 +807,13 @@ const ICON = {
   x: svg('<path d="M6 6l12 12M18 6L6 18"/>'),
   play: svg('<path d="M7 5l12 7-12 7z" fill="currentColor"/>'),
   check: svg('<path d="M5 12l5 5 9-10"/>'),
+  food: svg('<path d="M12 7c-1.5-2-5-2-6.5.5S5 14 7 17.5 10.5 21 12 20c1.5 1 3 1 5-2.5s2-8 .5-10.5S13.5 5 12 7z"/><path d="M12 7c0-2 1-3.5 3-4"/>'),
+  scan: svg('<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 8v8M11 8v8M14 8v8M17 8v8"/>'),
   dots: svg('<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>'),
 };
 
 // ---------- Start ----------
+N.initNutrition({ sheet, closeSheet, toast, ICON, dayLabel, today, addDays, chart, ui });
 S.subscribe(render);
 render();
 S.initSync();
