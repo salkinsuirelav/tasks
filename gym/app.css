@@ -173,3 +173,4 @@ main { max-width: 560px; margin: 0 auto; padding: calc(env(safe-area-inset-top) 
 .sport-inputs label { position: relative; }
 .sport-inputs label span { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--faint); font-size: 13px; pointer-events: none; }
 .target-inputs.cardio { grid-template-columns: 1fr; }
+.accent-txt { color: var(--accent); font-weight: 700; }
