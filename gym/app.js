@@ -9,7 +9,7 @@ import * as S from './store.js';
 import { LIBRARY, GROUPS, matches, norm, kindOfName, KIND_LABEL } from './exercises.js';
 import * as N from './nutrition.js';
 
-const VERSION = '0.9.0';
+const VERSION = '0.9.1';
 const $ = (sel, el = document) => el.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -114,7 +114,56 @@ const targetLine = (t, exId) => { if (!t) return ''; const k = exId ? kindOf(exI
 const trainSeg = () => `<div class="seg top-seg">${[['train', 'Training'], ['plans', 'Pläne']].map(([t, l]) => `<button data-tab="${t}" class="${ui.tab === t ? 'on' : ''}">${l}</button>`).join('')}</div>`;
 const ui = { tab: 'train', date: today(), exDetail: null, metric: 'w', histMode: 'cal', calMonth: today().slice(0, 7), sportType: 'fussball', planEdit: null };
 
-function go(tab) { ui.tab = tab; ui.exDetail = null; ui.planEdit = null; render(); window.scrollTo(0, 0); }
+function go(tab) { const same = ui.tab === tab; ui.tab = tab; ui.exDetail = null; ui.planEdit = null; if (!same) enter = 'in'; render(); window.scrollTo(0, 0); }
+
+// ---------- Animationen (Glass) ----------
+// enter: Inhalt beim Tab-/Tageswechsel einblenden ('in' | 'l' | 'r'). Nur einmal pro Wechsel, nicht bei jedem Sync.
+let enter = 'in';
+const TABS = [['train', 'Training', 'dumbbell'], ['food', 'Ernährung', 'food'], ['history', 'Verlauf', 'chart'], ['settings', 'Mehr', 'gear']];
+function renderTabbar() {
+  const tb = $('#tabbar');
+  if (!tb.dataset.ready) { tb.innerHTML = `<i class="tab-pill"></i>${TABS.map(([id, label, ic]) => `<button data-tab="${id}">${ICON[ic]}<span>${label}</span></button>`).join('')}`; tb.dataset.ready = '1'; }
+  const cur = ui.tab === 'plans' ? 'train' : ui.tab;
+  tb.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.tab === cur));
+  movePill(tb.querySelector('.tab-pill'), tb.querySelector('button.on'), !tb.dataset.placed);
+  tb.dataset.placed = '1';
+}
+function movePill(pill, target, instant) {
+  if (!pill || !target) return;
+  if (instant) pill.style.transition = 'none';
+  pill.style.width = target.offsetWidth + 'px';
+  pill.style.transform = `translateX(${target.offsetLeft}px)`;
+  if (instant) { void pill.offsetWidth; pill.style.transition = ''; }
+}
+// Segment-Umschalter: Pille gleitet von der alten zur neuen Position (FLIP)
+const segPos = {};
+function animateSegs() {
+  document.querySelectorAll('#main .seg').forEach((seg) => {
+    const key = [...seg.querySelectorAll('button')].map((b) => b.textContent).join('|');
+    const on = seg.querySelector('button.on');
+    if (!on) return;
+    const pill = document.createElement('i'); pill.className = 'seg-pill'; seg.prepend(pill);
+    const prev = segPos[key];
+    if (prev) { movePill(pill, prev, true); requestAnimationFrame(() => requestAnimationFrame(() => movePill(pill, on))); }
+    else movePill(pill, on, true);
+    segPos[key] = { offsetLeft: on.offsetLeft, offsetWidth: on.offsetWidth };
+  });
+}
+// Zahlen hochzählen (z. B. kcal übrig)
+const counted = {};
+function animateCounts() {
+  document.querySelectorAll('[data-count]').forEach((el) => {
+    const key = el.dataset.countKey || 'x', to = Number(el.dataset.count), from = counted[key] ?? to;
+    counted[key] = to;
+    if (from === to || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const t0 = performance.now(), dur = 550;
+    const step = (t) => { const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3); el.textContent = Math.round(from + (to - from) * e).toLocaleString('de-DE'); if (k < 1 && el.isConnected) requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+  });
+}
+// Kurz hervorheben, was gerade neu dazukam (Satz, Essen)
+ui.flash = null;
+function flash(id) { ui.flash = id; clearTimeout(flash.t); flash.t = setTimeout(() => { ui.flash = null; }, 900); }
 
 // ---------- Rendern ----------
 function render() {
@@ -126,8 +175,14 @@ function render() {
   else if (ui.tab === 'food') main.innerHTML = N.foodView(ui.date);
   else if (ui.tab === 'history') main.innerHTML = ui.exDetail ? exDetailView(ui.exDetail) : historyView();
   else main.innerHTML = settingsView();
-  $('#tabbar').innerHTML = [['train', 'Training', ICON.dumbbell], ['food', 'Ernährung', ICON.food], ['history', 'Verlauf', ICON.chart], ['settings', 'Mehr', ICON.gear]]
-    .map(([id, label, ic]) => `<button data-tab="${id}" class="${ui.tab === id || (id === 'train' && ui.tab === 'plans') ? 'on' : ''}">${ic}<span>${label}</span></button>`).join('');
+  renderTabbar();
+  if (enter) {
+    main.classList.remove('enter-in', 'enter-l', 'enter-r'); void main.offsetWidth;
+    main.classList.add(`enter-${enter}`); enter = null;
+    clearTimeout(render.t); render.t = setTimeout(() => main.classList.remove('enter-in', 'enter-l', 'enter-r'), 700);
+  }
+  animateSegs();
+  animateCounts();
   if (keepFocus) { const el = document.querySelector(`[data-keep="${keepFocus}"]`); if (el) { el.value = keepVal; el.focus(); } }
 }
 
@@ -166,7 +221,7 @@ function exCard(exId, date) {
     </div>
     ${last ? `<div class="last">Letztes Mal (${dayLabel(last.date)}): ${setsLine(last.sets)}</div>` : '<div class="last">Erstes Mal – viel Erfolg!</div>'}
     ${sets.length ? `<ol class="sets">${sets.map((s, i) => `
-      <li><span class="n">${i + 1}</span><span class="val">${setHtml(s)}</span>${isPR(s) ? '<span class="pr">PR</span>' : ''}
+      <li class="${ui.flash === s.id ? 'pop' : ''}"><span class="n">${i + 1}</span><span class="val">${setHtml(s)}</span>${isPR(s) ? '<span class="pr">PR</span>' : ''}
       <button class="icon-btn small faint" data-act="del-set" data-id="${s.id}" aria-label="Satz löschen">${ICON.x}</button></li>`).join('')}</ol>` : ''}
     <form class="add-set" data-ex="${exId}" data-kind="${kind}">
       ${FORM[kind].map(([f, unit, mode]) => {
@@ -517,7 +572,7 @@ function settingsView() {
 }
 // Design: Glass (Standard) oder Klassisch, pro Gerät. index.html setzt es schon vor dem ersten Zeichnen.
 const theme = () => { try { return localStorage.getItem('gym-theme') || 'glass'; } catch { return 'glass'; } };
-function setTheme(t) { try { localStorage.setItem('gym-theme', t); } catch {} document.documentElement.dataset.theme = t; render(); }
+function setTheme(t) { try { localStorage.setItem('gym-theme', t); } catch {} window.applyTheme?.(t); render(); }
 function helperLine() {
   const h = S.get('meta', 'helper');
   if (!h) return 'Läuft über den Mac-Helfer der Task-App (dein Claude-Abo). Noch nicht eingerichtet: Anleitung in helper/README.md.';
@@ -556,13 +611,36 @@ function chart(pts, unit) {
 }
 
 // ---------- Bottom-Sheet ----------
+let sheetToken = 0;
 function sheet(html, onMount) {
   const root = $('#sheet-root');
-  root.innerHTML = `<div class="backdrop" data-act="close-sheet"></div><div class="sheet">${html}</div>`;
+  const wasOpen = root.classList.contains('open') && !root.classList.contains('closing');
+  sheetToken++;
+  root.classList.remove('closing');
+  root.innerHTML = `<div class="backdrop" data-act="close-sheet"></div><div class="sheet${wasOpen ? ' swap' : ''}"><div class="grab"></div>${html}</div>`;
   root.classList.add('open');
-  onMount?.(root.querySelector('.sheet'));
+  const el = root.querySelector('.sheet');
+  dragToClose(el);
+  onMount?.(el);
 }
-function closeSheet() { N.stopScan(); const r = $('#sheet-root'); r.classList.remove('open'); r.innerHTML = ''; }
+function closeSheet() {
+  N.stopScan();
+  const r = $('#sheet-root');
+  if (!r.classList.contains('open')) return;
+  const my = ++sheetToken;
+  r.classList.add('closing');
+  setTimeout(() => { if (my !== sheetToken) return; r.classList.remove('open', 'closing'); r.innerHTML = ''; }, 260);
+}
+// Sheet nach unten wegziehen (wie bei iOS)
+function dragToClose(el) {
+  let y0 = null, dy = 0;
+  el.addEventListener('touchstart', (e) => { if (el.scrollTop > 0 || e.target.closest('input, textarea, select, video')) return; y0 = e.touches[0].clientY; dy = 0; el.style.transition = 'none'; }, { passive: true });
+  el.addEventListener('touchmove', (e) => { if (y0 === null) return; dy = Math.max(0, e.touches[0].clientY - y0); if (dy > 0) el.style.transform = `translateY(${dy}px)`; }, { passive: true });
+  el.addEventListener('touchend', () => {
+    if (y0 === null) return; y0 = null; el.style.transition = '';
+    if (dy > 110) closeSheet(); else el.style.transform = '';
+  });
+}
 
 // Übung auswählen (für Training oder Plan). onPick bekommt die Übungs-ID.
 let pickCb = null;
@@ -655,9 +733,9 @@ document.addEventListener('click', (e) => {
   const { act, id } = b.dataset;
   if (act.startsWith('n-') && N.onClick(act, b)) return;
   switch (act) {
-    case 'prev': ui.date = addDays(ui.date, -1); render(); break;
-    case 'next': ui.date = addDays(ui.date, 1); render(); break;
-    case 'today': ui.date = today(); render(); break;
+    case 'prev': ui.date = addDays(ui.date, -1); enter = 'l'; render(); break;
+    case 'next': ui.date = addDays(ui.date, 1); enter = 'r'; render(); break;
+    case 'today': enter = ui.date < today() ? 'r' : 'l'; ui.date = today(); render(); break;
     case 'add-ex': exercisePicker('Übung hinzufügen', exIdsOfDay(ui.date), addToDay); break;
     case 'close-sheet': closeSheet(); break;
     case 'pick': pickCb?.(id); break;
@@ -712,10 +790,10 @@ document.addEventListener('click', (e) => {
       S.remove('gym_plans', p.id); ui.planEdit = null; render(); break;
     }
     // Verlauf
-    case 'detail': closeSheet(); ui.tab = 'history'; ui.exDetail = id; render(); window.scrollTo(0, 0); break;
-    case 'back': ui.exDetail = null; render(); break;
+    case 'detail': closeSheet(); ui.tab = 'history'; ui.exDetail = id; enter = 'r'; render(); window.scrollTo(0, 0); break;
+    case 'back': ui.exDetail = null; enter = 'l'; render(); break;
     case 'metric': ui.metric = b.dataset.m; render(); break;
-    case 'hist-mode': ui.histMode = b.dataset.mode; render(); break;
+    case 'hist-mode': ui.histMode = b.dataset.mode; enter = 'in'; render(); break;
     case 'cal-prev': ui.calMonth = addMonth(ui.calMonth, -1); render(); break;
     case 'cal-next': ui.calMonth = addMonth(ui.calMonth, 1); render(); break;
     case 'cal-day': sportDaySheet(b.dataset.date); break;
@@ -786,6 +864,7 @@ document.addEventListener('submit', async (e) => {
     }
     const before = bestE1rm(exId), hadSets = setsOf(exId).length > 0;
     if (!S.get('gym_days', ui.date)) saveDay(ui.date, {}); // Plan des Tages festhalten, bevor der erste Satz kommt
+    set.id = S.uid(); flash(set.id); // vor dem Speichern merken, damit der neue Satz animiert erscheint
     S.put('gym_sets', set);
     if (!S.get('gym_days', ui.date).exIds.includes(exId)) saveDay(ui.date, {});
     if (kind === 'weight' && hadSets && e1rm(set.w, set.r) > before) toast('Neue Bestleistung! 💪');
@@ -822,7 +901,8 @@ const ICON = {
 };
 
 // ---------- Start ----------
-N.initNutrition({ sheet, closeSheet, toast, ICON, dayLabel, today, addDays, chart, ui });
+N.initNutrition({ sheet, closeSheet, toast, ICON, dayLabel, today, addDays, chart, ui, flash });
+window.addEventListener('resize', () => { const tb = $('#tabbar'); movePill(tb.querySelector('.tab-pill'), tb.querySelector('button.on'), true); });
 S.subscribe(render);
 render();
 S.initSync();
