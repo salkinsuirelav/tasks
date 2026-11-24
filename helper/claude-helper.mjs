@@ -66,10 +66,11 @@ function findClaude() {
 
 // ---------- 4. Claude ausführen ----------
 const BLOCKED = 'Bash,Edit,Write,MultiEdit,NotebookEdit,Task';
-function runClaude(claudePath, prompt, { web }) {
+function runClaude(claudePath, prompt, { web, read = false }) {
   fs.mkdirSync(WORK_DIR, { recursive: true });
   const args = ['-p', '--output-format', 'json', '--disallowedTools', web ? BLOCKED : `${BLOCKED},WebSearch,WebFetch`];
-  if (web) args.push('--allowedTools', 'WebSearch,WebFetch');
+  const allowed = [web && 'WebSearch,WebFetch', read && 'Read'].filter(Boolean).join(',');
+  if (allowed) args.push('--allowedTools', allowed);
   return new Promise((resolve, reject) => {
     const child = spawn(claudePath, args, { cwd: WORK_DIR, env: process.env });
     let out = '', err = '';
@@ -122,7 +123,7 @@ async function main() {
   const base = ['users', user.uid];
 
   // Lebenszeichen, damit die App "Mac-Helfer online" anzeigt
-  const beat = () => setDoc(doc(db, ...base, 'meta', 'helper'), { id: 'helper', lastSeen: Date.now(), host: os.hostname().replace(/\.local$/, ''), updatedAt: Date.now(), createdAt: Date.now() }).catch((e) => log('Heartbeat-Fehler:', e.message));
+  const beat = () => setDoc(doc(db, ...base, 'meta', 'helper'), { id: 'helper', lastSeen: Date.now(), host: os.hostname().replace(/\.local$/, ''), features: ['nutrition-image'], updatedAt: Date.now(), createdAt: Date.now() }).catch((e) => log('Heartbeat-Fehler:', e.message));
   beat();
   setInterval(beat, 60000);
 
@@ -137,7 +138,7 @@ async function main() {
     snap.docs.forEach((d) => {
       if (seen.has(d.id)) return;
       seen.add(d.id);
-      chain = chain.then(() => handle(d.ref, d.data())).finally(() => seen.delete(d.id));
+      chain = chain.then(() => handle(d.ref, d.data())).catch((e) => log('Auftrag abgebrochen:', e.message)).finally(() => seen.delete(d.id));
     });
   }, (e) => log('Fehler beim Zuhören:', e.message));
   log('Warte auf Aufträge …');
@@ -192,11 +193,20 @@ async function main() {
   server.listen(7777, '127.0.0.1', () => log('Schnell-Eingabe bereit: http://127.0.0.1:7777/add'));
 
   async function handle(ref, job) {
-    const label = job.type === 'plan' ? 'Wochenplanung' : `Aufgabe ${job.taskId}`;
+    const label = job.type === 'plan' ? 'Wochenplanung' : job.type === 'nutrition' ? 'Ernährung' : `Aufgabe ${job.taskId}`;
     log(`▶ Starte: ${label}`);
     await updateDoc(ref, { status: 'running', startedAt: Date.now(), updatedAt: Date.now() });
+    // Ernährung: Foto (kommt als Daten-URL im Auftrag) als Datei ablegen, damit Claude es mit "Read" ansehen kann
+    let prompt = job.prompt, img = null;
+    if (job.type === 'nutrition' && typeof job.image === 'string' && job.image.startsWith('data:image/')) {
+      fs.mkdirSync(WORK_DIR, { recursive: true });
+      img = path.join(WORK_DIR, `nut-${ref.id}.jpg`);
+      fs.writeFileSync(img, Buffer.from(job.image.split(',')[1], 'base64'));
+      prompt = prompt.replaceAll('{{IMAGE}}', img);
+    }
     try {
-      const result = await runClaude(claudePath, job.prompt, { web: job.type === 'task' });
+      const result = await runClaude(claudePath, prompt, { web: job.type === 'task', read: !!img });
+      if (img) await updateDoc(ref, { image: null }); // Foto nicht dauerhaft in Firebase lassen
       await updateDoc(ref, { status: 'done', result, finishedAt: Date.now(), updatedAt: Date.now() });
       // Ergebnis zeigt die App direkt aus dem Auftrag an (kurze Karte in der Aufgabe). Hier nur den Status zurücksetzen.
       if (job.type === 'task' && job.taskId) {
@@ -206,8 +216,10 @@ async function main() {
       }
       log(`✓ Fertig: ${label}`);
     } catch (e) {
-      await updateDoc(ref, { status: 'error', error: e.message, updatedAt: Date.now() });
+      await updateDoc(ref, { status: 'error', error: e.message, image: null, updatedAt: Date.now() }).catch(() => {}); // Auftrag evtl. schon gelöscht
       log(`✗ Fehler bei ${label}: ${e.message}`);
+    } finally {
+      if (img) fs.rmSync(img, { force: true });
     }
   }
 }
