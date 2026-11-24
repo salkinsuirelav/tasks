@@ -335,7 +335,7 @@ html[data-theme="glass"] {
 
 /* Oben: weicher Übergang statt harter Kante unter der Statusleiste, Inhalt verschwimmt beim Scrollen darunter */
 html[data-theme="glass"] body::after {
-  content: ""; position: fixed; left: 0; right: 0; top: 0; z-index: 9; pointer-events: none;
+  content: ""; position: fixed; left: 0; right: 0; top: 0; z-index: 9; pointer-events: none; opacity: 0; transition: opacity .25s;
   height: calc(env(safe-area-inset-top) + 34px);
   background: linear-gradient(var(--bg) 0%, color-mix(in srgb, var(--bg) 70%, transparent) 45%, transparent);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
@@ -427,3 +427,7 @@ html[data-theme="glass"] #toast.show { transform: translate(-50%, 0) scale(1); }
   html[data-theme="glass"] *, html[data-theme="glass"] *::before { animation: none !important; transition: none !important; }
 }
 #sheet-root.closing { pointer-events: none; }
+
+/* Weichzeichner oben nur, wenn gescrollt ist – sonst würde er das oberste Element anschneiden */
+html[data-theme="glass"].scrolled body::after { opacity: 1; }
+html[data-theme="glass"] main { padding-top: calc(env(safe-area-inset-top) + 16px); }

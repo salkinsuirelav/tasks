@@ -9,7 +9,7 @@ import * as S from './store.js';
 import { LIBRARY, GROUPS, matches, norm, kindOfName, KIND_LABEL } from './exercises.js';
 import * as N from './nutrition.js';
 
-const VERSION = '0.9.1';
+const VERSION = '0.9.2';
 const $ = (sel, el = document) => el.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -902,6 +902,9 @@ const ICON = {
 
 // ---------- Start ----------
 N.initNutrition({ sheet, closeSheet, toast, ICON, dayLabel, today, addDays, chart, ui, flash });
+// oben weichzeichnen erst, wenn Inhalt unter die Statusleiste scrollt
+const onScroll = () => document.documentElement.classList.toggle('scrolled', window.scrollY > 8);
+window.addEventListener('scroll', onScroll, { passive: true }); onScroll();
 window.addEventListener('resize', () => { const tb = $('#tabbar'); movePill(tb.querySelector('.tab-pill'), tb.querySelector('button.on'), true); });
 S.subscribe(render);
 render();
