@@ -148,15 +148,17 @@ const RAW = {
     "Farmer's Walk | farmers walk, farmer carry",
     'Dead Hang | dead hang, hängen',
   ],
-  'Ganzkörper & Cardio': [
+  'Cardio': [
+    'Laufband | treadmill, laufen, cardio',
+    'Crosstrainer | elliptical, cardio',
+    'Fahrrad-Ergometer | bike, stationary bike, cardio',
+    'Rudergerät | rowing machine, erg, cardio',
+    'Stepper | stairmaster, treppen, cardio',
+    'Seilspringen | jump rope, cardio',
+  ],
+  'Ganzkörper': [
     'Kettlebell Swings | kettlebell swing, kb swing',
     'Burpees | burpee',
-    'Laufband | treadmill, laufen',
-    'Crosstrainer | elliptical',
-    'Fahrrad-Ergometer | bike, stationary bike',
-    'Rudergerät | rowing machine, erg',
-    'Stepper | stairmaster, treppen',
-    'Seilspringen | jump rope',
     'Sled Push | schlitten, sled',
     'Thrusters | thruster',
     'Clean & Press | clean and press, umsetzen und drücken',
@@ -176,3 +178,6 @@ export const matches = (q, ...texts) => {
   const short = { kh: 'kurzhantel', lh: 'langhantel', db: 'dumbbell', bb: 'barbell' };
   return norm(q).split(' ').every((w) => hay.includes(short[w] || w) || hayTight.includes(short[w] || w));
 };
+
+// Cardio-Übungen werden mit Minuten + Stufe statt kg × Wdh erfasst
+export const isCardioName = (name) => LIBRARY.some((l) => l.group === 'Cardio' && norm(l.name) === norm(name));

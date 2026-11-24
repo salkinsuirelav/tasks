@@ -6,9 +6,9 @@
 //   gym_sets:      { id, exId, date: 'YYYY-MM-DD', w: kg, r: Wiederholungen, t: Zeitstempel }
 
 import * as S from './store.js';
-import { LIBRARY, GROUPS, matches, norm } from './exercises.js';
+import { LIBRARY, GROUPS, matches, norm, isCardioName } from './exercises.js';
 
-const VERSION = '0.5.0';
+const VERSION = '0.6.0';
 const $ = (sel, el = document) => el.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -69,13 +69,21 @@ function sessions(exId) {
   return Object.entries(by).map(([date, sets]) => ({ date, sets })).sort((a, b) => b.date.localeCompare(a.date));
 }
 const lastSession = (exId, before) => sessions(exId).find((x) => x.date < before);
-const bestE1rm = (exId) => Math.max(0, ...setsOf(exId).map((s) => e1rm(s.w, s.r)));
+// ---- Cardio (Minuten + Stufe statt kg × Wdh) ----
+const isCardio = (exId) => { const ex = S.get('gym_exercises', exId); return ex ? (ex.kind ? ex.kind === 'cardio' : isCardioName(ex.name)) : false; };
+const isCardioSet = (s) => s.min != null && s.w == null;
+const lvlLabel = (exId) => (/laufband/i.test(exName(exId)) ? 'km/h' : 'Stufe');
+const setTxt = (s) => (isCardioSet(s) ? `${kg(s.min)} min${s.lvl != null ? ` · ${lvlLabel(s.exId) === 'km/h' ? `${kg(s.lvl)} km/h` : `Stufe ${kg(s.lvl)}`}` : ''}` : `${kg(s.w)}×${s.r}`);
+const cardioMin = (sets) => sets.filter(isCardioSet).reduce((a, s) => a + s.min, 0);
+const weightSets = (sets) => sets.filter((s) => !isCardioSet(s));
+const bestE1rm = (exId) => Math.max(0, ...weightSets(setsOf(exId)).map((s) => e1rm(s.w, s.r)));
 const isPR = (set) => {
+  if (isCardioSet(set)) return false;
   const earlier = setsOf(set.exId).filter((s) => s.t < set.t);
-  return earlier.length > 0 && e1rm(set.w, set.r) > Math.max(...earlier.map((s) => e1rm(s.w, s.r)));
+  return earlier.length > 0 && e1rm(set.w, set.r) > Math.max(...weightSets(earlier).map((s) => e1rm(s.w, s.r)));
 };
-const setsLine = (sets) => sets.map((s) => `${kg(s.w)}×${s.r}`).join(' · ');
-const targetLine = (t) => (t ? `${t.sets || '?'} × ${t.reps || '?'}` : '');
+const setsLine = (sets) => sets.map(setTxt).join(' · ');
+const targetLine = (t, exId) => (!t ? '' : exId && isCardio(exId) ? `${t.reps || '?'} min` : `${t.sets || '?'} × ${t.reps || '?'}`);
 
 
 // ---------- Zustand der Oberfläche ----------
@@ -100,8 +108,8 @@ function render() {
 function trainView() {
   const d = ui.date, ids = exIdsOfDay(d), plan = planOfDate(d);
   const total = setsOfDay(d);
-  const vol = total.reduce((a, s) => a + s.w * s.r, 0);
-  const sub = total.length ? `${total.length} Sätze · ${kg(vol)} kg Volumen` : d > today() ? 'Geplant' : 'Noch nichts geloggt';
+  const ws = weightSets(total), vol = ws.reduce((a, s) => a + s.w * s.r, 0), cmin = cardioMin(total);
+  const sub = total.length ? [ws.length ? `${ws.length} ${ws.length === 1 ? 'Satz' : 'Sätze'} · ${kg(vol)} kg Volumen` : '', cmin ? `${kg(cmin)} min Cardio` : ''].filter(Boolean).join(' · ') : d > today() ? 'Geplant' : 'Noch nichts geloggt';
   return `
   <header class="top">
     <button class="icon-btn" data-act="prev" aria-label="Tag zurück">${ICON.left}</button>
@@ -121,23 +129,28 @@ function exCard(exId, date) {
   const last = lastSession(exId, date);
   const tgt = targetOf(date, exId);
   const ref = sets[sets.length - 1] || last?.sets[0];
-  const done = tgt?.sets && sets.length >= tgt.sets;
+  const cardio = isCardio(exId);
+  const done = cardio ? tgt && sets.length > 0 && cardioMin(sets) >= (parseInt(tgt.reps) || 1) : tgt?.sets && sets.length >= tgt.sets;
   return `
   <section class="card ${done ? 'done' : ''}" data-ex="${exId}">
     <div class="card-head">
       <button class="ex-name" data-act="detail" data-id="${exId}">${esc(exName(exId))}</button>
-      ${tgt ? `<span class="target">${done ? '✓ ' : ''}${tgt.sets ? `${sets.length}/${tgt.sets}` : ''} · Ziel ${esc(targetLine(tgt))}</span>` : ''}
+      ${tgt ? `<span class="target">${done ? '✓ ' : ''}${cardio ? `${kg(cardioMin(sets))} min` : tgt.sets ? `${sets.length}/${tgt.sets}` : ''} · Ziel ${esc(targetLine(tgt, exId))}</span>` : ''}
       <button class="icon-btn small" data-act="ex-menu" data-id="${exId}" aria-label="Optionen">${ICON.dots}</button>
     </div>
     ${last ? `<div class="last">Letztes Mal (${dayLabel(last.date)}): ${setsLine(last.sets)}</div>` : '<div class="last">Erstes Mal – viel Erfolg!</div>'}
     ${sets.length ? `<ol class="sets">${sets.map((s, i) => `
-      <li><span class="n">${i + 1}</span><span class="val"><b>${kg(s.w)}</b> kg × <b>${s.r}</b></span>${isPR(s) ? '<span class="pr">PR</span>' : ''}
+      <li><span class="n">${i + 1}</span><span class="val">${isCardioSet(s) ? `<b>${kg(s.min)}</b> min${s.lvl != null ? (lvlLabel(exId) === 'km/h' ? ` · <b>${kg(s.lvl)}</b> km/h` : ` · Stufe <b>${kg(s.lvl)}</b>`) : ''}` : `<b>${kg(s.w)}</b> kg × <b>${s.r}</b>`}</span>${isPR(s) ? '<span class="pr">PR</span>' : ''}
       <button class="icon-btn small faint" data-act="del-set" data-id="${s.id}" aria-label="Satz löschen">${ICON.x}</button></li>`).join('')}</ol>` : ''}
-    <form class="add-set" data-ex="${exId}">
-      <label><input data-keep="w-${exId}" name="w" inputmode="decimal" autocomplete="off" placeholder="–" value="${ref ? kg(ref.w) : ''}"><span>kg</span></label>
-      <label><input data-keep="r-${exId}" name="r" inputmode="numeric" autocomplete="off" placeholder="${parseInt(tgt?.reps) || '–'}" value="${ref ? ref.r : ''}"><span>Wdh</span></label>
+    ${cardio ? `<form class="add-set" data-ex="${exId}" data-kind="cardio">
+      <label><input data-keep="m-${exId}" name="min" inputmode="decimal" autocomplete="off" placeholder="${parseInt(tgt?.reps) || '–'}" value="${ref && isCardioSet(ref) ? kg(ref.min) : ''}"><span>min</span></label>
+      <label><input data-keep="l-${exId}" name="lvl" inputmode="decimal" autocomplete="off" placeholder="–" value="${ref && isCardioSet(ref) && ref.lvl != null ? kg(ref.lvl) : ''}"><span>${lvlLabel(exId)}</span></label>
+      <button class="btn primary" type="submit">${ICON.plus} Eintrag</button>
+    </form>` : `<form class="add-set" data-ex="${exId}">
+      <label><input data-keep="w-${exId}" name="w" inputmode="decimal" autocomplete="off" placeholder="–" value="${ref && !isCardioSet(ref) ? kg(ref.w) : ''}"><span>kg</span></label>
+      <label><input data-keep="r-${exId}" name="r" inputmode="numeric" autocomplete="off" placeholder="${parseInt(tgt?.reps) || '–'}" value="${ref && !isCardioSet(ref) ? ref.r : ''}"><span>Wdh</span></label>
       <button class="btn primary" type="submit">${ICON.plus} Satz</button>
-    </form>
+    </form>`}
   </section>`;
 }
 
@@ -336,11 +349,13 @@ function planEditView(id) {
           <button class="icon-btn small" data-act="item-move" data-i="${i}" data-dir="1" ${i === p.items.length - 1 ? 'disabled' : ''} aria-label="Nach unten">${ICON.down}</button>
           <button class="icon-btn small faint" data-act="item-del" data-i="${i}" aria-label="Entfernen">${ICON.x}</button>
         </span></div>
-      <div class="target-inputs">
+      ${isCardio(it.exId) ? `<div class="target-inputs cardio">
+        <label><input data-keep="r-${i}" data-item="${i}" data-field="reps" inputmode="numeric" value="${esc(it.reps ?? '')}" placeholder="20"><span>Minuten</span></label>
+      </div>` : `<div class="target-inputs">
         <label><input data-keep="s-${i}" data-item="${i}" data-field="sets" inputmode="numeric" value="${it.sets ?? ''}" placeholder="3"><span>Sätze</span></label>
         <span class="times">×</span>
         <label><input data-keep="r-${i}" data-item="${i}" data-field="reps" value="${esc(it.reps ?? '')}" placeholder="8–10"><span>Wdh</span></label>
-      </div>
+      </div>`}
     </section>`).join('')}</div>` : '<p class="muted">Noch keine Übungen im Plan.</p>'}
   <button class="btn wide" data-act="plan-add-ex">${ICON.plus} Übung zum Plan hinzufügen</button>
   <button class="link center danger-link" data-act="plan-del">Plan löschen</button>`;
@@ -383,9 +398,11 @@ function historyView() {
   const list = exercises().map((ex) => ({ ex, ses: sessions(ex.id) })).filter((x) => x.ses.length).sort((a, b) => b.ses[0].date.localeCompare(a.ses[0].date));
   return `<header class="top"><div class="title"><h1>Verlauf</h1></div></header>${seg}
   ${list.length ? `<div class="list">${list.map(({ ex, ses }) => {
-    const pts = ses.slice(0, 12).reverse().map((x) => Math.max(...x.sets.map((s) => s.w)));
-    const top = Math.max(...setsOf(ex.id).map((s) => s.w));
-    return `<button class="row" data-act="detail" data-id="${ex.id}"><div><b>${esc(ex.name)}</b><div class="muted">${ses.length}× · zuletzt ${dayLabel(ses[0].date)} · max ${kg(top)} kg</div></div>${spark(pts)}</button>`;
+    const c = isCardio(ex.id);
+    const val = (x) => (c ? cardioMin(x.sets) : Math.max(0, ...weightSets(x.sets).map((s) => s.w)));
+    const pts = ses.slice(0, 12).reverse().map(val);
+    const top = Math.max(...ses.map(val));
+    return `<button class="row" data-act="detail" data-id="${ex.id}"><div><b>${esc(ex.name)}</b><div class="muted">${ses.length}× · zuletzt ${dayLabel(ses[0].date)} · max ${kg(top)} ${c ? 'min' : 'kg'}</div></div>${spark(pts)}</button>`;
   }).join('')}</div>` : `<div class="empty"><p>Sobald du Sätze loggst, siehst du hier deinen Fortschritt.</p></div>`}`;
 }
 
@@ -393,10 +410,15 @@ function exDetailView(exId) {
   const ex = S.get('gym_exercises', exId);
   if (!ex) { ui.exDetail = null; return historyView(); }
   const ses = sessions(exId);
-  const metrics = { w: ['Max. Gewicht', (x) => Math.max(...x.sets.map((s) => s.w)), 'kg'], e: ['Gesch. 1RM', (x) => Math.max(...x.sets.map((s) => e1rm(s.w, s.r))), 'kg'], v: ['Volumen', (x) => x.sets.reduce((a, s) => a + s.w * s.r, 0), 'kg'] };
+  const cardio = isCardio(exId);
+  const metrics = cardio
+    ? { w: ['Dauer', (x) => cardioMin(x.sets), 'min'], e: [lvlLabel(exId) === 'km/h' ? 'Tempo' : 'Stufe', (x) => Math.max(0, ...x.sets.filter(isCardioSet).map((s) => s.lvl || 0)), lvlLabel(exId) === 'km/h' ? 'km/h' : ''] }
+    : { w: ['Max. Gewicht', (x) => Math.max(0, ...weightSets(x.sets).map((s) => s.w)), 'kg'], e: ['Gesch. 1RM', (x) => Math.max(0, ...weightSets(x.sets).map((s) => e1rm(s.w, s.r))), 'kg'], v: ['Volumen', (x) => weightSets(x.sets).reduce((a, s) => a + s.w * s.r, 0), 'kg'] };
+  if (!metrics[ui.metric]) ui.metric = 'w';
   const [, fn, unit] = metrics[ui.metric];
   const pts = ses.slice().reverse().map((x) => ({ date: x.date, v: fn(x) }));
-  const best = setsOf(exId).reduce((b, s) => (!b || e1rm(s.w, s.r) > e1rm(b.w, b.r) ? s : b), null);
+  const best = weightSets(setsOf(exId)).reduce((b, s) => (!b || e1rm(s.w, s.r) > e1rm(b.w, b.r) ? s : b), null);
+  const cs = setsOf(exId).filter(isCardioSet);
   return `
   <header class="top">
     <button class="icon-btn" data-act="back" aria-label="Zurück">${ICON.left}</button>
@@ -405,8 +427,9 @@ function exDetailView(exId) {
   </header>
   ${ses.length ? `
   <div class="stats">
-    <div><span>Bester Satz</span><b>${kg(best.w)} × ${best.r}</b></div>
-    <div><span>Gesch. 1RM</span><b>${kg(Math.round(e1rm(best.w, best.r) * 2) / 2)} kg</b></div>
+    ${cardio ? `<div><span>Längste Einheit</span><b>${kg(Math.max(0, ...ses.map((x) => cardioMin(x.sets))))} min</b></div>
+    <div><span>Gesamt</span><b>${kg(cardioMin(cs))} min</b></div>` : best ? `<div><span>Bester Satz</span><b>${kg(best.w)} × ${best.r}</b></div>
+    <div><span>Gesch. 1RM</span><b>${kg(Math.round(e1rm(best.w, best.r) * 2) / 2)} kg</b></div>` : '<div></div><div></div>'}
     <div><span>Einheiten</span><b>${ses.length}</b></div>
   </div>
   <div class="seg">${Object.entries(metrics).map(([k, [l]]) => `<button data-act="metric" data-m="${k}" class="${ui.metric === k ? 'on' : ''}">${l}</button>`).join('')}</div>
@@ -550,6 +573,7 @@ function exMenu(exId) {
       ${i > 0 ? `<button class="row" data-act="move" data-id="${exId}" data-dir="-1">Nach oben</button>` : ''}
       ${i < ids.length - 1 ? `<button class="row" data-act="move" data-id="${exId}" data-dir="1">Nach unten</button>` : ''}
       <button class="row" data-act="detail" data-id="${exId}">Verlauf ansehen</button>
+      <button class="row" data-act="toggle-kind" data-id="${exId}">${isCardio(exId) ? 'Mit kg × Wdh erfassen' : 'Als Cardio erfassen (Minuten + Stufe)'}</button>
       <button class="row danger" data-act="remove-ex" data-id="${exId}">Aus diesem Training entfernen</button>
     </div>`);
 }
@@ -596,6 +620,7 @@ document.addEventListener('click', (e) => {
       closeSheet(); break;
     }
     case 'choose-plan': choosePlanSheet(); break;
+    case 'toggle-kind': S.patch('gym_exercises', id, { kind: isCardio(id) ? 'weight' : 'cardio' }); closeSheet(); break;
     case 'wo-start': startWorkout(); break;
     case 'wo-stop': if (confirm('Training beenden und in den Kalender eintragen?')) stopWorkout(); break;
     case 'set-plan': setPlan(id); break;
@@ -613,8 +638,8 @@ document.addEventListener('click', (e) => {
     case 'plan-add-ex': {
       const p = S.get('gym_plans', ui.planEdit);
       exercisePicker('Übung zum Plan', p.items.map((i) => i.exId), (exId) => {
-        const last = p.items[p.items.length - 1];
-        patchItems((items) => items.push({ exId, sets: last?.sets ?? 3, reps: last?.reps ?? '8–10' }));
+        const last = [...p.items].reverse().find((i) => !isCardio(i.exId));
+        patchItems((items) => items.push(isCardio(exId) ? { exId, sets: 1, reps: '20' } : { exId, sets: last?.sets ?? 3, reps: last?.reps ?? '8–10' }));
         closeSheet();
       });
       break;
@@ -685,7 +710,16 @@ document.addEventListener('submit', async (e) => {
     sportDaySheet(f.dataset.date);
     return;
   }
-  if (f.classList.contains('add-set')) {
+  if (f.classList.contains('add-set') && f.dataset.kind === 'cardio') {
+    const min = num(f.min.value), lvl = num(f.lvl.value);
+    if (!min || min <= 0) { f.min.focus(); return toast('Minuten eintragen'); }
+    const exId = f.dataset.ex;
+    if (!S.get('gym_days', ui.date)) saveDay(ui.date, {});
+    S.put('gym_sets', { exId, date: ui.date, min, lvl, t: Date.now() });
+    if (!S.get('gym_days', ui.date).exIds.includes(exId)) saveDay(ui.date, {});
+    navigator.vibrate?.(15);
+    document.activeElement?.blur();
+  } else if (f.classList.contains('add-set')) {
     const w = num(f.w.value), r = Math.round(num(f.r.value));
     if (w === null || w < 0) { f.w.focus(); return toast('Gewicht eintragen'); }
     if (!r || r < 1) { f.r.focus(); return toast('Wiederholungen eintragen'); }
