@@ -13,7 +13,15 @@
   <link rel="icon" type="image/svg+xml" href="icon.svg">
   <meta name="theme-color" content="#f4f3ef" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#121211" media="(prefers-color-scheme: dark)">
-  <script>try { document.documentElement.dataset.theme = localStorage.getItem('gym-theme') || 'glass'; } catch (e) {}</script>
+  <script>
+    // Design vor dem ersten Zeichnen setzen; Statusleisten-Farbe passend zum Hintergrund, damit oben keine Kante entsteht
+    window.applyTheme = function (t) {
+      document.documentElement.dataset.theme = t;
+      var c = t === 'glass' ? ['#f2efea', '#0f0f12'] : ['#f4f3ef', '#121211'];
+      document.querySelectorAll('meta[name=theme-color]').forEach(function (m, i) { m.setAttribute('content', c[i]); });
+    };
+    try { window.applyTheme(localStorage.getItem('gym-theme') || 'glass'); } catch (e) { window.applyTheme('glass'); }
+  </script>
   <link rel="stylesheet" href="app.css">
 </head>
 <body>

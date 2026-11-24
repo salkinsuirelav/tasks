@@ -53,7 +53,7 @@ export function foodView(date) {
   </header>
   ${date !== today ? `<button class="link center" data-act="today">Zurück zu heute</button>` : ''}
   <section class="card n-sum">
-    <div class="n-kcal"><div><b class="${left < 0 ? 'danger' : ''}">${r0(Math.abs(left))}</b><span>${left < 0 ? 'kcal drüber' : 'kcal übrig'}</span></div>
+    <div class="n-kcal"><div><b class="${left < 0 ? 'danger' : ''}" data-count="${Math.round(Math.abs(left))}" data-count-key="kcal-${date}">${r0(Math.abs(left))}</b><span>${left < 0 ? 'kcal drüber' : 'kcal übrig'}</span></div>
       <div class="muted">${r0(s.kcal)} gegessen</div></div>
     ${bar(s.kcal, g.kcal)}
     <div class="n-macros">${macro('p', 'Protein')}${macro('c', 'Kohlenhydrate')}${macro('f', 'Fett')}</div>
@@ -69,7 +69,7 @@ export function foodView(date) {
     return `<section class="card n-meal">
       <div class="card-head"><b>${icon} ${label}</b><span class="muted">${items.length ? `${r0(ms.kcal)} kcal · ${r0(ms.p)} g P` : ''}</span>
         <button class="icon-btn small" data-act="n-add" data-meal="${m}" aria-label="${label} hinzufügen">${X.ICON.plus}</button></div>
-      ${items.map((x) => `<button class="n-item" data-act="n-edit" data-id="${x.id}"><span>${esc(x.name)}<small class="muted"> · ${r0(x.g)} ${unitOf(x)}</small></span><span class="muted">${r0(tot(x).kcal)}</span></button>`).join('')}
+      ${items.map((x) => `<button class="n-item ${X.ui.flash === x.id ? 'pop' : ''}" data-act="n-edit" data-id="${x.id}"><span>${esc(x.name)}<small class="muted"> · ${r0(x.g)} ${unitOf(x)}</small></span><span class="muted">${r0(tot(x).kcal)}</span></button>`).join('')}
     </section>`;
   }).join('')}`;
 }
@@ -184,7 +184,8 @@ let pendingFood = null;
 
 function logFood(food, g, meal, date) {
   const saved = S.put('nut_foods', { ...(S.get('nut_foods', food.id) || {}), ...food, lastUsed: Date.now(), uses: (S.get('nut_foods', food.id)?.uses || 0) + 1 });
-  S.put('nut_log', { date, meal, foodId: saved.id, name: food.name, brand: food.brand || '', unit: unitOf(food), per: { kcal: food.kcal, p: food.p, c: food.c, f: food.f }, g, t: Date.now() });
+  const id = S.uid(); X.flash(id);
+  S.put('nut_log', { id, date, meal, foodId: saved.id, name: food.name, brand: food.brand || '', unit: unitOf(food), per: { kcal: food.kcal, p: food.p, c: food.c, f: food.f }, g, t: Date.now() });
 }
 
 // ---------- Eigenes Lebensmittel ----------
