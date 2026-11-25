@@ -240,32 +240,41 @@ html[data-design="glass"] .flash:not(.open):active { transform: scale(.985); tra
 @media (prefers-color-scheme: dark) { html[data-design="glass"] .btn:not(.primary):active { background: rgba(255,255,255,.14); } }
 
 /* Inhalt beim Tab-Wechsel: Karten gleiten gestaffelt herein */
-html[data-design="glass"] main.enter-in > * { animation: rise .55s var(--ease-out) both; }
+html[data-design="glass"] main.enter-in > * { animation: g-rise .55s var(--ease-out) both; }
 html[data-design="glass"] main.enter-in > *:nth-child(2) { animation-delay: .04s; }
 html[data-design="glass"] main.enter-in > *:nth-child(3) { animation-delay: .08s; }
 html[data-design="glass"] main.enter-in > *:nth-child(4) { animation-delay: .12s; }
 html[data-design="glass"] main.enter-in > *:nth-child(5) { animation-delay: .16s; }
 html[data-design="glass"] main.enter-in > *:nth-child(n+6) { animation-delay: .2s; }
-html[data-design="glass"] main.enter-in .list > * { animation: rise .55s var(--ease-out) both; }
+html[data-design="glass"] main.enter-in .list > * { animation: g-rise .55s var(--ease-out) both; }
 html[data-design="glass"] main.enter-in .list > *:nth-child(2) { animation-delay: .1s; }
 html[data-design="glass"] main.enter-in .list > *:nth-child(3) { animation-delay: .14s; }
 html[data-design="glass"] main.enter-in .list > *:nth-child(n+4) { animation-delay: .18s; }
-@keyframes rise { from { opacity: 0; transform: translateY(14px) scale(.985); filter: blur(4px); } }
+html[data-design="glass"] main.enter-in > :is(.flash, .grades) { animation-name: g-lift; }
+@keyframes g-rise { from { opacity: 0; transform: translateY(14px) scale(.985); } }
 /* Lernkarte: Antwort zeigen = Karte dreht sich um, nächste Karte gleitet von rechts herein */
 html[data-design="glass"] main { perspective: 1400px; }
 /* Karte nur beim echten Wechsel animieren (enter-*), nicht bei jedem Neuzeichnen */
 html[data-design="glass"] .flash { animation: none; }
-html[data-design="glass"] main.enter-flip .flash { animation: flip .6s var(--spring) both; }
-html[data-design="glass"] main.enter-flip .grades { animation: rise .5s var(--ease-out) .12s both; }
-html[data-design="glass"] main.enter-flip .grades .g { animation: pop .5s var(--spring) both; }
-html[data-design="glass"] main.enter-flip .grades .g:nth-child(2) { animation-delay: .17s; }
-html[data-design="glass"] main.enter-flip .grades .g:nth-child(3) { animation-delay: .22s; }
-html[data-design="glass"] main.enter-flip .grades .g:nth-child(4) { animation-delay: .27s; }
-html[data-design="glass"] main.enter-flip .grades .g:nth-child(1) { animation-delay: .12s; }
-html[data-design="glass"] main.enter-next .flash, html[data-design="glass"] main.enter-next .btn.show { animation: from-r .5s var(--ease-out) both; }
-html[data-design="glass"] main.enter-next .btn.show { animation-delay: .05s; }
-@keyframes flip { 0% { transform: rotateY(-70deg) scale(.96); opacity: .3; } 100% { transform: none; opacity: 1; } }
-@keyframes from-r { from { opacity: 0; transform: translateX(40px) scale(.98); } }
+/* Lernkarte: Die Glasfläche selbst bleibt stehen (Deckkraft/Drehung auf Glas mit Weichzeichner flackert auf dem iPhone).
+   Animiert wird nur der Inhalt: Antwort gleitet ein, nächste Karte schiebt ihren Inhalt von rechts herein. */
+html[data-design="glass"] main.enter-flip .flash.open > :is(.divider, .answer, .rom, .expl, .example) { animation: g-up .45s var(--ease-out) both; }
+html[data-design="glass"] main.enter-flip .flash.open > .rom { animation-delay: .04s; }
+html[data-design="glass"] main.enter-flip .flash.open > .expl { animation-delay: .08s; }
+html[data-design="glass"] main.enter-flip .flash.open > .example { animation-delay: .12s; }
+html[data-design="glass"] main.enter-flip .grades { animation: g-lift .5s var(--spring) both; }
+html[data-design="glass"] main.enter-flip .grades .g { animation: pop .45s var(--spring) both; }
+html[data-design="glass"] main.enter-flip .grades .g:nth-child(1) { animation-delay: .04s; }
+html[data-design="glass"] main.enter-flip .grades .g:nth-child(2) { animation-delay: .08s; }
+html[data-design="glass"] main.enter-flip .grades .g:nth-child(3) { animation-delay: .12s; }
+html[data-design="glass"] main.enter-flip .grades .g:nth-child(4) { animation-delay: .16s; }
+html[data-design="glass"] main.enter-next .flash { animation: g-nudge .45s var(--spring) both; }
+html[data-design="glass"] main.enter-next .flash > * { animation: g-in-r .4s var(--ease-out) both; }
+html[data-design="glass"] main.enter-next .btn.show { animation: g-lift .45s var(--spring) both; }
+@keyframes g-up { from { opacity: 0; transform: translateY(10px); } }
+@keyframes g-in-r { from { opacity: 0; transform: translateX(24px); } }
+@keyframes g-nudge { from { transform: scale(.985); } }
+@keyframes g-lift { from { transform: translateY(14px); } }
 @keyframes pop { 0% { opacity: 0; transform: scale(.8); } 60% { transform: scale(1.04); } 100% { transform: scale(1); } }
 
 /* Sheets federn hoch, gleiten raus; nach unten wegziehbar */
