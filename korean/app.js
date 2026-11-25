@@ -10,7 +10,7 @@ import * as S from './store.js';
 import { grade, preview, newSrs, dayStart } from './srs.js';
 import { HANGUL_DECK } from './hangul.js';
 
-const VERSION = '0.2.1';
+const VERSION = '0.2.2';
 const $ = (sel, el = document) => el.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pad = (n) => String(n).padStart(2, '0');
