@@ -12,7 +12,7 @@ self.addEventListener('install', (e) => {
   self.skipWaiting();
 });
 self.addEventListener('activate', (e) => {
-  e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== VERSION && !k.startsWith('gym-') && !k.startsWith('hub-')).map((k) => caches.delete(k)))));
+  e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== VERSION && !/^(gym|hub|ko)-/.test(k)).map((k) => caches.delete(k)))));
   self.clients.claim();
 });
 
