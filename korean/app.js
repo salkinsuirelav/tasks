@@ -10,7 +10,7 @@ import * as S from './store.js';
 import { grade, preview, newSrs, dayStart } from './srs.js';
 import { HANGUL_DECK } from './hangul.js';
 
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 const $ = (sel, el = document) => el.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pad = (n) => String(n).padStart(2, '0');
@@ -171,10 +171,41 @@ function render() {
   const view = { learn: viewLearn, add: viewAdd, cards: viewCards, more: viewMore }[ui.tab] || viewLearn;
   const active = document.activeElement;
   const keep = active && active.id && ['add-text', 'search'].includes(active.id) ? { id: active.id, pos: active.selectionStart } : null;
-  $('#main').innerHTML = view();
-  $('#tabbar').innerHTML = TABS.map(([id, label, icon]) => `<button class="${ui.tab === id ? 'on' : ''}" data-act="tab" data-id="${id}">${icon}<span>${label}</span>${id === 'learn' && counts().todo ? `<i class="badge">${counts().todo}</i>` : ''}</button>`).join('');
+  const main = $('#main');
+  main.innerHTML = view();
+  $('#tabbar').innerHTML = `<i class="tab-pill"></i>` + TABS.map(([id, label, icon]) => `<button class="${ui.tab === id ? 'on' : ''}" data-act="tab" data-id="${id}">${icon}<span>${label}</span>${id === 'learn' && counts().todo ? `<i class="badge">${counts().todo}</i>` : ''}</button>`).join('');
+  // Animationen (nur im Glass-Design sichtbar, CSS entscheidet)
+  slidePill($('#tabbar'), 'tabbar');
+  main.querySelectorAll('.segs').forEach((seg) => slidePill(seg, 'seg:' + [...seg.querySelectorAll('.seg')].map((b) => b.textContent).join('|'), 'seg-pill'));
+  if (ui.anim) {
+    main.classList.remove('enter-in', 'enter-next', 'enter-flip'); void main.offsetWidth;
+    main.classList.add('enter-' + ui.anim); ui.anim = null;
+    clearTimeout(render.t); render.t = setTimeout(() => main.classList.remove('enter-in', 'enter-next', 'enter-flip'), 700);
+  }
   if (keep) { const el = $('#' + keep.id); if (el) { el.focus(); try { el.setSelectionRange(keep.pos, keep.pos); } catch {} } }
 }
+
+// ---------- Animationen (Glass) ----------
+// Pille gleitet von der alten zur neuen Position (FLIP): alte Position merken, nach dem Neuzeichnen dorthin setzen und loslaufen lassen.
+const pillPos = {};
+function slidePill(box, key, cls = 'tab-pill') {
+  let pill = box.querySelector(':scope > .' + cls);
+  if (!pill) { pill = document.createElement('i'); pill.className = cls; box.prepend(pill); }
+  const on = box.querySelector(':scope > .on');
+  if (!on) { pill.style.opacity = '0'; return; }
+  const to = { x: on.offsetLeft, w: on.offsetWidth }, from = pillPos[key];
+  const place = (p) => { pill.style.width = p.w + 'px'; pill.style.transform = `translateX(${p.x}px)`; };
+  pill.style.transition = 'none'; place(from || to); void pill.offsetWidth; pill.style.transition = '';
+  if (from && (from.x !== to.x || from.w !== to.w)) requestAnimationFrame(() => requestAnimationFrame(() => place(to)));
+  pillPos[key] = to;
+}
+ui.anim = 'in';
+// Oben weich ausblenden, sobald gescrollt wird
+addEventListener('scroll', () => document.documentElement.classList.toggle('scrolled', scrollY > 4), { passive: true });
+
+// Design: Glass (Standard) oder Klassisch, pro Gerät. index.html setzt es schon vor dem ersten Zeichnen.
+const design = () => { try { return localStorage.getItem('ko-design') || 'glass'; } catch { return 'glass'; } };
+function setDesign(d) { try { localStorage.setItem('ko-design', d); } catch {} window.applyDesign?.(d); render(); }
 
 // ---------- Lernen ----------
 function pickCard(skipId) {
@@ -221,6 +252,7 @@ function reveal() {
   ui.shown = true;
   const c = S.get('ko_cards', ui.cur);
   if (settings().autoplay && ui.curDir === 'de-ko' && c) speak(sayOf(c));
+  ui.anim = 'flip';
   render();
 }
 
@@ -233,6 +265,7 @@ function answer(g) {
   S.put('ko_days', { ...d, n: (d.n || 0) + 1, newN: (d.newN || 0) + (wasNew ? 1 : 0), again: (d.again || 0) + (g === 1 ? 1 : 0) });
   const next = pickCard(c.id);
   if (next && settings().autoplay && ui.curDir === 'ko-de') speak(sayOf(next));
+  ui.anim = 'next';
   render();
 }
 
@@ -327,6 +360,9 @@ function viewMore() {
       <p class="label">Neue Karten pro Tag</p><div class="segs">${[5, 10, 15, 20, 30].map((n) => opt('newPerDay', n, n)).join('')}</div>
       <p class="label">Abfrage-Richtung</p><div class="segs">${opt('dir', 'ko-de', '한 → DE')}${opt('dir', 'de-ko', 'DE → 한')}${opt('dir', 'mix', 'Gemischt')}</div>
       <p class="label">Aussprache automatisch abspielen</p><div class="segs">${opt('autoplay', true, 'An')}${opt('autoplay', false, 'Aus')}</div></div>
+    <div class="card"><h2>Design</h2>
+      <div class="theme-pick">${[['glass', 'Glass'], ['classic', 'Klassisch']].map(([d, l]) => `<button class="t-${d} ${design() === d ? 'on' : ''}" data-act="design" data-v="${d}"><i></i>${l}</button>`).join('')}</div>
+      <p class="muted small">Gilt für dieses Gerät.</p></div>
     <div class="card"><h2>Decks</h2><p class="muted">Hangul-Starterdeck: ${HANGUL_DECK.length} Karten (Vokale, Konsonanten, Doppelkonsonanten, Mischvokale, Leseregeln).</p>
       <button class="btn" data-act="hangul">${cards().some((c) => c.deck === 'hangul') ? 'Fehlende Hangul-Karten ergänzen' : 'Hangul-Deck hinzufügen'}</button></div>
     <div class="card"><h2>Import & Export</h2>
@@ -374,11 +410,34 @@ function exportCards() {
 }
 
 // ---------- Sheet + Toast ----------
+let sheetToken = 0;
 function sheet(html) {
-  $('#sheet-root').innerHTML = `<div class="backdrop" data-act="close"></div><div class="sheet">${html}</div>`;
+  const root = $('#sheet-root');
+  const wasOpen = !!root.querySelector('.sheet') && !root.classList.contains('closing');
+  sheetToken++; root.classList.remove('closing');
+  root.innerHTML = `<div class="backdrop" data-act="close"></div><div class="sheet${wasOpen ? ' swap' : ''}"><div class="grab"></div>${html}</div>`;
   document.body.classList.add('sheet-open');
+  dragToClose(root.querySelector('.sheet'));
 }
-function closeSheet() { $('#sheet-root').innerHTML = ''; document.body.classList.remove('sheet-open'); }
+function closeSheet() {
+  const root = $('#sheet-root');
+  document.body.classList.remove('sheet-open');
+  if (!root.innerHTML || root.classList.contains('closing')) return;
+  if (design() !== 'glass' || matchMedia('(prefers-reduced-motion: reduce)').matches) { root.innerHTML = ''; return; }
+  const my = ++sheetToken;
+  root.classList.add('closing');
+  setTimeout(() => { if (my !== sheetToken) return; root.classList.remove('closing'); root.innerHTML = ''; }, 260);
+}
+// Sheet nach unten wegziehen (wie bei iOS)
+function dragToClose(el) {
+  let y0 = null, dy = 0;
+  el.addEventListener('touchstart', (e) => { if (design() !== 'glass' || el.scrollTop > 0 || e.target.closest('input, textarea, select')) return; y0 = e.touches[0].clientY; dy = 0; el.style.transition = 'none'; }, { passive: true });
+  el.addEventListener('touchmove', (e) => { if (y0 === null) return; dy = Math.max(0, e.touches[0].clientY - y0); if (dy > 0) el.style.transform = `translate(-50%, ${dy}px)`; }, { passive: true });
+  el.addEventListener('touchend', () => {
+    if (y0 === null) return; y0 = null; el.style.transition = '';
+    if (dy > 110) closeSheet(); else el.style.transform = '';
+  });
+}
 let toastTimer;
 function toast(msg, action) {
   const el = $('#toast');
@@ -394,7 +453,7 @@ document.addEventListener('click', (e) => {
   if (!t || !t.dataset.act) return;
   const { act, id } = t.dataset;
   switch (act) {
-    case 'tab': ui.tab = id; localStorage.setItem('ko-tab', id); if (id === 'add') ui.recentFrom = Date.now(); closeSheet(); render(); window.scrollTo(0, 0); break;
+    case 'tab': if (ui.tab !== id) ui.anim = 'in'; ui.tab = id; localStorage.setItem('ko-tab', id); if (id === 'add') ui.recentFrom = Date.now(); closeSheet(); render(); window.scrollTo(0, 0); break;
     case 'show': reveal(); break;
     case 'grade': e.stopPropagation(); answer(+t.dataset.g); break;
     case 'speak': e.stopPropagation(); speak(t.dataset.text); break;
@@ -414,6 +473,7 @@ document.addEventListener('click', (e) => {
     }
     case 'close': closeSheet(); break;
     case 'set': { const v = t.dataset.v; setSetting(t.dataset.k, v === 'true' ? true : v === 'false' ? false : /^\d+$/.test(v) ? +v : v); if (t.dataset.k === 'dir') ui.cur = null; break; }
+    case 'design': setDesign(t.dataset.v); break;
     case 'signout': S.signOutUser(); break;
     case 'import': $('#import-file').click(); break;
     case 'export': exportCards(); break;
