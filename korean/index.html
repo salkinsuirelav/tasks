@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="de">
+<html lang="de" data-design="glass">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
@@ -13,6 +13,15 @@
   <link rel="icon" type="image/svg+xml" href="icon.svg">
   <meta name="theme-color" content="#f3f1f8" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#101016" media="(prefers-color-scheme: dark)">
+  <script>
+    // Design (Glass/Klassisch) vor dem ersten Zeichnen setzen, Statusleiste passend zum Hintergrund
+    window.applyDesign = function (d) {
+      document.documentElement.dataset.design = d;
+      var c = d === 'glass' ? ['#f1eef6', '#0e0d14'] : ['#f3f1f8', '#101016'];
+      document.querySelectorAll('meta[name=theme-color]').forEach(function (m, i) { m.setAttribute('content', c[i]); });
+    };
+    try { window.applyDesign(localStorage.getItem('ko-design') || 'glass'); } catch (e) { window.applyDesign('glass'); }
+  </script>
   <link rel="stylesheet" href="app.css">
 </head>
 <body>

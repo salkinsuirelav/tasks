@@ -41,8 +41,40 @@ function renderNav() {
       <a class="nav-item ${view === 'settings' ? 'active' : ''}" href="#settings" title="Einstellungen">${icon('gear')}<span class="lbl">Einstellungen</span></a>
       <div class="sync-pill" title="${syncText}"><span class="dot" style="background:${syncColor}"></span><span class="txt">${syncText}</span></div>
     </div>`;
-  $('#tabbar').innerHTML = NAV.map((n) => `<a class="${active(n.href) ? 'active' : ''}" href="${n.href}">${icon(n.icon)}${n.label}</a>`).join('');
+  $('#tabbar').innerHTML = `<i class="tab-pill"></i>` + NAV.map((n) => `<a class="${active(n.href) ? 'active' : ''}" href="${n.href}">${icon(n.icon)}<span>${n.label}</span></a>`).join('');
+  slidePill($('#tabbar'), 'tabbar', '.active');
 }
+
+// ---------- Design: Glass (Standard) oder Klassisch + Animationen ----------
+// Pro Gerät gespeichert; index.html setzt es schon vor dem ersten Zeichnen. Im klassischen Design blendet CSS alles hier aus.
+const design = () => { try { return localStorage.getItem('taskapp-design') || 'glass'; } catch { return 'glass'; } };
+const glass = () => design() === 'glass' && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+function setDesign(d) { try { localStorage.setItem('taskapp-design', d); } catch {} window.applyDesign?.(d); applyTheme(); renderAll(); }
+// Pille gleitet von der alten zur neuen Position (FLIP): alte Position merken, nach dem Neuzeichnen dort ansetzen und loslaufen lassen
+const pillPos = {};
+function slidePill(box, key, onSel = '.on', cls = 'tab-pill') {
+  if (!box) return;
+  let pill = box.querySelector(`:scope > .${cls}`);
+  if (!pill) { pill = document.createElement('i'); pill.className = cls; box.prepend(pill); }
+  const on = box.querySelector(`:scope > ${onSel}`);
+  if (!on || !on.offsetWidth) { pill.style.opacity = '0'; return; }
+  const to = { x: on.offsetLeft, w: on.offsetWidth }, from = pillPos[key];
+  const place = (p) => { pill.style.width = p.w + 'px'; pill.style.transform = `translateX(${p.x}px)`; };
+  pill.style.transition = 'none'; place(from || to); void pill.offsetWidth; pill.style.transition = '';
+  if (from && (from.x !== to.x || from.w !== to.w)) requestAnimationFrame(() => requestAnimationFrame(() => place(to)));
+  pillPos[key] = to;
+}
+// Kurz hervorheben, was gerade neu dazukam oder abgehakt wurde
+function flash(id, kind = 'pop') { ui.flash = { id, kind }; clearTimeout(flash.t); flash.t = setTimeout(() => { ui.flash = null; }, 900); }
+function applyFlash() {
+  const f = ui.flash;
+  if (!f || !glass()) return;
+  ui.flash = null; // nur einmal, sonst ploppt es bei jedem Sync erneut
+  if (f.kind === 'check') document.querySelectorAll(`.check[data-id="${f.id}"]`).forEach((el) => el.classList.add('pop'));
+  else document.querySelectorAll(`[data-id="${f.id}"]`).forEach((el) => { const c = el.closest('.tcard, .card, .row'); if (c) c.classList.add('pop'); });
+}
+// Oben weich ausblenden, sobald gescrollt wird (auf dem iPhone scrollt #main, nicht die Seite)
+main.addEventListener('scroll', () => document.documentElement.classList.toggle('scrolled', main.scrollTop > 4), { passive: true });
 
 // ---------- Rendern ----------
 let lastView = '';
@@ -70,21 +102,56 @@ function renderMain() {
     if ($('.side-list') && scroll.side != null) $('.side-list').scrollTop = scroll.side;
   } else {
     main.scrollTop = 0;
+    document.documentElement.classList.remove('scrolled');
+    if (glass()) {
+      main.classList.remove('enter-in'); void main.offsetWidth; main.classList.add('enter-in');
+      clearTimeout(renderMain.t); renderMain.t = setTimeout(() => main.classList.remove('enter-in'), 800);
+    }
     const cs = $('#cal-scroll');
     if (cs) cs.scrollTop = Math.max(0, (new Date().getHours() - 3 - store.settings.dayStart) * HOUR); // Logbuch: die letzten Stunden im Blick
     if (view === 'plan' && isMobile()) $('.col.today')?.scrollIntoView({ inline: 'start', block: 'nearest' });
   }
   lastView = view;
+  main.querySelectorAll('.tabs').forEach((tb) => slidePill(tb, 'tabs:' + [...tb.querySelectorAll('button')].map((b) => b.dataset.v || b.textContent).join('|'), '.on', 'seg-pill'));
+  applyFlash();
   if (key) {
     const el = main.querySelector(`[data-key="${key}"]`);
     if (el) { el.focus({ preventScroll: true }); if (sel) try { el.setSelectionRange(...sel); } catch {} }
   }
   renderNav();
 }
+let sheetShown = null, sheetCloseT;
 const renderSheet = () => {
+  const root = $('#sheet-root');
   const t = ui.openTask && store.get('tasks', ui.openTask);
-  $('#sheet-root').innerHTML = t ? V.sheetHTML(t) : '';
+  clearTimeout(sheetCloseT); root.classList.remove('closing');
+  if (!t) {
+    // Glass: Sheet gleitet raus statt einfach zu verschwinden
+    if (sheetShown && glass() && root.innerHTML) { root.classList.add('closing'); sheetCloseT = setTimeout(() => { root.classList.remove('closing'); root.innerHTML = ''; }, 260); }
+    else root.innerHTML = '';
+    sheetShown = null; return;
+  }
+  const same = sheetShown === t.id, scroll = same ? $('.sheet-body', root)?.scrollTop : 0;
+  root.innerHTML = V.sheetHTML(t);
+  root.classList.toggle('stay', same); // gleiche Aufgabe neu gezeichnet (Sync, Änderung): nicht nochmal hereinfedern
+  if (scroll) $('.sheet-body', root).scrollTop = scroll;
+  dragToClose($('.sheet', root));
+  sheetShown = t.id;
 };
+// Sheet auf dem iPhone nach unten wegziehen (wie bei iOS)
+function dragToClose(el) {
+  if (!el || !isMobile()) return;
+  let y0 = null, dy = 0;
+  el.addEventListener('touchstart', (e) => {
+    if (!glass() || $('.sheet-body', el)?.scrollTop > 0 || e.target.closest('input, textarea, select, .seg, .files')) return;
+    y0 = e.touches[0].clientY; dy = 0; el.style.transition = 'none';
+  }, { passive: true });
+  el.addEventListener('touchmove', (e) => { if (y0 === null) return; dy = Math.max(0, e.touches[0].clientY - y0); if (dy > 0) el.style.transform = `translateY(${dy}px)`; }, { passive: true });
+  el.addEventListener('touchend', () => {
+    if (y0 === null) return; y0 = null; el.style.transition = '';
+    if (dy > 110) A['close-sheet'](); else el.style.transform = '';
+  });
+}
 const renderModal = () => {
   if (route().view === 'calendar') renderMain(); // markierte Zeit im Kalender ein-/ausblenden
   $('#modal-root').innerHTML = ui.modal ? V.modalHTML(ui.modal) : '';
@@ -100,7 +167,7 @@ function applyTheme() {
   if (t === 'system') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
   document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.remove());
   const meta = document.createElement('meta');
-  meta.name = 'theme-color'; meta.content = isDark() ? '#121211' : '#f4f3ef';
+  meta.name = 'theme-color'; meta.content = design() === 'glass' ? (isDark() ? '#0f1112' : '#f1f1ed') : isDark() ? '#121211' : '#f4f3ef';
   document.head.append(meta);
 }
 darkMQ.addEventListener?.('change', applyTheme);
@@ -206,6 +273,7 @@ const A = {
   toggle: (el) => {
     const t = store.get('tasks', el.dataset.id);
     const wasDone = t.status === 'done';
+    if (!wasDone) flash(t.id, 'check');
     M.toggleDone(t.id);
     if (!wasDone) toast(t.repeat ? 'Erledigt ✓ Nächste Wiederholung ist angelegt.' : 'Erledigt ✓', t.repeat ? null : { label: 'Rückgängig', fn: () => M.toggleDone(t.id) });
     if (ui.openTask === t.id) renderSheet();
@@ -284,6 +352,7 @@ const A = {
   'review-nav': (el) => { const d = +el.dataset.d; ui.reviewWeek = d ? addDays(ui.reviewWeek, d) : weekStart(today()); renderMain(); },
   'toggle-nav': () => store.saveSettings({ navCollapsed: !store.settings.navCollapsed }),
   theme: (el) => store.saveSettings({ theme: el.dataset.v }),
+  design: (el) => setDesign(el.dataset.v),
   'toggle-side': () => { if (isMobile()) { ui.sideOpen = !ui.sideOpen; renderMain(); } else store.saveSettings({ sidebar: !store.settings.sidebar }); },
 
   'auto-plan': () => {
@@ -534,11 +603,13 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     if (el.dataset.add === 'today-proj' || el.dataset.add === 'today-other') {
       const pid = el.dataset.add === 'today-proj' ? ($('#today-proj')?.value || null) : null;
-      if (M.addToday(el.value, { projectId: pid, duration: ui.todayDur || 60 }, 'bottom')) el.value = '';
+      const nt = M.addToday(el.value, { projectId: pid, duration: ui.todayDur || 60 }, 'bottom');
+      if (nt) { el.value = ''; flash(nt.id); renderMain(); }
       return;
     }
     const extra = el.dataset.add === 'today' ? { date: today() } : el.dataset.add === 'day' ? { date: el.dataset.date } : el.dataset.add === 'project' ? { projectId: el.dataset.project } : {};
-    if (M.addTask(el.value, extra)) el.value = '';
+    const nt = M.addTask(el.value, extra);
+    if (nt) { el.value = ''; flash(nt.id); renderMain(); }
   } else if (el.id === 'login-pass') A['sign-in']();
   else if (el.id === 'slot-title') A['slot-task']();
   else if (el.id === 'p-name') A['save-project']();
