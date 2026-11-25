@@ -10,7 +10,7 @@ import * as S from './store.js';
 import { grade, preview, newSrs, dayStart } from './srs.js';
 import { HANGUL_DECK } from './hangul.js';
 
-const VERSION = '0.2.0';
+const VERSION = '0.2.1';
 const $ = (sel, el = document) => el.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pad = (n) => String(n).padStart(2, '0');
@@ -172,7 +172,13 @@ function render() {
   const active = document.activeElement;
   const keep = active && active.id && ['add-text', 'search'].includes(active.id) ? { id: active.id, pos: active.selectionStart } : null;
   const main = $('#main');
-  main.innerHTML = view();
+  // Nur neu zeichnen, wenn sich wirklich etwas geändert hat. Jeder Speichervorgang (und jede Sync-Bestätigung)
+  // löst ein render() aus; ein unnötig ersetztes DOM startet die Einblend-Animation der Karte neu = Flackern.
+  const html = view();
+  if (html !== render.html) { main.innerHTML = html; render.html = html; }
+  else if (!ui.anim) { if (keep) restoreFocus(keep); return; }
+  // Spätere Neuzeichnungen (z. B. Sync) sollen die Wechsel-Animation nicht erneut abspielen
+  if (!ui.anim) { clearTimeout(render.t); main.classList.remove('enter-in', 'enter-next', 'enter-flip'); }
   $('#tabbar').innerHTML = `<i class="tab-pill"></i>` + TABS.map(([id, label, icon]) => `<button class="${ui.tab === id ? 'on' : ''}" data-act="tab" data-id="${id}">${icon}<span>${label}</span>${id === 'learn' && counts().todo ? `<i class="badge">${counts().todo}</i>` : ''}</button>`).join('');
   // Animationen (nur im Glass-Design sichtbar, CSS entscheidet)
   slidePill($('#tabbar'), 'tabbar');
@@ -182,8 +188,9 @@ function render() {
     main.classList.add('enter-' + ui.anim); ui.anim = null;
     clearTimeout(render.t); render.t = setTimeout(() => main.classList.remove('enter-in', 'enter-next', 'enter-flip'), 700);
   }
-  if (keep) { const el = $('#' + keep.id); if (el) { el.focus(); try { el.setSelectionRange(keep.pos, keep.pos); } catch {} } }
+  if (keep) restoreFocus(keep);
 }
+function restoreFocus(keep) { const el = $('#' + keep.id); if (el && document.activeElement !== el) { el.focus(); try { el.setSelectionRange(keep.pos, keep.pos); } catch {} } }
 
 // ---------- Animationen (Glass) ----------
 // Pille gleitet von der alten zur neuen Position (FLIP): alte Position merken, nach dem Neuzeichnen dorthin setzen und loslaufen lassen.

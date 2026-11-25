@@ -253,6 +253,8 @@ html[data-design="glass"] main.enter-in .list > *:nth-child(n+4) { animation-del
 @keyframes rise { from { opacity: 0; transform: translateY(14px) scale(.985); filter: blur(4px); } }
 /* Lernkarte: Antwort zeigen = Karte dreht sich um, nächste Karte gleitet von rechts herein */
 html[data-design="glass"] main { perspective: 1400px; }
+/* Karte nur beim echten Wechsel animieren (enter-*), nicht bei jedem Neuzeichnen */
+html[data-design="glass"] .flash { animation: none; }
 html[data-design="glass"] main.enter-flip .flash { animation: flip .6s var(--spring) both; }
 html[data-design="glass"] main.enter-flip .grades { animation: rise .5s var(--ease-out) .12s both; }
 html[data-design="glass"] main.enter-flip .grades .g { animation: pop .5s var(--spring) both; }
