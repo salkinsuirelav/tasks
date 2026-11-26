@@ -415,8 +415,13 @@ Meine Antwort/Rückfrage dazu: ${reply}
 Gib mir jetzt die aktualisierte Antwort (gleiche Regeln wie oben).`;
 }
 
-// Plan-Spalte: wiederholende Aufgaben (Morning check-in usw.) immer oben, darunter der Rest
-export const planOrder = (list, mode) => { const s = sortTasks(list, mode); return [...s.filter((t) => t.repeat), ...s.filter((t) => !t.repeat)]; };
+// Plan-Spalte: wiederholende Aufgaben (Morning check-in usw.) oben. Bei "Eigene" frei sortierbar,
+// dort landen Wiederholungen ohne eigene Position trotzdem zuerst oben.
+export const planOrder = (list, mode) => {
+  if (mode === 'manual') return list.sort((a, b) => (a.order ?? (a.repeat ? -1 : 1e15)) - (b.order ?? (b.repeat ? -1 : 1e15)) || byPrio(a, b));
+  const s = sortTasks(list, mode);
+  return [...s.filter((t) => t.repeat), ...s.filter((t) => !t.repeat)];
+};
 export const sortTasks = (list, mode) => list.sort(mode === 'manual' ? (a, b) => (a.order ?? 1e15) - (b.order ?? 1e15) || byPrio(a, b) : mode === 'time' ? (a, b) => (a.time || '99').localeCompare(b.time || '99') || prioRank(a.priority) - prioRank(b.priority) : byPrio);
 
 // ---- Beispieldaten zum Ausprobieren ----
