@@ -858,27 +858,60 @@ const dropMin = (t, e) => {
   const min = store.settings.dayStart * 60 + Math.round(((((e.clientY - rect.top) / HOUR) * 60) - ui.drag.offsetMin) / 15) * 15;
   return Math.max(store.settings.dayStart * 60, Math.min(min, store.settings.dayEnd * 60 - 15));
 };
-const clearGhost = () => document.querySelectorAll('.drop-ghost').forEach((g) => g.remove());
+const clearGhost = () => document.querySelectorAll('.drop-ghost,.drop-line').forEach((g) => g.remove());
+// Plan-Board: Linie zeigt, wo die Karte landet. Wiederholende bleiben oben, also nur zwischen Karten der gleichen Art.
+function planInsert(t, e) {
+  const col = t.closest('.col[data-drop-day]');
+  if (!col || !ui.drag) return null;
+  const d = col.dataset.dropDay, task = store.get('tasks', ui.drag.id);
+  if (!task || ui.drag.occ || (task.repeat && task.date !== d)) return null; // Wiederholung an anderen Tag: fragt nach
+  if (store.settings.sortMode !== 'manual' && task.date !== d) return null; // Prio/Zeit sortiert selbst: nur Spalte zeigen
+  const rep = !!task.repeat;
+  const cards = [...col.querySelectorAll('.card[data-drop-plan]')].filter((c) => c.dataset.id !== task.id && !!c.dataset.rep === rep);
+  const before = cards.find((c) => { const r = c.getBoundingClientRect(); return e.clientY < r.top + r.height / 2; }) || null;
+  let line = document.querySelector('.drop-line');
+  if (!line) { line = document.createElement('div'); line.className = 'drop-line'; }
+  if (before) before.before(line);
+  else if (cards.length) cards[cards.length - 1].after(line);
+  else { const anchor = rep ? col.querySelector('.col-add') : [...col.querySelectorAll('.card[data-rep]')].pop() || col.querySelector('.col-add'); anchor.after(line); }
+  return { date: d, before: before?.dataset.id || null };
+}
 document.addEventListener('dragover', (e) => {
   const t = dropTarget(e);
   if (!t || !ui.drag) return;
   e.preventDefault();
-  document.querySelectorAll('.drag-over').forEach((x) => x !== t && x.classList.remove('drag-over'));
-  t.classList.add('drag-over');
+  const pi = planInsert(t, e);
+  ui.drag.plan = pi;
+  const hl = pi ? t.closest('.col') : t;
+  document.querySelectorAll('.drag-over').forEach((x) => x !== hl && x.classList.remove('drag-over'));
+  if (!pi) { document.querySelector('.drop-line')?.remove(); hl.classList.add('drag-over'); } else hl.classList.remove('drag-over');
   if (t.dataset.dropCal) {
     const min = dropMin(t, e), dur = store.get('tasks', ui.drag.id)?.duration || 60;
     let g = t.querySelector('.drop-ghost');
     if (!g) { clearGhost(); g = document.createElement('div'); g.className = 'ev ghost drop-ghost'; t.appendChild(g); }
     g.style.cssText = `top:${((min - store.settings.dayStart * 60) * HOUR) / 60}px;height:${Math.max(18, (dur * HOUR) / 60 - 2)}px;left:3px;right:3px`;
     g.textContent = `${fromMin(min % 1440)}–${fromMin((min + dur) % 1440)}`;
-  } else clearGhost();
+  } else document.querySelectorAll('.drop-ghost').forEach((g) => g.remove());
 });
-document.addEventListener('dragleave', (e) => { const t = dropTarget(e); if (t && !t.contains(e.relatedTarget)) t.classList.remove('drag-over'); });
+document.addEventListener('dragleave', (e) => {
+  const t = dropTarget(e);
+  if (t && !t.contains(e.relatedTarget)) t.classList.remove('drag-over');
+  const col = e.target.closest?.('.col'); if (col && !col.contains(e.relatedTarget)) document.querySelector('.drop-line')?.remove();
+});
 document.addEventListener('drop', (e) => {
   const t = dropTarget(e);
   if (!t || !ui.drag) return;
   e.preventDefault();
-  const id = ui.drag.id, occ = ui.drag.occ;
+  const id = ui.drag.id, occ = ui.drag.occ, pi = ui.drag.plan;
+  clearGhost();
+  if (pi && t.closest('.col[data-drop-day]')) {
+    const task = store.get('tasks', id);
+    if (!task) return;
+    if (task.date !== pi.date) store.patch('tasks', id, { date: pi.date });
+    M.reorderDay(pi.date, id, pi.before, 'manual');
+    if (store.settings.sortMode !== 'manual') { store.saveSettings({ sortMode: 'manual' }); toast('Eigene Reihenfolge aktiv. Über „Prio“ oder „Zeit“ sortierst du wieder automatisch.'); }
+    return;
+  }
   if (t.dataset.dropCard) {
     const task = store.get('tasks', id);
     if (task?.time) scheduleChange(id, occ, { date: today(), time: null }); // Termin aus dem Kalender zurück in die Liste

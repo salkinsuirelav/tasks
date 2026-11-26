@@ -845,3 +845,8 @@ html[data-design="glass"] .toast { animation: toast-in .5s var(--spring); }
 .wd-pick { display: flex; gap: 6px; flex-wrap: wrap; }
 .wd-pick button { width: 40px; height: 34px; border-radius: 9px; border: 1px solid var(--line); font-size: 13.5px; color: var(--muted); }
 .wd-pick button.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+
+/* Plan-Board: Einfüge-Linie beim Ziehen */
+.drop-line { height: 3px; margin: -5px 4px 6px; border-radius: 3px; background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); position: relative; pointer-events: none; }
+.drop-line::before { content: ""; position: absolute; left: -4px; top: -3px; width: 9px; height: 9px; border-radius: 50%; background: var(--accent); }
+.col .card.drag-over { box-shadow: none; }

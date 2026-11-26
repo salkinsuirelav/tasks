@@ -109,7 +109,7 @@ export const taskCard = (t, showDate = false, { occ = null, planDate = null } = 
     aiBtn(t),
   ].join('');
   return `
-  <div class="card ${t.status === 'done' ? 'done' : ''} ${occ ? 'rep' : ''}" data-action="open-task" data-id="${t.id}" draggable="true" data-drag="task"${occ ? ` data-occ="${occ}" title="Wiederholung"` : ''}${planDate && t.status !== 'done' ? ` data-drop-plan="${t.id}" data-date="${planDate}"` : ''}>
+  <div class="card ${t.status === 'done' ? 'done' : ''} ${occ ? 'rep' : ''}" data-action="open-task" data-id="${t.id}" draggable="true" data-drag="task"${occ ? ` data-occ="${occ}" title="Wiederholung"` : ''}${t.repeat || occ ? ' data-rep="1"' : ''}${planDate && t.status !== 'done' ? ` data-drop-plan="${t.id}" data-date="${planDate}"` : ''}>
     ${p ? `<div class="bar" style="background:${p.color}"></div>` : ''}
     <div class="ttl"><span>${esc(t.title)}</span>${occ || !f.play ? '' : playBtn(t)}</div>
     <div class="meta">${meta}</div>
@@ -267,7 +267,7 @@ export function viewPlan() {
 
   const column = (d) => {
     const list = M.tasks().filter((t) => t.date === d);
-    const open = M.sortTasks(list.filter((t) => t.status !== 'done'), s.sortMode);
+    const open = M.planOrder(list.filter((t) => t.status !== 'done'), s.sortMode);
     // Wiederholungen: Vorschau an den Folgetagen (echte Aufgabe entsteht beim Erledigen bzw. Verschieben)
     const reps = d > t0 ? M.tasks().filter((t) => t.repeat && t.date !== d && M.repeatsOn(t, d)) : [];
     const done = list.filter((t) => t.status === 'done');
@@ -280,8 +280,8 @@ export function viewPlan() {
         <div class="col-head"><span class="wd">${d === t0 ? 'Heute' : shortWeekday(d)}</span><span class="num">${dayNum(d)}</span><span class="sum" title="${loadTip}">${L.planned ? fmtMinutes(L.planned) : "0h"} / ${L.cap ? fmtMinutes(L.cap) : "0h"}</span></div>
         <div class="load ${lvl}" title="${loadTip}"><div style="width:${Math.min(100, Math.round((isFinite(L.pct) ? L.pct : 1) * 100))}%"></div></div>
         <input class="col-add" data-add="day" data-date="${d}" data-key="add-${d}" placeholder="+ Aufgabe" enterkeyhint="done">
-        ${open.map((t) => taskCard(t, false, { planDate: d })).join('')}
         ${reps.map((t) => taskCard(t, false, { occ: d })).join('')}
+        ${open.map((t) => taskCard(t, false, { planDate: d })).join('')}
         ${done.map((t) => taskCard(t)).join('')}
       </div>`;
   };
@@ -665,7 +665,7 @@ export function viewSettings() {
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.10.2</p>
+      <p class="mono muted">Version 0.10.3</p>
     </div>`;
 }
 

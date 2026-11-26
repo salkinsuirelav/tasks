@@ -125,7 +125,7 @@ export function moveInToday(id, dir) {
 }
 // Plan-Board: Aufgabe in einer Tages-Spalte vor eine andere schieben; die sichtbare Reihenfolge wird zur eigenen
 export function reorderDay(date, id, beforeId, mode) {
-  const list = sortTasks(tasks().filter((t) => t.date === date && t.status !== 'done' && t.id !== id), mode);
+  const list = planOrder(tasks().filter((t) => t.date === date && t.status !== 'done' && t.id !== id), mode);
   const item = store.get('tasks', id);
   if (!item) return;
   const j = list.findIndex((t) => t.id === beforeId);
@@ -415,6 +415,8 @@ Meine Antwort/Rückfrage dazu: ${reply}
 Gib mir jetzt die aktualisierte Antwort (gleiche Regeln wie oben).`;
 }
 
+// Plan-Spalte: wiederholende Aufgaben (Morning check-in usw.) immer oben, darunter der Rest
+export const planOrder = (list, mode) => { const s = sortTasks(list, mode); return [...s.filter((t) => t.repeat), ...s.filter((t) => !t.repeat)]; };
 export const sortTasks = (list, mode) => list.sort(mode === 'manual' ? (a, b) => (a.order ?? 1e15) - (b.order ?? 1e15) || byPrio(a, b) : mode === 'time' ? (a, b) => (a.time || '99').localeCompare(b.time || '99') || prioRank(a.priority) - prioRank(b.priority) : byPrio);
 
 // ---- Beispieldaten zum Ausprobieren ----
