@@ -10,6 +10,7 @@
 
 import * as S from './store.js';
 import { matches } from './exercises.js';
+import { BASIC } from './foods-basic.js';
 
 let X; // Hilfsfunktionen aus app.js (sheet, toast, ICON, …)
 export function initNutrition(ctx) { X = ctx; }
@@ -117,42 +118,89 @@ function addSheet(meal) {
 const foodRow = (f, act = 'n-pick') => `<button class="row" data-act="${act}" data-id="${esc(f.id)}"><div><b>${esc(f.name)}</b><div class="muted">${f.brand ? esc(f.brand) + ' · ' : ''}${r0(f.kcal)} kcal · ${r0(f.p)} g P / 100 ${unitOf(f)}</div></div>${f.src === 'ai' ? '<span class="muted">✨</span>' : ''}</button>`;
 function localResults(q) {
   const ql = q.trim();
-  const foods = ql ? S.all('nut_foods').filter((f) => matches(ql, f.name, f.brand || '')).sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0)).slice(0, 30) : recentFoods().slice(0, 20);
-  if (!foods.length) return ql ? '' : '<p class="muted">Noch nichts gegessen. Such oben, scanne einen Barcode oder lass Claude schätzen.</p>';
-  return `<div class="label">${ql ? 'Deine Lebensmittel' : 'Zuletzt'}</div>${foods.map((f) => foodRow(f)).join('')}`;
+  if (!ql) {
+    const rec = recentFoods().slice(0, 20);
+    return rec.length ? `<div class="label">Zuletzt</div>${rec.map((f) => foodRow(f)).join('')}` : '<p class="muted">Noch nichts gegessen. Such oben (z. B. „Toast“, „Reis“, „Kimbap“), scanne einen Barcode oder lass Claude schätzen.</p>';
+  }
+  const mine = S.all('nut_foods').filter((f) => matches(ql, f.name, f.brand || '')).sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0)).slice(0, 30);
+  const have = new Set(mine.map((f) => f.id));
+  const basic = BASIC.filter((f) => !have.has(f.id) && matches(ql, f.name, f.alias)).slice(0, 15);
+  return `${mine.length ? `<div class="label">Deine Lebensmittel</div>${mine.map((f) => foodRow(f)).join('')}` : ''}
+    ${basic.length ? `<div class="label">Grundnahrungsmittel</div>${basic.map((f) => foodRow(f, 'n-pick-basic')).join('')}` : ''}`;
 }
-const offButton = (q) => `<button class="row accent" data-act="n-off-search" data-q="${esc(q.trim())}">🔎 „${esc(q.trim())}“ in Open Food Facts suchen</button>`;
+const offButton = (q) => `<button class="row accent" data-act="n-off-search" data-q="${esc(q.trim())}">🔎 „${esc(q.trim())}“ in Open Food Facts suchen (Markenprodukte)</button>`;
 
 const OFF = 'https://world.openfoodfacts.org';
 const FIELDS = 'code,product_name,product_name_de,product_name_en,generic_name,brands,nutriments,serving_quantity';
 const offCache = new Map();
-async function offFetch(url) {
-  const ac = new AbortController(), tm = setTimeout(() => ac.abort(), 15000);
-  try { const r = await fetch(url, { signal: ac.signal }); if (!r.ok) throw new Error('HTTP ' + r.status); return await r.json(); }
+// Netzwerkfehler verständlich machen ("Load failed" = Safari, "Failed to fetch" = Chrome: keine Antwort bzw. blockiert)
+const netMsg = (e) => (e.name === 'AbortError' ? 'Server antwortet nicht' : /load failed|failed to fetch|networkerror/i.test(e.message) ? 'keine Antwort vom Server' : e.message);
+async function offFetch(url, ms = 9000) {
+  const ac = new AbortController(), tm = setTimeout(() => ac.abort(), ms);
+  try { const r = await fetch(url, { signal: ac.signal }); if (!r.ok) throw new Error(r.status === 429 ? 'zu viele Anfragen, kurz warten' : r.status >= 500 ? `Server überlastet (${r.status})` : 'HTTP ' + r.status); return await r.json(); }
   finally { clearTimeout(tm); }
 }
+const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+const txt = (v) => (Array.isArray(v) ? v[0] : v && typeof v === 'object' ? v.de || v.en || Object.values(v)[0] : v) || '';
 function offFood(p) {
   const n = p.nutriments || {};
   const kcal = num(n['energy-kcal_100g']) ?? (num(n.energy_100g) != null ? num(n.energy_100g) / 4.184 : null);
   if (kcal == null || !p.code) return null;
-  const name = p.product_name_de || p.product_name || p.product_name_en || p.generic_name;
+  const name = txt(p.product_name_de) || txt(p.product_name) || txt(p.product_name_en) || txt(p.generic_name);
   if (!name) return null;
-  return { id: 'off-' + p.code, code: p.code, name: name.trim(), brand: (p.brands || '').split(',')[0].trim(), kcal, p: num(n.proteins_100g) || 0, c: num(n.carbohydrates_100g) || 0, f: num(n.fat_100g) || 0, serving: num(p.serving_quantity), src: 'off' };
+  const brand = Array.isArray(p.brands) ? p.brands[0] || '' : String(p.brands || '').split(',')[0];
+  return { id: 'off-' + p.code, code: String(p.code), name: String(name).trim(), brand: brand.trim(), kcal, p: num(n.proteins_100g) || 0, c: num(n.carbohydrates_100g) || 0, f: num(n.fat_100g) || 0, serving: num(p.serving_quantity), src: 'off' };
 }
+
+// Suchergebnisse 7 Tage auf dem Gerät merken: gleiche Suche = sofort da, auch wenn OFF gerade hängt
+const CACHE_KEY = 'nut-search-cache';
+const readCache = () => { try { return JSON.parse(localStorage.getItem(CACHE_KEY) || '{}'); } catch { return {}; } };
+function cacheGet(q) { const e = readCache()[q.toLowerCase()]; return e ? { ...e, fresh: Date.now() - e.t < 7 * 864e5 } : null; }
+function cachePut(q, foods) {
+  try { const c = readCache(); c[q.toLowerCase()] = { t: Date.now(), foods }; const keys = Object.keys(c).sort((a, b) => c[b].t - c[a].t); keys.slice(40).forEach((k) => delete c[k]); localStorage.setItem(CACHE_KEY, JSON.stringify(c)); } catch {}
+}
+
+// Zwei Wege zu Open Food Facts: neue Suche (search.openfoodfacts.org), sonst die alte (cgi/search.pl), dann ein zweiter Versuch
+const SOURCES = [
+  (q) => `https://search.openfoodfacts.org/search?q=${encodeURIComponent(q)}&page_size=30&langs=de,en&fields=${FIELDS}`,
+  (q) => `${OFF}/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=30&fields=${FIELDS}`,
+];
+async function searchOnline(q, status) {
+  let lastErr = null;
+  const tries = [[0, 0], [1, 0], [1, 1500]];
+  for (let i = 0; i < tries.length; i++) {
+    const [src, wait] = tries[i];
+    if (wait) { status('Zweiter Versuch …'); await pause(wait); }
+    try {
+      const data = await offFetch(SOURCES[src](q));
+      const foods = (data.hits || data.products || []).map(offFood).filter(Boolean);
+      if (foods.length || src === 1) return foods; // neue Suche ohne Treffer/Nährwerte → alte Suche probieren
+    } catch (e) { lastErr = e; if (i === 0) status('Versuche zweiten Server …'); }
+  }
+  throw lastErr || new Error('keine Antwort');
+}
+const offList = (foods) => `<div class="label">Open Food Facts</div><div class="list tight">${foods.map((f) => foodRow(f, 'n-pick-off')).join('')}</div>`;
+const fallbackBtns = (q) => `<div class="n-fallback">
+    <button class="btn" data-act="n-off-search" data-q="${esc(q)}">↻ Nochmal</button>
+    <button class="btn" data-act="n-ai" data-meal="${addMeal}" data-text="${esc(q)}">✨ Claude fragen</button>
+    <button class="btn" data-act="n-own" data-meal="${addMeal}" data-name="${esc(q)}">${X.ICON.plus} Selbst anlegen</button></div>`;
 async function offSearch(q) {
   const box = document.querySelector('#n-off');
   if (!box) return;
-  box.innerHTML = '<p class="muted center">Suche in Open Food Facts …</p>';
+  const cached = cacheGet(q);
+  if (cached?.fresh && cached.foods.length) { cached.foods.forEach((f) => offCache.set(f.id, f)); box.innerHTML = offList(cached.foods); return; }
+  const status = (t) => { if (document.querySelector('#n-off') === box) box.innerHTML = `<p class="muted center">${t}</p>`; };
+  status('Suche in Open Food Facts …');
   try {
-    const url = `${OFF}/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=30&fields=${FIELDS}`;
-    const data = await offFetch(url);
-    const foods = (data.products || []).map(offFood).filter(Boolean);
+    const foods = await searchOnline(q, status);
     foods.forEach((f) => offCache.set(f.id, f));
-    if (!document.querySelector('#n-off')) return;
-    box.innerHTML = foods.length ? `<div class="label">Open Food Facts</div><div class="list tight">${foods.map((f) => foodRow(f, 'n-pick-off')).join('')}</div>`
-      : `<p class="muted center">Nichts gefunden. Probier es kürzer oder mit Marke, oder leg es selbst an.</p>`;
+    if (foods.length) cachePut(q, foods);
+    if (!box.isConnected) return;
+    box.innerHTML = foods.length ? offList(foods) : `<p class="muted center">Nichts gefunden. Probier es kürzer oder mit Marke – oder:</p>${fallbackBtns(q)}`;
   } catch (e) {
-    if (document.querySelector('#n-off')) box.innerHTML = `<p class="muted center">Open Food Facts gerade nicht erreichbar (${esc(e.name === 'AbortError' ? 'Zeitüberschreitung' : e.message)}). Kurz warten und nochmal, die Suche erlaubt nur ca. 10 Anfragen pro Minute.</p>`;
+    if (!box.isConnected) return;
+    if (cached?.foods.length) { cached.foods.forEach((f) => offCache.set(f.id, f)); box.innerHTML = `<p class="muted center">Open Food Facts antwortet gerade nicht, das sind deine gespeicherten Ergebnisse.</p>${offList(cached.foods)}`; return; }
+    box.innerHTML = `<p class="muted center">Open Food Facts antwortet gerade nicht (${esc(netMsg(e))}). Das liegt an deren Server, nicht an dir. Grundnahrungsmittel oben gehen trotzdem.</p>${fallbackBtns(q)}`;
   }
 }
 
@@ -263,7 +311,8 @@ async function lookup(code) {
   const st = document.querySelector('#n-scan-status');
   if (st) st.textContent = `Suche ${code} …`; else X.toast('Suche Produkt …');
   try {
-    const data = await offFetch(`${OFF}/api/v2/product/${code}.json?fields=${FIELDS}`);
+    const url = `${OFF}/api/v2/product/${code}.json?fields=${FIELDS}`;
+    const data = await offFetch(url).catch(() => pause(1200).then(() => offFetch(url)));
     const food = data.status === 1 && data.product ? offFood({ ...data.product, code }) : null;
     if (food) { offCache.set(food.id, food); return amountSheet(food, { meal: addMeal }); }
     ownSheet(addMeal, { code });
@@ -280,13 +329,13 @@ const helperCanImage = () => (helper()?.features || []).includes('nutrition-imag
 const nutJobs = () => S.all('jobs').filter((j) => j.type === 'nutrition').sort((a, b) => a.createdAt - b.createdAt);
 
 let aiImage = null;
-function aiSheet(meal) {
+function aiSheet(meal, text = '') {
   addMeal = meal; aiImage = null;
   const on = helperOnline();
   X.sheet(`<div class="sheet-head"><h2>✨ Claude schätzen lassen</h2><button class="icon-btn small" data-act="close-sheet">${X.ICON.x}</button></div>
     <p class="muted">${on ? '🟢 Mac-Helfer online' : '⚪️ Mac-Helfer gerade offline: der Auftrag wartet, bis dein Mac wach ist.'}${on && !helperCanImage() ? ' · Für Fotos den Helfer einmal updaten (Mehr → Ernährung).' : ''}</p>
     <form id="n-ai-form" class="stack">
-      <textarea name="text" rows="3" placeholder="z. B. 200 g Hähnchen, eine Schüssel Reis, Kimchi – oder leer lassen und nur ein Foto schicken"></textarea>
+      <textarea name="text" rows="3" placeholder="z. B. 200 g Hähnchen, eine Schüssel Reis, Kimchi – oder leer lassen und nur ein Foto schicken">${esc(text)}</textarea>
       <label class="btn wide n-photo"><input type="file" name="photo" accept="image/*" hidden>📷 Foto aufnehmen oder auswählen</label>
       <img class="n-thumb" alt="" hidden>
       <select name="meal">${MEALS.map(([m, l]) => `<option value="${m}" ${meal === m ? 'selected' : ''}>${l}</option>`).join('')}</select>
@@ -411,11 +460,12 @@ export function onClick(act, b) {
   switch (act) {
     case 'n-add': addSheet(meal); return true;
     case 'n-scan': scanSheet(meal); return true;
-    case 'n-ai': aiSheet(meal); return true;
-    case 'n-own': ownSheet(meal); return true;
+    case 'n-ai': aiSheet(meal, b.dataset.text || ''); return true;
+    case 'n-own': ownSheet(meal, b.dataset.name ? { name: b.dataset.name } : {}); return true;
     case 'n-weight': weightSheet(X.ui.date); return true;
     case 'n-off-search': offSearch(b.dataset.q); return true;
     case 'n-pick': amountSheet(S.get('nut_foods', id), { meal: addMeal }); return true;
+    case 'n-pick-basic': amountSheet(S.get('nut_foods', id) || BASIC.find((f) => f.id === id), { meal: addMeal }); return true;
     case 'n-pick-off': amountSheet(S.get('nut_foods', id) || offCache.get(id), { meal: addMeal }); return true;
     case 'n-edit': { const e = S.get('nut_log', id); if (e) amountSheet({ id: e.foodId, name: e.name, brand: e.brand, unit: e.unit, ...e.per, serving: S.get('nut_foods', e.foodId)?.serving }, { entry: e }); return true; }
     case 'n-del': S.remove('nut_log', id); X.closeSheet(); X.toast('Gelöscht'); return true;
