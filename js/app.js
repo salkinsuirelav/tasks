@@ -859,21 +859,20 @@ const dropMin = (t, e) => {
   return Math.max(store.settings.dayStart * 60, Math.min(min, store.settings.dayEnd * 60 - 15));
 };
 const clearGhost = () => document.querySelectorAll('.drop-ghost,.drop-line').forEach((g) => g.remove());
-// Plan-Board: Linie zeigt, wo die Karte landet. Wiederholende bleiben oben, also nur zwischen Karten der gleichen Art.
+// Plan-Board: Linie zeigt, wo die Karte landet (danach gilt "Eigene", dort ist alles frei sortierbar).
 function planInsert(t, e) {
   const col = t.closest('.col[data-drop-day]');
   if (!col || !ui.drag) return null;
   const d = col.dataset.dropDay, task = store.get('tasks', ui.drag.id);
   if (!task || ui.drag.occ || (task.repeat && task.date !== d)) return null; // Wiederholung an anderen Tag: fragt nach
   if (store.settings.sortMode !== 'manual' && task.date !== d) return null; // Prio/Zeit sortiert selbst: nur Spalte zeigen
-  const rep = !!task.repeat;
-  const cards = [...col.querySelectorAll('.card[data-drop-plan]')].filter((c) => c.dataset.id !== task.id && !!c.dataset.rep === rep);
+  const cards = [...col.querySelectorAll('.card[data-drop-plan]')].filter((c) => c.dataset.id !== task.id);
   const before = cards.find((c) => { const r = c.getBoundingClientRect(); return e.clientY < r.top + r.height / 2; }) || null;
   let line = document.querySelector('.drop-line');
   if (!line) { line = document.createElement('div'); line.className = 'drop-line'; }
   if (before) before.before(line);
   else if (cards.length) cards[cards.length - 1].after(line);
-  else { const anchor = rep ? col.querySelector('.col-add') : [...col.querySelectorAll('.card[data-rep]')].pop() || col.querySelector('.col-add'); anchor.after(line); }
+  else ([...col.querySelectorAll('.card[data-occ]')].pop() || col.querySelector('.col-add')).after(line);
   return { date: d, before: before?.dataset.id || null };
 }
 document.addEventListener('dragover', (e) => {
