@@ -77,7 +77,9 @@ export const REPEATS = [
   { id: 'weekdays', label: 'Werktags (Mo–Fr)' },
   { id: 'weekly', label: 'Wöchentlich' },
   { id: 'monthly', label: 'Monatlich' },
+  { id: 'days', label: 'Bestimmte Tage…' },
 ];
+export const WD_SHORT = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
 export const COLORS = ['#e5484d', '#f76b15', '#e2a336', '#30a46c', '#12a594', '#0090ff', '#6e56cf', '#d6409f', '#8d8d86'];
 

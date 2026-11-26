@@ -6,8 +6,8 @@ import { icon, PROJECT_ICONS } from './icons.js';
 import { md, splitSources } from './md.js';
 import { SHORTCUTS, keyOf, keyLabel } from './keys.js';
 import {
-  esc, toDateStr, today, addDays, weekStart, dayLabel, longDate, shortWeekday, dayNum, rangeLabel, toMin, fromMin, nowMin,
-  fmtDur, fmtHours, fmtClock, fmtMinutes, PRIOS, prioLabel, STATUS, REPEATS, COLORS, byPrio,
+  esc, toDateStr, today, addDays, weekStart, dayLabel, longDate, shortWeekday, dayNum, rangeLabel, toMin, fromMin, nowMin, weekday,
+  fmtDur, fmtHours, fmtClock, fmtMinutes, PRIOS, prioLabel, STATUS, REPEATS, WD_SHORT, COLORS, byPrio,
 } from './util.js';
 
 const HOUR = 56; // Pixel pro Stunde im Kalender (gleich wie --hour in CSS)
@@ -64,6 +64,8 @@ function aiChip(t) {
   return `<span class="chip ${c[0]}">${c[1]}</span>`;
 }
 
+// Wochentage wählen (Mo–So), z. B. für "Bestimmte Tage" bei Wiederholungen
+const wdPick = (days, action) => `<div class="wd-pick">${WD_SHORT.map((l, i) => `<button type="button" class="${days.includes(i) ? 'on' : ''}" data-action="${action}" data-d="${i}">${l}</button>`).join('')}</div>`;
 const checkBtn = (t) => `<button class="check ${t.status === 'done' ? 'on' : ''}" data-action="toggle" data-id="${t.id}" aria-label="Erledigt">${icon('check')}</button>`;
 // Kleiner Claude-Knopf an jeder Aufgabe (Liste + Karten)
 const aiBtn = (t) => {
@@ -663,7 +665,7 @@ export function viewSettings() {
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.10.1</p>
+      <p class="mono muted">Version 0.10.2</p>
     </div>`;
 }
 
@@ -720,8 +722,9 @@ export function sheetHTML(t) {
         </div>
         <div class="inline">
           <div class="field"><label>Geschätzte Dauer</label><select data-field="duration">${durs.sort((a, b) => a - b).map((d) => `<option value="${d}" ${d === t.duration ? 'selected' : ''}>${fmtMinutes(d)}</option>`).join('')}</select></div>
-          <div class="field"><label>Wiederholen</label><select data-field="repeat">${REPEATS.map((r) => `<option value="${r.id}" ${r.id === (t.repeat || '') ? 'selected' : ''}>${r.label}</option>`).join('')}</select></div>
+          <div class="field"><label>Wiederholen</label><select data-field="repeat">${REPEATS.map((r) => `<option value="${r.id}" ${r.id === (M.repeatDays(t.repeat) ? 'days' : t.repeat || '') ? 'selected' : ''}>${r.label}</option>`).join('')}</select></div>
         </div>
+        ${M.repeatDays(t.repeat) ? `<div class="field"><label>An diesen Tagen</label>${wdPick(M.repeatDays(t.repeat), 'task-repeat-day')}</div>` : ''}
         ${t.time ? (() => { const pp = M.pushPrefs(), r = t.remind ?? ''; return `<div class="field"><label>Erinnerung</label><select data-field="remind">
           <option value="" ${r === '' ? 'selected' : ''}>Standard (${pp.enabled && pp.lead >= 0 ? M.LEADS.find((l) => l[0] === pp.lead)?.[1] || pp.lead + ' Min vorher' : 'keine'})</option>
           <option value="-1" ${r === -1 ? 'selected' : ''}>Keine</option>
@@ -874,7 +877,8 @@ export function modalHTML(m) {
         <div class="field"><label>Bis</label><input type="time" step="900" id="b-end" value="${b.end}"></div>
       </div>
       <div class="field"><label>Wiederholen</label><select id="b-repeat">
-        ${[['', 'Nur einmal'], ['daily', 'Täglich'], ['weekdays', 'Werktags (Mo–Fr)'], ['weekly', 'Jede Woche an diesem Wochentag']].map(([v, l]) => `<option value="${v}" ${v === (b.repeat || '') ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+        ${[['', 'Nur einmal'], ['daily', 'Täglich'], ['weekdays', 'Werktags (Mo–Fr)'], ['weekly', 'Jede Woche an diesem Wochentag'], ['days', 'Bestimmte Tage…']].map(([v, l]) => `<option value="${v}" ${v === (M.repeatDays(b.repeat) ? 'days' : b.repeat || '') ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+      <div class="field" id="b-days" ${M.repeatDays(b.repeat) ? '' : 'hidden'}><label>An diesen Tagen</label>${wdPick(M.repeatDays(b.repeat) || [weekday(b.date)], 'block-repeat-day')}</div>
       <div class="foot">
         ${b.id ? `<button class="btn danger" data-action="delete-block" data-id="${b.id}" style="margin-right:auto">${icon('trash')} Löschen</button>` : ''}
         <button class="btn" data-action="close-modal">Abbrechen</button><button class="btn primary" data-action="save-block">Speichern</button></div>`;

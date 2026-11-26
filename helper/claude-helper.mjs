@@ -238,6 +238,7 @@ function onDay(t, day) {
   if (t.repeat === 'weekdays') return wd(day) < 5;
   if (t.repeat === 'weekly') return wd(day) === wd(t.date);
   if (t.repeat === 'monthly') return day.slice(8) === t.date.slice(8);
+  if (typeof t.repeat === 'string' && t.repeat.startsWith('days:')) return t.repeat.slice(5).split(',').map(Number).includes(wd(day));
   return false;
 }
 function menubarText(live) {

@@ -48,7 +48,7 @@ export async function run(env, scheduledTime, deps = {}) {
     const days = [now.date];
     if (now.min >= 22 * 60) days.push(addDays(now.date, 1)); // Termine kurz nach Mitternacht
     const byDate = await Promise.all(days.map((d) => fs.query('tasks', 'date', 'EQUAL', d)));
-    const repeating = await fs.query('tasks', 'repeat', 'IN', ['daily', 'weekdays', 'weekly', 'monthly']);
+    const repeating = await fs.query('tasks', 'repeat', 'GREATER_THAN_OR_EQUAL', 'a') // alle mit Wiederholung, auch eigene Tage ('days:1,3');
     const seen = new Set();
     for (const day of days) {
       const cands = [...byDate.flat().filter((t) => t.date === day), ...repeating.filter((t) => repeatsOn(t, day))];
@@ -158,6 +158,7 @@ export function repeatsOn(t, date) {
   if (t.repeat === 'weekdays') return weekday(date) < 5;
   if (t.repeat === 'weekly') return weekday(date) === weekday(t.date);
   if (t.repeat === 'monthly') return date.slice(8) === t.date.slice(8);
+  if (typeof t.repeat === 'string' && t.repeat.startsWith('days:')) return t.repeat.slice(5).split(',').map(Number).includes(weekday(date));
   return false;
 }
 
