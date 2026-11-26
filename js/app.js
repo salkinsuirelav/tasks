@@ -292,6 +292,7 @@ const A = {
   'today-dur': (el) => { ui.todayDur = +el.dataset.v; renderMain(); },
   'toggle-other': () => store.saveSettings({ hideOther: !store.settings.hideOther }),
   'toggle-done': () => store.saveSettings({ hideDone: !store.settings.hideDone }),
+  'card-field': (el) => { const f = V.cardFields(); store.saveSettings({ cardFields: { ...f, [el.dataset.k]: !f[el.dataset.k] } }); },
   'pull-today': (el) => { ui.pullOpen = true; store.patch('tasks', el.dataset.id, { date: today(), order: Date.now() }); },
   focus: (el) => { ui.focusTask = el.dataset.id; ui.openTask = null; renderSheet(); renderFocus(); renderPill(); },
   'close-focus': () => { ui.focusTask = null; renderFocus(); renderPill(); },

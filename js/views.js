@@ -84,14 +84,33 @@ export const taskRow = (t, showDate = true) => `
     ${aiBtn(t)}${playBtn(t)}
   </div>`;
 
+// Was die Plan-Karten zeigen (Einstellungen > Planung > Karten zeigen)
+export const CARD_FIELDS = [['project', 'Projekt'], ['prio', 'Priorität'], ['dur', 'Dauer'], ['status', 'Status'], ['repeat', 'Wiederholung'], ['play', 'Timer-Knopf']];
+const CARD_DEFAULT = { project: true, prio: true, dur: false, status: false, repeat: true, play: true };
+export const cardFields = () => ({ ...CARD_DEFAULT, ...(store.settings.cardFields || {}) });
+
 // occ = Datum einer Wiederholungs-Vorschau, planDate = Spalte im Plan-Board (zum Umsortieren per Ziehen)
+// Kompakt: Titel oben, darunter Haken + gewählte Infos in einer Zeile
 export const taskCard = (t, showDate = false, { occ = null, planDate = null } = {}) => {
-  const p = M.project(t.projectId);
+  const p = M.project(t.projectId), f = cardFields();
+  const meta = [
+    occ ? `<span class="rep-ic" title="Wiederholung">${icon('repeat')}</span>` : checkBtn(t),
+    f.prio && t.priority === 'frog' ? '<span class="frog" title="Frosch">🐸</span>' : '',
+    f.project && p ? `<span class="pj" title="${esc(p.name)}">${projIcon(p, 12)}<span class="pj-n">${esc(p.name)}</span></span>` : '',
+    f.prio && t.priority && t.priority !== 'frog' ? chipPrio(t.priority) : '',
+    chipWhen(t, showDate),
+    f.dur && t.duration ? `<span class="chip mono">${fmtMinutes(t.duration)}</span>` : '',
+    f.status && t.status === 'doing' ? '<span class="chip">In Arbeit</span>' : '',
+    f.status && t.status === 'waiting' && !['queued', 'running'].includes(M.aiState(t)) ? '<span class="chip">Wartet</span>' : '',
+    aiChip(t),
+    f.repeat && t.repeat && !occ ? `<span class="rep-ic end" title="Wiederholt sich">${icon('repeat')}</span>` : '',
+    aiBtn(t),
+  ].join('');
   return `
   <div class="card ${t.status === 'done' ? 'done' : ''} ${occ ? 'rep' : ''}" data-action="open-task" data-id="${t.id}" draggable="true" data-drag="task"${occ ? ` data-occ="${occ}" title="Wiederholung"` : ''}${planDate && t.status !== 'done' ? ` data-drop-plan="${t.id}" data-date="${planDate}"` : ''}>
     ${p ? `<div class="bar" style="background:${p.color}"></div>` : ''}
-    <div class="ttl">${occ ? `<span class="rep-ic">${icon('repeat')}</span>` : checkBtn(t)}<span>${esc(t.title)}</span>${occ ? '' : playBtn(t)}</div>
-    <div class="meta">${chips(t, showDate)}${aiBtn(t)}</div>
+    <div class="ttl"><span>${esc(t.title)}</span>${occ || !f.play ? '' : playBtn(t)}</div>
+    <div class="meta">${meta}</div>
   </div>`;
 };
 
@@ -611,6 +630,8 @@ export function viewSettings() {
           <select data-setting="workEnd" aria-label="Arbeitszeit endet">${hourOpts(1, 24, s.workEnd ?? 17)}</select>
           <div class="set-lbl">Wochenziel</div>
           <div class="set-num"><input type="number" min="1" max="100" data-setting="weeklyGoal" value="${s.weeklyGoal}"><span class="muted">Stunden</span></div>
+          <div class="set-lbl">Plan-Karten zeigen</div>
+          <div class="set-pills">${(() => { const f = cardFields(); return CARD_FIELDS.map(([k, l]) => `<button class="pill ${f[k] ? 'on' : ''}" data-action="card-field" data-k="${k}">${f[k] ? icon('check') : ''}${l}</button>`).join(''); })()}</div>
         </div>
         <div class="field" style="margin:4px 0 0"><label>Am Wochenende einplanen (Auto-Plan + Claude)</label>
           <div class="seg"><button class="${s.planWeekends !== false ? 'on' : ''}" data-action="plan-weekends" data-v="1">Ja</button><button class="${s.planWeekends === false ? 'on' : ''}" data-action="plan-weekends" data-v="0">Nein, nur Mo–Fr</button></div></div>
@@ -642,7 +663,7 @@ export function viewSettings() {
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.10.0</p>
+      <p class="mono muted">Version 0.10.1</p>
     </div>`;
 }
 
