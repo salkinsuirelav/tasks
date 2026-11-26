@@ -4,7 +4,7 @@ import * as M from './model.js';
 import * as V from './views.js';
 import { ui, isMobile } from './ui.js';
 import { icon } from './icons.js';
-import { esc, toDateStr, today, addDays, weekStart, toMin, fromMin, nowMin, fmtClock, fmtDur, fmtHours, fmtMinutes, COLORS } from './util.js';
+import { esc, toDateStr, today, addDays, weekStart, toMin, fromMin, nowMin, weekday, fmtClock, fmtDur, fmtHours, fmtMinutes, COLORS } from './util.js';
 import { SHORTCUTS, actionFor } from './keys.js';
 import { splitSources } from './md.js';
 
@@ -379,10 +379,24 @@ const A = {
   'edit-block': (el) => { ui.modal = { type: 'block', block: { ...store.get('blocks', el.dataset.id) } }; renderModal(); },
   'save-block': () => {
     const b = ui.modal.block;
-    const v = { date: $('#b-date').value, start: $('#b-start').value, end: $('#b-end').value, label: $('#b-label').value.trim(), repeat: $('#b-repeat').value };
+    let repeat = $('#b-repeat').value;
+    if (repeat === 'days') repeat = `days:${[...document.querySelectorAll('#b-days button.on')].map((x) => x.dataset.d).join(',')}`;
+    const v = { date: $('#b-date').value, start: $('#b-start').value, end: $('#b-end').value, label: $('#b-label').value.trim(), repeat };
     if (!v.date || !v.start || !v.end || v.end === v.start) return toast('Bitte Datum, Start und Ende angeben.');
     store.put('blocks', { ...b, ...v });
     ui.modal = null; renderModal();
+  },
+  'task-repeat-day': (el) => {
+    const t = store.get('tasks', ui.openTask), d = +el.dataset.d, cur = M.repeatDays(t.repeat) || [];
+    const next = cur.includes(d) ? cur.filter((x) => x !== d) : [...cur, d].sort();
+    if (!next.length) return toast('Mindestens ein Tag muss ausgewählt sein.');
+    store.patch('tasks', t.id, { repeat: `days:${next.join(',')}` });
+    renderSheet();
+  },
+  'block-repeat-day': (el) => {
+    const on = el.parentElement.querySelectorAll('button.on');
+    if (on.length === 1 && el.classList.contains('on')) return toast('Mindestens ein Tag muss ausgewählt sein.');
+    el.classList.toggle('on');
   },
   'delete-block': (el) => { store.remove('blocks', el.dataset.id); ui.modal = null; renderModal(); },
   'cal-slot': (el, e) => {
@@ -759,6 +773,12 @@ document.addEventListener('change', async (e) => {
     if (f === 'projectId' && v === '__new') { el.value = store.get('tasks', id).projectId || ''; return A['new-project']({ dataset: { fromTask: id } }); }
     if (f === 'duration') v = +v;
     if (f === 'remind') v = v === '' ? null : +v;
+    if (f === 'repeat') {
+      const t = store.get('tasks', id);
+      if (v === 'days') v = M.repeatDays(t.repeat) ? t.repeat : `days:${weekday(t.date || today())}`;
+      store.patch('tasks', id, { repeat: v, ...(v && !t.date ? { date: today() } : {}) });
+      return renderSheet();
+    }
     if (f === 'date' || f === 'time' || f === 'projectId') v = v || null;
     const changes = { [f]: v };
     if (f === 'time' && v && !store.get('tasks', id).date) changes.date = today();
@@ -773,6 +793,7 @@ document.addEventListener('change', async (e) => {
     if (f === 'date' || f === 'time') { if (document.activeElement === el) el.addEventListener('blur', () => { if (ui.openTask === id) renderSheet(); }, { once: true }); else renderSheet(); }
     return;
   }
+  if (el.id === 'b-repeat') { $('#b-days').hidden = el.value !== 'days'; return; }
   if (el.id === 'push-lead') { M.setPushPrefs({ lead: +el.value }); return; }
   if (el.dataset.setting) {
     const v = +el.value;

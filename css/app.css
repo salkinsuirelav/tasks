@@ -840,3 +840,8 @@ html[data-design="glass"] .toast { animation: toast-in .5s var(--spring); }
   html[data-design="glass"] *, html[data-design="glass"] *::before { animation: none !important; transition: none !important; }
 }
 @media (hover: hover) { .card:not(:hover) .meta .ai-btn { display: none; } }
+
+/* Wochentage wählen (Wiederholung "Bestimmte Tage") */
+.wd-pick { display: flex; gap: 6px; flex-wrap: wrap; }
+.wd-pick button { width: 40px; height: 34px; border-radius: 9px; border: 1px solid var(--line); font-size: 13.5px; color: var(--muted); }
+.wd-pick button.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }

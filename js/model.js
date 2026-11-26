@@ -54,8 +54,13 @@ export function moveSeries(id, occDate, changes) {
   store.patch('tasks', id, patch);
 }
 
+// Eigene Wochentage: repeat = 'days:1,3' (0 = Montag … 6 = Sonntag), z. B. nur Di + Do
+export const repeatDays = (r) => (typeof r === 'string' && r.startsWith('days:') ? r.slice(5).split(',').filter((x) => x !== '').map(Number) : null);
+
 function nextDate(date, repeat) {
   const base = date || today();
+  const days = repeatDays(repeat);
+  if (days) { if (!days.length) return null; let d = addDays(base, 1); for (let i = 0; i < 7 && !days.includes(weekday(d)); i++) d = addDays(d, 1); return d; }
   if (repeat === 'daily') return addDays(base, 1);
   if (repeat === 'weekly') return addDays(base, 7);
   if (repeat === 'monthly') return addMonths(base, 1);
@@ -71,6 +76,7 @@ export function repeatsOn(t, date) {
   if (t.repeat === 'weekdays') return weekday(date) < 5;
   if (t.repeat === 'weekly') return weekday(date) === weekday(t.date);
   if (t.repeat === 'monthly') return date.slice(8) === t.date.slice(8);
+  if (repeatDays(t.repeat)) return repeatDays(t.repeat).includes(weekday(date));
   return false;
 }
 
@@ -207,6 +213,7 @@ export function blocksOn(date) {
     if (b.repeat === 'daily') return true;
     if (b.repeat === 'weekdays') return weekday(date) < 5;
     if (b.repeat === 'weekly') return weekday(date) === weekday(b.date);
+    if (repeatDays(b.repeat)) return repeatDays(b.repeat).includes(weekday(date));
     return false;
   });
 }
