@@ -9,7 +9,7 @@ import * as S from './store.js';
 import { LIBRARY, GROUPS, matches, norm, kindOfName, KIND_LABEL } from './exercises.js';
 import * as N from './nutrition.js';
 
-const VERSION = '0.9.2';
+const VERSION = '0.9.3';
 const $ = (sel, el = document) => el.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 

@@ -431,3 +431,5 @@ html[data-theme="glass"] #toast.show { transform: translate(-50%, 0) scale(1); }
 /* Weichzeichner oben nur, wenn gescrollt ist – sonst würde er das oberste Element anschneiden */
 html[data-theme="glass"].scrolled body::after { opacity: 1; }
 html[data-theme="glass"] main { padding-top: calc(env(safe-area-inset-top) + 16px); }
+.n-fallback { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 8px 0; }
+.n-fallback .btn { padding: 10px 4px; font-size: 13px; white-space: normal; }
