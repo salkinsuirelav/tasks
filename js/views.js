@@ -1,4 +1,5 @@
 // Alle Ansichten. Jede Funktion gibt HTML als Text zurück, app.js setzt es in die Seite ein.
+import { enabled as tabsOn } from './tabs.js';
 import * as store from './store.js';
 import * as M from './model.js';
 import { ui, isMobile } from './ui.js';
@@ -619,6 +620,9 @@ export function viewSettings() {
         <p class="muted" style="font-size:13px;margin:10px 0 0">„Wie System“ folgt der Einstellung deines Macs bzw. iPhones (Hell/Dunkel/Automatisch).</p>
         <div class="theme-pick">${[['hero', 'Modern'], ['glass', 'Glass'], ['classic', 'Klassisch']].map(([d, l]) => `<button class="t-${d} ${curDesign() === d ? 'on' : ''}" data-action="design" data-v="${d}"><i></i>${l}</button>`).join('')}</div>
         <p class="muted" style="font-size:13px;margin:10px 0 0">Design gilt für dieses Gerät.</p>
+        <div class="field mac-only" style="margin:16px 0 0"><label>Tabs oben (Mac)</label>
+          <div class="seg"><button class="${tabsOn() ? 'on' : ''}" data-action="tabs-on" data-v="1">Ein</button><button class="${tabsOn() ? '' : 'on'}" data-action="tabs-on" data-v="0">Aus</button></div>
+          <p class="muted" style="font-size:13px;margin:8px 0 0">Mehrere Ansichten offen halten. ⌘-Klick auf einen Eintrag links öffnet ihn in einem neuen Tab. Tabs lassen sich verschieben.</p></div>
       </div>
       <div class="panel"><h4>Planung</h4>
         <div class="set-grid">
@@ -670,7 +674,7 @@ export function viewSettings() {
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.13.0</p>
+      <p class="mono muted">Version 0.14.0</p>
     </div>`;
 }
 

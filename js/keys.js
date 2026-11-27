@@ -7,6 +7,7 @@ export const SHORTCUTS = [
   { id: 'calendar', label: 'Kalender öffnen', key: '3' },
   { id: 'projects', label: 'Projekte öffnen', key: '4' },
   { id: 'review', label: 'Rückblick öffnen', key: '5' },
+  { id: 'finance', label: 'Finanzen öffnen', key: '6' },
   { id: 'settings', label: 'Einstellungen', key: ',' },
   { id: 'today', label: 'Zu heute springen', key: 't' },
   { id: 'prev', label: 'Zurück (Woche/Tag)', key: 'ArrowLeft' },
@@ -17,6 +18,9 @@ export const SHORTCUTS = [
   { id: 'theme', label: 'Hell/Dunkel wechseln', key: 'd' },
   { id: 'done', label: 'Offene Aufgabe erledigen', key: 'e' },
   { id: 'focus', label: 'Offene Aufgabe: Fokus-Modus', key: 'f' },
+  { id: 'tabnew', label: 'Neuer Tab (Mac)', key: '+' },
+  { id: 'tabclose', label: 'Tab schließen (Mac)', key: 'x' },
+  { id: 'tabnext', label: 'Nächster Tab (Mac)', key: '.' },
   { id: 'help', label: 'Kürzel anzeigen', key: '?' },
 ];
 

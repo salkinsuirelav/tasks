@@ -1142,3 +1142,45 @@ html[data-motion] .toast { animation: toast-in .5s var(--spring); }
   .pf-kpi-v { flex-direction: column; align-items: flex-start; }
   .pf-x span:nth-child(2), .pf-x span:nth-child(4) { display: none; }
 }
+
+/* ===================================================================
+   v0.14: Tabs oben (Mac) – wie HeroSpace
+   =================================================================== */
+.work { display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100dvh; }
+.work > main { flex: 1; min-height: 0; }
+.tabstrip { display: none; }
+html.has-tabs .tabstrip:not(:empty) {
+  display: flex; align-items: center; gap: 6px; flex: none; height: 48px; padding: 8px 16px 0 12px; min-width: 0;
+}
+.ts-nav { display: flex; gap: 2px; flex: none; margin-right: 4px; }
+.ts-nav .icon-btn, .ts-add { width: 28px; height: 28px; border-radius: 8px; background: transparent; border: 0; box-shadow: none; color: var(--muted); }
+.ts-nav .icon-btn svg.i, .ts-add svg.i { width: 16px; height: 16px; }
+.ts-nav .icon-btn:hover:not(:disabled), .ts-add:hover:not(:disabled) { background: var(--line-soft); color: var(--text); }
+.ts-nav .icon-btn:disabled, .ts-add:disabled { opacity: .35; cursor: default; }
+.ts-tabs { display: flex; align-items: center; gap: 2px; min-width: 0; flex: 0 1 auto; overflow: hidden; }
+.ts-tab {
+  position: relative; display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px 0 12px; border-radius: 10px;
+  width: 180px; flex: 0 1 auto; min-width: 64px; font-size: 13px; font-weight: 500; color: var(--muted); cursor: default; user-select: none; -webkit-user-select: none;
+  transition: background-color .15s, color .15s;
+}
+.ts-tab > svg.i, .ts-tab > .picon { width: 16px; height: 16px; flex: none; }
+.ts-tab > .picon svg.i { width: 16px; height: 16px; }
+.ts-tab .ts-l { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ts-tab:hover { background: var(--line-soft); color: var(--text); }
+.ts-tab.on { background: var(--card); color: var(--text); box-shadow: var(--shadow); }
+.ts-x { flex: none; width: 18px; height: 18px; display: inline-grid; place-items: center; border-radius: 6px; color: var(--muted); opacity: 0; transition: opacity .12s, background-color .12s; }
+.ts-x svg.i { width: 12px; height: 12px; stroke-width: 2.2; }
+.ts-tab:hover .ts-x, .ts-tab.on .ts-x { opacity: 1; }
+.ts-x:hover { background: var(--line); color: var(--text); }
+.ts-tab.dragging { opacity: .4; }
+.ts-tab.drop-before::before, .ts-tabs.drop-end .ts-tab:last-child::after {
+  content: ""; position: absolute; top: 6px; bottom: 6px; width: 2px; border-radius: 2px; background: var(--accent);
+}
+.ts-tab.drop-before::before { left: -2px; }
+.ts-tabs.drop-end .ts-tab:last-child::after { right: -2px; }
+html.has-tabs main { padding-top: 16px; }
+@media (max-width: 760px) {
+  .work { display: contents; }
+  .mac-only { display: none !important; }
+  html.has-tabs main { padding-top: max(18px, env(safe-area-inset-top)); }
+}
