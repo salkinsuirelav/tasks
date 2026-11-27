@@ -90,7 +90,7 @@ html[data-design="hero"] .pcard.add, html[data-design="hero"] .empty-hero { back
 /* Aufgaben-Karten auf Heute */
 html[data-design="hero"] .tcard { border-radius: var(--h-r-md); position: relative; overflow: hidden; padding: 14px 14px 14px 18px; }
 html[data-design="hero"] .tcard::before { content: ""; position: absolute; left: 7px; top: 14px; bottom: 14px; width: 3px; border-radius: 3px; background: var(--pc); }
-html[data-design="hero"] .tcard.live { box-shadow: var(--h-shadow), 0 0 0 2px var(--h-accent); }
+html[data-design="hero"] .tcard.live { box-shadow: var(--h-shadow); background: color-mix(in oklab, var(--h-accent) 7%, var(--h-surface)); }
 html[data-design="hero"] .hero { position: relative; overflow: hidden; }
 html[data-design="hero"] .hero::before { content: ""; position: absolute; left: 8px; top: 18px; bottom: 18px; width: 4px; border-radius: 4px; background: var(--pc, var(--accent)); }
 html[data-design="hero"] .empty-hero::before { display: none; }
@@ -99,7 +99,6 @@ html[data-design="hero"] .empty-hero::before { display: none; }
 html[data-design="hero"] .col { padding: 12px; }
 html[data-design="hero"] .col-head { border-bottom: 0; padding: 4px 6px 8px; }
 html[data-design="hero"] .col-head .wd { font-weight: 600; }
-html[data-design="hero"] .col.today { box-shadow: var(--h-shadow), 0 0 0 2px var(--h-accent); }
 html[data-design="hero"] .col.today .col-head .num { color: var(--h-accent); font-weight: 600; }
 html[data-design="hero"] .col.overdue .col-head .wd { color: var(--danger); }
 html[data-design="hero"] .col .card { background: var(--h-surface-2); border: 0; border-radius: 14px; box-shadow: none; transition: background-color .15s, transform .25s var(--ease-out); }
@@ -117,8 +116,12 @@ html[data-design="hero"] :is(.progress, .load, .hbar .track) { background: var(-
 html[data-design="hero"] :is(.progress, .load) > div { border-radius: 999px; }
 
 /* ---------- Kopfzeile ---------- */
+html[data-design="hero"] .head .icon-btn { background: var(--h-surface); box-shadow: var(--h-shadow); color: var(--text); }
+html[data-design="hero"] .head .icon-btn:hover { background: color-mix(in oklab, var(--h-surface) 94%, var(--h-fg)); }
+html[data-design="hero"][data-theme="dark"] .head .icon-btn { background: var(--h-default); }
+@media (prefers-color-scheme: dark) { html[data-design="hero"]:not([data-theme="light"]) .head .icon-btn { background: var(--h-default); } }
 html[data-design="hero"] .tsec-title { text-transform: none; letter-spacing: -0.01em; font-size: 15px; font-weight: 600; }
-html[data-design="hero"] .head h1 { font-weight: 700; letter-spacing: -0.025em; }
+html[data-design="hero"] .head h1 { font-weight: 600; letter-spacing: -0.025em; }
 html[data-design="hero"] .head .sub { font-family: var(--sans); font-size: 14px; color: var(--muted); margin-top: 4px; }
 
 /* ---------- Buttons (HeroUI: Pille, h 36, text-sm, medium) ---------- */
@@ -144,13 +147,24 @@ html[data-design="hero"] :is(input, select, textarea) {
   background: var(--h-surface); border: 0; border-radius: var(--h-r-field); box-shadow: var(--h-shadow), 0 0 0 1px var(--h-border) inset;
   padding: 10px 12px; transition: box-shadow .15s;
 }
-html[data-design="hero"][data-theme="dark"] :is(input, select, textarea) { background: var(--h-surface-2); box-shadow: none; }
-@media (prefers-color-scheme: dark) { html[data-design="hero"]:not([data-theme="light"]) :is(input, select, textarea) { background: var(--h-surface-2); box-shadow: none; } }
+html[data-design="hero"][data-theme="dark"] :is(input, select, textarea) { background-color: var(--h-surface-2); box-shadow: none; }
+@media (prefers-color-scheme: dark) { html[data-design="hero"]:not([data-theme="light"]) :is(input, select, textarea) { background-color: var(--h-surface-2); box-shadow: none; } }
+html[data-design="hero"][data-theme="dark"] select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23a1a1aa' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E"); }
+@media (prefers-color-scheme: dark) { html[data-design="hero"]:not([data-theme="light"]) select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23a1a1aa' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E"); } }
 html[data-design="hero"] :is(input, select, textarea):focus { box-shadow: 0 0 0 2px var(--h-accent) !important; }
 html[data-design="hero"] :is(input, textarea)::placeholder { color: var(--muted); }
 html[data-design="hero"] .capture { border-radius: 999px; padding: 5px 5px 5px 20px; }
 html[data-design="hero"] .capture input, html[data-design="hero"] .sheet .title-in { background: transparent !important; box-shadow: none !important; border: 0; }
-html[data-design="hero"] .capture select, html[data-design="hero"] .mini-select { border-radius: 999px; background: var(--h-default) !important; box-shadow: none !important; height: 32px; padding: 0 30px 0 12px; font-size: 13px; font-weight: 500; }
+html[data-design="hero"] select {
+  -webkit-appearance: none; appearance: none; cursor: pointer; padding-right: 34px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%2371717a' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center; background-size: 14px 14px;
+}
+html[data-design="hero"] :is(.capture select, .mini-select) {
+  height: 32px; border-radius: 999px; background-color: var(--h-default) !important; box-shadow: none !important;
+  padding: 0 32px 0 14px; font-size: 13px; font-weight: 500; max-width: 190px; text-overflow: ellipsis; background-position: right 11px center;
+}
+html[data-design="hero"] :is(.capture select, .mini-select):hover { background-color: color-mix(in oklab, var(--h-default) 92%, var(--h-fg)) !important; }
 
 /* ---------- Chips (HeroUI: rund, soft) ---------- */
 html[data-design="hero"] .chip { border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 500; background: var(--h-default); }
@@ -182,19 +196,31 @@ html[data-design="hero"] .seg.mini button.on { background: var(--h-surface); col
 html[data-design="hero"] .wd-pick button { border: 0; border-radius: 999px; background: var(--h-default); }
 html[data-design="hero"] .wd-pick button.on { background: var(--h-accent); }
 
-/* ---------- Seitenleiste (Mac) ---------- */
-html[data-design="hero"] .sidebar { background: var(--h-bg); border-right: 1px solid var(--h-sep); padding-left: 14px; padding-right: 14px; }
-html[data-design="hero"] .brand { font-weight: 700; letter-spacing: -0.01em; }
-html[data-design="hero"] .brand-logo { border-radius: 10px; }
-html[data-design="hero"] .nav-label { font-weight: 500; padding-top: 18px; }
-html[data-design="hero"] .nav-item { border-radius: 12px; padding: 8px 10px; font-weight: 500; color: var(--muted); border: 0; transition: background-color .15s, color .15s; }
-html[data-design="hero"] .nav-item svg.i { color: var(--muted); }
-html[data-design="hero"] .nav-item:hover { background: var(--h-default); color: var(--text); }
-html[data-design="hero"] .nav-item.active { background: var(--h-surface); color: var(--text); box-shadow: var(--h-shadow); border: 0; padding: 8px 10px; }
-html[data-design="hero"][data-theme="dark"] .nav-item.active { background: var(--h-default); }
-@media (prefers-color-scheme: dark) { html[data-design="hero"]:not([data-theme="light"]) .nav-item.active { background: var(--h-default); } }
-html[data-design="hero"] .nav-item.active svg.i { color: var(--h-accent); }
-html[data-design="hero"] .sync-pill { border-radius: 999px; }
+/* ---------- Seitenleiste (Mac) – wie die HeroUI-App: eine Icon-Spalte, eine Text-Spalte, eine Zahlen-Spalte ---------- */
+html[data-design="hero"] .sidebar { background: var(--h-bg); border-right: 0; padding: max(18px, env(safe-area-inset-top)) 12px 14px; gap: 2px; }
+html[data-design="hero"] .brand { font-weight: 600; font-size: 15px; letter-spacing: -0.01em; padding: 2px 10px 16px; gap: 10px; }
+html[data-design="hero"] .brand-logo { width: 28px; height: 28px; border-radius: 8px; }
+html[data-design="hero"] .brand .collapse-btn { width: 28px; height: 28px; margin-right: -4px; }
+html[data-design="hero"] .nav-label { font-size: 12px; font-weight: 400; color: color-mix(in oklab, var(--h-muted) 75%, transparent); padding: 16px 8px 4px 10px; height: auto; }
+html[data-design="hero"] .nav-label .icon-btn { width: 24px !important; height: 24px !important; border-radius: 8px; color: var(--muted); }
+html[data-design="hero"] .nav-label .icon-btn svg.i { width: 14px; height: 14px; }
+html[data-design="hero"] .nav-item { height: 34px; border-radius: 10px; padding: 0 8px 0 10px; gap: 10px; font-size: 14px; font-weight: 500; color: var(--text); border: 0; transition: background-color .15s; }
+html[data-design="hero"] .nav-item > :first-child { width: 18px !important; height: 18px !important; flex: none; display: inline-grid; place-items: center; color: color-mix(in oklab, var(--h-fg) 70%, transparent); }
+html[data-design="hero"] .nav-item > .dot:first-child { width: 8px !important; height: 8px !important; margin: 0 5px; }
+html[data-design="hero"] .nav-item > .picon:first-child svg.i { width: 16px; height: 16px; }
+html[data-design="hero"] .nav-item .lbl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-design="hero"] .nav-item .count { margin-left: 0; min-width: 24px; text-align: center; font-family: var(--sans); font-size: 13px; font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; }
+html[data-design="hero"] .nav-item:hover { background: color-mix(in oklab, var(--h-default) 60%, transparent); }
+html[data-design="hero"] .nav-item.active { background: var(--h-default); color: var(--text); box-shadow: none; border: 0; padding: 0 8px 0 10px; }
+html[data-design="hero"] .nav-item.active .count { color: var(--text); }
+html[data-design="hero"] .sidebar-foot { border-top: 0; padding-top: 8px; display: grid; gap: 2px; }
+html[data-design="hero"] .sync-pill { height: 28px; padding: 0 8px 0 10px; gap: 10px; font-size: 12.5px; color: var(--muted); }
+html[data-design="hero"] .sync-pill .dot { width: 8px; height: 8px; margin: 0 5px; }
+/* eingeklappte Leiste: Icons mittig */
+html[data-design="hero"] .app.nav-collapsed .nav-item, html[data-design="hero"] .app.nav-collapsed .nav-item.active { width: 40px; height: 36px; padding: 0; justify-content: center; }
+html[data-design="hero"] .app.nav-collapsed .nav-label { padding: 14px 0 4px; }
+html[data-design="hero"] .app.nav-collapsed .sync-pill { padding: 0; justify-content: center; }
+html[data-design="hero"] .app.nav-collapsed .brand { padding: 2px 0 12px; }
 
 /* ---------- Kalender ---------- */
 html[data-design="hero"] .cal-side { background: var(--h-bg); border-color: var(--h-sep); }
@@ -203,8 +229,10 @@ html[data-design="hero"] .ev { border-radius: 10px; box-shadow: none; }
 html[data-design="hero"] .ev:not(.block):not(.log):not(.appt) { border: 0; border-left: 3px solid var(--accent); background: color-mix(in oklab, var(--h-accent) 12%, var(--h-surface)); }
 html[data-design="hero"] .ev.block { border: 0; background: repeating-linear-gradient(135deg, color-mix(in oklab, var(--h-fg) 5%, transparent) 0 6px, transparent 6px 12px), var(--h-surface-2); }
 html[data-design="hero"] .ev.log { border-left-width: 3px; border-top: 0; border-right: 0; border-bottom: 0; }
-html[data-design="hero"] .cal-day.today { background-color: color-mix(in oklab, var(--h-accent) 4%, transparent); }
-html[data-design="hero"] :is(.now-line, .now-line::before) { background: var(--h-danger); }
+html[data-design="hero"] .cal-day.today { background-color: transparent; }
+html[data-design="hero"] .cal-scroll { padding-top: 14px; }
+html[data-design="hero"] .cal-times div { font-family: var(--sans); font-size: 11px; color: var(--muted); }
+html[data-design="hero"] .now-line, html[data-design="hero"] .now-line::before { background: var(--h-danger); }
 
 /* ---------- Detail-Ansicht, Dialoge, Toast, Timer ---------- */
 html[data-design="hero"] .overlay, html[data-design="hero"] .modal-overlay { background: rgba(0,0,0,.4); }
@@ -259,3 +287,6 @@ html[data-design="hero"] * { scrollbar-width: thin; scrollbar-color: color-mix(i
   html[data-design="hero"] .head .actions .icon-btn { width: 32px; height: 32px; }
   html[data-design="hero"] .head .actions { gap: 4px; }
 }
+
+/* Mac: Grundschrift 14px wie HeroUI (text-sm) */
+@media (min-width: 761px) { html[data-design="hero"] body { font-size: 14px; } }
