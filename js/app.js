@@ -108,7 +108,7 @@ function renderMain() {
       clearTimeout(renderMain.t); renderMain.t = setTimeout(() => main.classList.remove('enter-in'), 800);
     }
     const cs = $('#cal-scroll');
-    if (cs) cs.scrollTop = Math.max(0, (new Date().getHours() - 3 - store.settings.dayStart) * HOUR); // Logbuch: die letzten Stunden im Blick
+    if (cs) cs.scrollTop = Math.max(0, (new Date().getHours() - 3 - store.settings.dayStart) * HOUR - 14); // Logbuch: die letzten Stunden im Blick
     if (view === 'plan' && isMobile()) $('.col.today')?.scrollIntoView({ inline: 'start', block: 'nearest' });
   }
   lastView = view;
