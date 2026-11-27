@@ -788,56 +788,56 @@ html[data-design="glass"] .focus::before { content: ""; position: fixed; inset: 
 
 /* ===== Glass-Animationen ===== */
 /* Druck-Feedback: Glas-Buttons wölben sich kurz auf, Karten geben nach */
-html[data-design="glass"] :is(.btn, .icon-btn, .row, .tcard, .card, .pcard, .check, .seg button, .theme-pick button, .stat, .col-add) { transition: transform .45s var(--spring), background-color .2s, box-shadow .2s, border-color .2s; }
-html[data-design="glass"] .btn:not(.primary):active { transform: scale(1.05); background: var(--press-bg); transition-duration: .12s; }
-html[data-design="glass"] .btn.primary:active { transform: scale(.96); transition-duration: .1s; }
-html[data-design="glass"] :is(.row, .tcard, .card, .pcard, .theme-pick button, .col-add):active { transform: scale(.98); transition-duration: .1s; }
-html[data-design="glass"] :is(.icon-btn, .check, .seg button):active { transform: scale(.88); transition-duration: .1s; }
+html[data-motion] :is(.btn, .icon-btn, .row, .tcard, .card, .pcard, .check, .seg button, .theme-pick button, .stat, .col-add) { transition: transform .45s var(--spring), background-color .2s, box-shadow .2s, border-color .2s; }
+html[data-motion] .btn:not(.primary):active { transform: scale(1.05); background: var(--press-bg); transition-duration: .12s; }
+html[data-motion] .btn.primary:active { transform: scale(.96); transition-duration: .1s; }
+html[data-motion] :is(.row, .tcard, .card, .pcard, .theme-pick button, .col-add):active { transform: scale(.98); transition-duration: .1s; }
+html[data-motion] :is(.icon-btn, .check, .seg button):active { transform: scale(.88); transition-duration: .1s; }
 
 /* Ansicht wechseln: Inhalt gleitet gestaffelt herein */
-html[data-design="glass"] main.enter-in > *,
-html[data-design="glass"] main.enter-in :is(.today-main, .today-log, .settings, .grid, .stats, .panels, .tlist, .board) > * { animation: rise .55s var(--ease-out) both; }
-html[data-design="glass"] main.enter-in > *:nth-child(2), html[data-design="glass"] main.enter-in :is(.today-main, .today-log, .settings, .grid, .stats, .panels, .tlist, .board) > *:nth-child(2) { animation-delay: .04s; }
-html[data-design="glass"] main.enter-in > *:nth-child(3), html[data-design="glass"] main.enter-in :is(.today-main, .today-log, .settings, .grid, .stats, .panels, .tlist, .board) > *:nth-child(3) { animation-delay: .08s; }
-html[data-design="glass"] main.enter-in > *:nth-child(4), html[data-design="glass"] main.enter-in :is(.today-main, .today-log, .settings, .grid, .stats, .panels, .tlist, .board) > *:nth-child(4) { animation-delay: .12s; }
-html[data-design="glass"] main.enter-in > *:nth-child(5), html[data-design="glass"] main.enter-in :is(.today-main, .today-log, .settings, .grid, .stats, .panels, .tlist, .board) > *:nth-child(5) { animation-delay: .16s; }
-html[data-design="glass"] main.enter-in > *:nth-child(n+6), html[data-design="glass"] main.enter-in :is(.today-main, .today-log, .settings, .grid, .stats, .panels, .tlist, .board) > *:nth-child(n+6) { animation-delay: .2s; }
-html[data-design="glass"] main.enter-in.full > * { animation: none; }
+html[data-motion] main.enter-in > *,
+html[data-motion] main.enter-in :is(.today-main, .today-log, .settings, .grid, .stats, .panels, .tlist, .board) > * { animation: rise .55s var(--ease-out) both; }
+html[data-motion] main.enter-in > *:nth-child(2), html[data-motion] main.enter-in :is(.today-main, .today-log, .settings, .grid, .stats, .panels, .tlist, .board) > *:nth-child(2) { animation-delay: .04s; }
+html[data-motion] main.enter-in > *:nth-child(3), html[data-motion] main.enter-in :is(.today-main, .today-log, .settings, .grid, .stats, .panels, .tlist, .board) > *:nth-child(3) { animation-delay: .08s; }
+html[data-motion] main.enter-in > *:nth-child(4), html[data-motion] main.enter-in :is(.today-main, .today-log, .settings, .grid, .stats, .panels, .tlist, .board) > *:nth-child(4) { animation-delay: .12s; }
+html[data-motion] main.enter-in > *:nth-child(5), html[data-motion] main.enter-in :is(.today-main, .today-log, .settings, .grid, .stats, .panels, .tlist, .board) > *:nth-child(5) { animation-delay: .16s; }
+html[data-motion] main.enter-in > *:nth-child(n+6), html[data-motion] main.enter-in :is(.today-main, .today-log, .settings, .grid, .stats, .panels, .tlist, .board) > *:nth-child(n+6) { animation-delay: .2s; }
+html[data-motion] main.enter-in.full > * { animation: none; }
 @keyframes rise { from { opacity: 0; transform: translateY(14px) scale(.985); filter: blur(4px); } }
 /* Balken füllen sich */
-html[data-design="glass"] main.enter-in :is(.progress > div, .load > div, .hbar .track > div) { animation: grow .8s var(--ease-out) .15s both; transform-origin: left; }
-html[data-design="glass"] main.enter-in .bars .fill { animation: grow-y .8s var(--ease-out) .15s both; transform-origin: bottom; }
+html[data-motion] main.enter-in :is(.progress > div, .load > div, .hbar .track > div) { animation: grow .8s var(--ease-out) .15s both; transform-origin: left; }
+html[data-motion] main.enter-in .bars .fill { animation: grow-y .8s var(--ease-out) .15s both; transform-origin: bottom; }
 @keyframes grow { from { transform: scaleX(0); } }
 @keyframes grow-y { from { transform: scaleY(0); } }
 /* Neue Aufgabe ploppt rein, Haken federt */
-html[data-design="glass"] .pop { animation: pop .6s var(--spring) both; }
-html[data-design="glass"] .check.pop { animation: check-pop .55s var(--spring) both; }
+html[data-motion] .pop { animation: pop .6s var(--spring) both; }
+html[data-motion] .check.pop { animation: check-pop .55s var(--spring) both; }
 @keyframes pop { 0% { opacity: 0; transform: scale(.85); } 60% { transform: scale(1.02); } 100% { transform: scale(1); } }
 @keyframes check-pop { 0% { transform: scale(.6); } 55% { transform: scale(1.25); } 100% { transform: scale(1); } }
 /* Detail-Ansicht federt rein und gleitet raus, nach unten wegziehbar (iPhone) */
-html[data-design="glass"] .overlay { animation: fade .3s ease both; transition: opacity .25s; }
-html[data-design="glass"] .sheet { animation: sheet-in-r .5s var(--spring); transition: transform .4s var(--spring); }
-html[data-design="glass"] #sheet-root.closing .sheet { animation: sheet-out-r .26s cubic-bezier(.4, 0, 1, 1) forwards; }
-html[data-design="glass"] #sheet-root.closing .overlay { opacity: 0; }
-html[data-design="glass"] #sheet-root.stay :is(.sheet, .overlay) { animation: none; }
+html[data-motion] .overlay { animation: fade .3s ease both; transition: opacity .25s; }
+html[data-motion] .sheet { animation: sheet-in-r .5s var(--spring); transition: transform .4s var(--spring); }
+html[data-motion] #sheet-root.closing .sheet { animation: sheet-out-r .26s cubic-bezier(.4, 0, 1, 1) forwards; }
+html[data-motion] #sheet-root.closing .overlay { opacity: 0; }
+html[data-motion] #sheet-root.stay :is(.sheet, .overlay) { animation: none; }
 #sheet-root.closing { pointer-events: none; }
 @keyframes sheet-in-r { from { transform: translateX(60px); opacity: .3; } }
 @keyframes sheet-out-r { to { transform: translateX(100%); opacity: .6; } }
 @media (max-width: 760px) {
-  html[data-design="glass"] .sheet { animation-name: sheet-in; }
-  html[data-design="glass"] #sheet-root.closing .sheet { animation-name: sheet-out; }
+  html[data-motion] .sheet { animation-name: sheet-in; }
+  html[data-motion] #sheet-root.closing .sheet { animation-name: sheet-out; }
 }
 @keyframes sheet-in { from { transform: translateY(70%) scale(.96); opacity: .4; } }
 @keyframes sheet-out { to { transform: translateY(100%); opacity: .6; } }
 /* Dialoge ploppen auf, Toast federt hoch */
-html[data-design="glass"] .modal { animation: modal-in .45s var(--spring); }
-html[data-design="glass"] .modal-overlay { animation: fade .25s ease both; }
+html[data-motion] .modal { animation: modal-in .45s var(--spring); }
+html[data-motion] .modal-overlay { animation: fade .25s ease both; }
 @keyframes modal-in { from { transform: translate(-50%, -46%) scale(.92); opacity: 0; } }
-html[data-design="glass"] .toast { animation: toast-in .5s var(--spring); }
+html[data-motion] .toast { animation: toast-in .5s var(--spring); }
 @keyframes toast-in { from { transform: translate(-50%, 24px) scale(.9); opacity: 0; } }
 
 @media (prefers-reduced-motion: reduce) {
-  html[data-design="glass"] *, html[data-design="glass"] *::before { animation: none !important; transition: none !important; }
+  html[data-motion] *, html[data-motion] *::before { animation: none !important; transition: none !important; }
 }
 @media (hover: hover) { .card:not(:hover) .meta .ai-btn { display: none; } }
 
