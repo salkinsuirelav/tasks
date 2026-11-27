@@ -95,7 +95,7 @@ export function toBase(v, cur) {
 }
 export function ensureFx() {
   const b = baseCur();
-  const need = [...new Set(store.all('subs').map((s) => s.currency).filter((c) => c && c !== b))];
+  const need = [...new Set([...store.all('subs'), ...store.all('holdings')].map((s) => s.currency).filter((c) => c && c !== b))];
   if (!need.length || fxBusy) return;
   const fresh = fx?.base === b && fx.day === today() && need.every((c) => fx.rates?.[c]);
   if (fresh || (fx?.failAt && Date.now() - fx.failAt < 10 * 60000)) return;
@@ -180,8 +180,10 @@ export function viewFinance() {
     const m0 = ui.finMonth || monthStart(today());
     body = grid(calendarView(all, m0), overview(all, m0));
   }
-  return `${head('Finanzen', 'Abos', actions)}${body}`;
+  return `${head('Finanzen', '', actions, 'fin-head', areaTabs('finance'))}${body}`;
 }
+// Abos | Portfolio direkt neben dem Titel (wie „Subscriptions ⌄“ bei HeroSpace)
+export const areaTabs = (cur) => `<div class="tabs fin-area">${[['finance', 'Abos'], ['finance/portfolio', 'Portfolio']].map(([h, l]) => `<button class="${cur === h ? 'on' : ''}" data-action="fin-area" data-v="${h}">${l}</button>`).join('')}</div>`;
 const grid = (mainHTML, side) => `<div class="fin-grid"><div class="fin-main">${mainHTML}</div><aside class="fin-side panel">${side}</aside></div>`;
 const empty = () => `
   <div class="panel fin-empty">

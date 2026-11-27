@@ -19,10 +19,10 @@ const navToggle = () => {
   const c = !!store.settings.navCollapsed;
   return `<button class="icon-btn nav-toggle" data-action="toggle-nav" title="Seitenleiste ${c ? 'ausklappen' : 'einklappen'} (B)" aria-label="Seitenleiste ${c ? 'ausklappen' : 'einklappen'}">${icon(c ? 'expand' : 'collapse')}</button>`;
 };
-export const head = (title, sub = '', actions = '', cls = '') => `
+export const head = (title, sub = '', actions = '', cls = '', after = '') => `
   <div class="head ${cls}">
     ${navToggle()}
-    <div class="head-title"><h1>${title}</h1>${sub ? `<div class="sub">${sub}</div>` : ''}</div>
+    <div class="head-title"><h1>${title}</h1>${sub ? `<div class="sub">${sub}</div>` : ''}${after}</div>
     <div class="actions">${actions}${gear}</div>
   </div>`;
 
@@ -670,7 +670,7 @@ export function viewSettings() {
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.12.0</p>
+      <p class="mono muted">Version 0.13.0</p>
     </div>`;
 }
 
