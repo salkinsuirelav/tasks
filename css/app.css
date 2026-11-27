@@ -454,7 +454,7 @@ kbd { font-family: var(--mono); font-size: 12px; background: var(--card); border
   .tabbar a { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 10.5px; color: var(--muted); text-decoration: none; padding: 4px 0; }
   .tabbar a.active { color: var(--text); }
   .tabbar a svg.i { width: 22px; height: 22px; }
-  .tabbar a span { font-size: 10px; letter-spacing: -0.015em; white-space: nowrap; }
+  .tabbar a span { white-space: nowrap; }
   .head .mobile-only { display: inline-grid; position: absolute; top: 0; right: 0; }
   .head h1 { font-size: 28px; }
   .head > .head-title { padding-right: 40px; }
@@ -1281,3 +1281,39 @@ html.has-tabs .mail-wrap.split { height: calc(100dvh - 160px); }
   .m-reader { border: 0; background: transparent; box-shadow: none; padding: 0; }
   .m-r-bar { top: 0; margin: 0 -4px; }
 }
+
+/* ===================================================================
+   v0.16: Navigation sortieren + iPhone-Leiste mit „Mehr“
+   =================================================================== */
+.nav-item { position: relative; }
+.nav-item.dragging { opacity: .4; }
+.nav-item.drop-before::before, .nav-item.drop-after::after { content: ""; position: absolute; left: 8px; right: 8px; height: 2px; border-radius: 2px; background: var(--accent); pointer-events: none; }
+.nav-item.drop-before::before { top: -2px; }
+.nav-item.drop-after::after { bottom: -2px; }
+.nav-order { display: grid; }
+.no-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line-soft); font-size: 14px; }
+.no-row:last-child { border-bottom: 0; }
+.no-row > svg.i { width: 18px; height: 18px; color: var(--muted); }
+.no-l { flex: 1; min-width: 0; }
+.no-tag { font-size: 12px; color: var(--accent); white-space: nowrap; }
+.no-tag.muted { color: var(--muted); }
+.no-row.cut { border-top: 1px dashed var(--line); margin-top: 4px; padding-top: 10px; }
+.no-row .icon-btn { width: 28px; height: 28px; background: transparent; border: 0; box-shadow: none; }
+.no-row .icon-btn svg.i { width: 15px; height: 15px; }
+.no-row .icon-btn:hover:not(:disabled) { background: var(--line-soft); }
+.no-row .icon-btn:disabled { opacity: .3; }
+.more-sheet {
+  position: fixed; z-index: 51; left: 12px; right: 12px; bottom: calc(env(safe-area-inset-bottom) + 12px);
+  background: var(--panel); border-radius: 26px; padding: 14px; box-shadow: 0 24px 60px rgba(0,0,0,.25), 0 0 0 1px var(--line);
+  animation: more-up .28s cubic-bezier(.2, .9, .3, 1.1) both;
+}
+@keyframes more-up { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+.more-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.more-item { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 6px 12px; border-radius: 18px; background: var(--line-soft); color: var(--text); text-decoration: none; font-size: 13px; font-weight: 500; }
+.more-item .more-ic { display: grid; place-items: center; }
+.more-item svg.i { width: 24px; height: 24px; }
+.more-item.on { color: var(--accent); }
+.more-item:active { transform: scale(.96); }
+.more-edit { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 10px; padding: 8px; font-size: 13px; color: var(--muted); text-decoration: none; }
+.more-edit svg.i { width: 15px; height: 15px; }
+@media (min-width: 761px) { .more-sheet { left: 50%; right: auto; width: 380px; transform: translateX(-50%); animation: none; } }

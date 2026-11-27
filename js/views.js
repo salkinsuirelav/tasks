@@ -1,6 +1,7 @@
 // Alle Ansichten. Jede Funktion gibt HTML als Text zurück, app.js setzt es in die Seite ein.
 import { enabled as tabsOn } from './tabs.js';
 import { st as mailSt } from './mail.js';
+import { navItems, BAR } from './nav.js';
 import * as store from './store.js';
 import * as M from './model.js';
 import { ui, isMobile } from './ui.js';
@@ -625,6 +626,13 @@ export function viewSettings() {
           <div class="seg"><button class="${tabsOn() ? 'on' : ''}" data-action="tabs-on" data-v="1">Ein</button><button class="${tabsOn() ? '' : 'on'}" data-action="tabs-on" data-v="0">Aus</button></div>
           <p class="muted" style="font-size:13px;margin:8px 0 0">Mehrere Ansichten offen halten. ⌘-Klick auf einen Eintrag links öffnet ihn in einem neuen Tab. Tabs lassen sich verschieben.</p></div>
       </div>
+      <div class="panel" id="nav-order"><h4>Navigation</h4>
+        <p class="muted" style="font-size:13px;margin:0 0 10px">Reihenfolge der Bereiche. Auf dem Mac kannst du sie auch direkt links in der Seitenleiste ziehen. Auf dem iPhone stehen die ersten ${BAR} unten in der Leiste, der Rest unter „Mehr“.</p>
+        <div class="nav-order">${navItems(s).map((n, i, a) => `<div class="no-row ${i === BAR ? 'cut' : ''}">${icon(n.icon)}<span class="no-l">${n.label}</span>${i < BAR ? '<span class="no-tag">iPhone-Leiste</span>' : '<span class="no-tag muted">Mehr</span>'}
+          <button class="icon-btn" data-action="nav-move" data-href="${n.href}" data-d="-1" title="Nach oben" ${i === 0 ? 'disabled' : ''}>${icon('up')}</button>
+          <button class="icon-btn" data-action="nav-move" data-href="${n.href}" data-d="1" title="Nach unten" ${i === a.length - 1 ? 'disabled' : ''}>${icon('down')}</button></div>`).join('')}</div>
+        ${(s.navOrder || []).length ? '<button class="btn small" data-action="nav-reset" style="margin-top:10px">Standard-Reihenfolge</button>' : ''}
+      </div>
       <div class="panel"><h4>Planung</h4>
         <div class="set-grid">
           <div class="set-lbl">Kalender zeigt</div>
@@ -680,7 +688,7 @@ export function viewSettings() {
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.15.0</p>
+      <p class="mono muted">Version 0.16.0</p>
     </div>`;
 }
 

@@ -1,9 +1,9 @@
 // Service Worker: macht die App offline-fähig.
 // Bei jeder Änderung an den Dateien: VERSION hochzählen, damit iPhone/Mac die neue Version holen.
-const VERSION = 'v0.15.0';
+const VERSION = 'v0.16.0';
 const SHELL = [
   './', 'index.html', 'manifest.json', 'css/app.css', 'css/hero.css',
-  'js/app.js', 'js/store.js', 'js/model.js', 'js/views.js', 'js/ui.js', 'js/util.js', 'js/icons.js', 'js/config.js', 'js/md.js', 'js/keys.js', 'js/finance.js', 'js/portfolio.js', 'js/tabs.js', 'js/mail.js',
+  'js/app.js', 'js/store.js', 'js/model.js', 'js/views.js', 'js/ui.js', 'js/util.js', 'js/icons.js', 'js/config.js', 'js/md.js', 'js/keys.js', 'js/finance.js', 'js/portfolio.js', 'js/tabs.js', 'js/mail.js', 'js/nav.js',
   'icon-180.png', 'icon-192.png', 'icon-512.png', 'favicon.svg', 'favicon-32.png', 'favicon-64.png',
 ];
 
