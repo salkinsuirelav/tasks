@@ -6,7 +6,7 @@
 
 Das funktioniert auch vom iPhone aus, solange der Helfer auf dem Mac läuft.
 
-**Sicherheit:** Claude darf hier nur im Web suchen und lesen. Befehle ausführen und Dateien ändern ist gesperrt. Dein Passwort liegt nur lokal in `~/.tasks-helper.json`.
+**Sicherheit:** Claude darf hier nur im Web suchen und lesen. Befehle ausführen und Dateien ändern ist gesperrt. Dein Passwort liegt nur lokal in `~/.tasks-helper.json`. Für Apple Mail liegt das iCloud-Passwort im macOS-Schlüsselbund.
 
 ---
 
@@ -65,6 +65,7 @@ In der App unter **Einstellungen → Claude** steht jetzt **🟢 Online**.
 | `uninstall.command` | Komplett entfernen (inkl. gespeichertem Passwort) |
 | `start.command` | Nur zum Ausprobieren im Terminal-Fenster |
 | `menubar.command` | Anzeige in der Mac-Menüleiste einrichten (braucht SwiftBar) |
+| `mail-setup.command` | Apple Mail (iCloud) für die App verbinden, siehe [APPLEMAIL.md](../APPLEMAIL.md) |
 
 Das Protokoll liegt unter `~/Library/Logs/tasks-helper.log`.
 
@@ -76,6 +77,10 @@ In der Health-App (`/gym/`) unter **Ernährung → ✨ Claude** schickst du ein 
 - Läuft über dein Abo, keine API-Kosten. Claude darf dafür nur das Foto lesen (Read-Tool, nur im Arbeitsordner `~/.tasks-helper-work`).
 - Das Foto liegt nur kurz in Firebase und wird nach der Auswertung gelöscht, auch auf dem Mac.
 - **Für Fotos braucht es den Helfer ab Version mit Ernährung**: einmal den Update-Befehl unten ausführen. Text geht auch mit dem alten Helfer.
+
+## Apple Mail (iCloud) in der App
+
+Der Helfer holt deine iCloud-Mails per IMAP (wie Apple Mail) und zeigt sie in der App unter **Mail**, nur auf diesem Mac. Lesen, gelesen/ungelesen, archivieren. Kein Senden, kein Löschen. Das App-spezifische Passwort liegt im macOS-Schlüsselbund. Einrichten: [APPLEMAIL.md](../APPLEMAIL.md).
 
 ## Schnell-Eingabe per Tastenkürzel (aus jeder App)
 

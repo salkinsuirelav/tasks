@@ -6,6 +6,7 @@ import * as F from './finance.js';
 import * as P from './portfolio.js';
 import * as T from './tabs.js';
 import * as Ml from './mail.js';
+import { NAV, BAR, navItems, reorder } from './nav.js';
 import { ui, isMobile } from './ui.js';
 import { icon } from './icons.js';
 import { esc, toDateStr, today, addDays, weekStart, toMin, fromMin, nowMin, weekday, fmtClock, fmtDur, fmtHours, fmtMinutes, COLORS } from './util.js';
@@ -17,15 +18,6 @@ const main = $('#main');
 const HOUR = 56;
 
 // ---------- Navigation ----------
-const NAV = [
-  { href: '#today', label: 'Heute', icon: 'sun' },
-  { href: '#mail', label: 'Mail', icon: 'mail' },
-  { href: '#plan', label: 'Plan', icon: 'board' },
-  { href: '#calendar', label: 'Kalender', icon: 'calendar' },
-  { href: '#projects', label: 'Projekte', icon: 'folder' },
-  { href: '#review', label: 'Rückblick', icon: 'chart' },
-  { href: '#finance', label: 'Finanzen', icon: 'wallet' },
-];
 const route = () => { const [view, param] = (location.hash.slice(1) || 'today').split('/'); return { view, param }; };
 
 function renderNav() {
@@ -40,14 +32,18 @@ function renderNav() {
   $('#sidebar').innerHTML = `
     <div class="brand"><img class="brand-logo" src="favicon.svg" alt=""><span class="txt">Tasks</span>
       <button class="icon-btn collapse-btn" data-action="toggle-nav" title="Seitenleiste ${collapsed ? 'ausklappen' : 'einklappen'} (B)">${icon(collapsed ? 'expand' : 'collapse')}</button></div>
-    ${NAV.map((n) => `<a class="nav-item ${active(n.href) ? 'active' : ''}" href="${n.href}" title="${n.label}">${icon(n.icon)}<span class="lbl">${n.label}</span>${n.href === '#inbox' && M.aiNewCount() ? '<span class="ai-dot" title="Claude ist mit Aufgaben fertig"></span>' : ''}${n.href === '#inbox' && inboxCount ? `<span class="count">${inboxCount}</span>` : ''}</a>`).join('')}
+    ${navItems(store.settings).map((n) => `<a class="nav-item ${active(n.href) ? 'active' : ''}" href="${n.href}" title="${n.label}" draggable="true" data-nav="${n.href}">${icon(n.icon)}<span class="lbl">${n.label}</span>${n.href === '#inbox' && M.aiNewCount() ? '<span class="ai-dot" title="Claude ist mit Aufgaben fertig"></span>' : ''}${n.href === '#inbox' && inboxCount ? `<span class="count">${inboxCount}</span>` : ''}</a>`).join('')}
     <div class="nav-label"><span class="txt">Projekte</span> <button class="icon-btn" style="width:24px;height:24px" data-action="new-project" title="Neues Projekt">${icon('plus')}</button></div>
     ${M.projects().map((p) => `<a class="nav-item ${view === 'project' && param === p.id ? 'active' : ''}" href="#project/${p.id}" title="${esc(p.name)}">${V.projIcon(p, 16)}<span class="lbl">${esc(p.name)}</span><span class="count">${M.openTasks().filter((t) => t.projectId === p.id).length || ''}</span></a>`).join('')}
     <div class="sidebar-foot">
       <a class="nav-item ${view === 'settings' ? 'active' : ''}" href="#settings" title="Einstellungen">${icon('gear')}<span class="lbl">Einstellungen</span></a>
       <div class="sync-pill" title="${syncText}"><span class="dot" style="background:${syncColor}"></span><span class="txt">${syncText}</span></div>
     </div>`;
-  $('#tabbar').innerHTML = `<i class="tab-pill"></i>` + NAV.map((n) => `<a class="${active(n.href) ? 'active' : ''}" href="${n.href}">${icon(n.icon)}<span>${n.label}</span></a>`).join('');
+  // iPhone-Leiste: die ersten Bereiche deiner Reihenfolge, der Rest unter „Mehr“
+  const items = navItems(store.settings), bar = items.slice(0, BAR), rest = items.slice(BAR);
+  const restOn = rest.some((n) => active(n.href)) || view === 'settings';
+  $('#tabbar').innerHTML = `<i class="tab-pill"></i>` + bar.map((n) => `<a class="${active(n.href) ? 'active' : ''}" href="${n.href}">${icon(n.icon)}<span>${n.label}</span></a>`).join('')
+    + `<a class="${restOn ? 'active' : ''}" href="#" data-action="nav-more">${icon(restOn ? (rest.find((n) => active(n.href))?.icon || 'gear') : 'more')}<span>${restOn ? (rest.find((n) => active(n.href))?.label || 'Einstellungen') : 'Mehr'}</span></a>`;
   slidePill($('#tabbar'), 'tabbar', '.active');
   renderTabs();
 }
@@ -216,9 +212,20 @@ function dragToClose(el) {
     if (dy > 110) A['close-sheet'](); else el.style.transform = '';
   });
 }
+// iPhone: „Mehr“ öffnet die übrigen Bereiche als Blatt von unten
+function moreHTML() {
+  const { view } = route();
+  const on = (h) => h === `#${view}` || (view === 'project' && h === '#projects');
+  const list = [...navItems(store.settings).slice(BAR), { href: '#settings', label: 'Einstellungen', icon: 'gear' }];
+  return `<div class="overlay modal-overlay" data-action="close-modal"></div>
+    <div class="more-sheet" role="dialog" aria-label="Mehr">
+      <div class="more-grid">${list.map((n) => `<a class="more-item ${on(n.href) ? 'on' : ''}" href="${n.href}" data-action="close-modal-go"><span class="more-ic">${icon(n.icon)}</span><span>${n.label}</span></a>`).join('')}</div>
+      <a class="more-edit" href="#settings" data-action="nav-edit">${icon('list')}<span>Leiste anpassen</span></a>
+    </div>`;
+}
 const renderModal = () => {
   if (route().view === 'calendar') renderMain(); // markierte Zeit im Kalender ein-/ausblenden
-  $('#modal-root').innerHTML = ui.modal ? (P.isPfModal(ui.modal) ? P.pfModalHTML(ui.modal) : F.isFinModal(ui.modal) ? F.finModalHTML(ui.modal) : V.modalHTML(ui.modal)) : '';
+  $('#modal-root').innerHTML = ui.modal ? (ui.modal.type === 'nav-more' ? moreHTML() : P.isPfModal(ui.modal) ? P.pfModalHTML(ui.modal) : F.isFinModal(ui.modal) ? F.finModalHTML(ui.modal) : V.modalHTML(ui.modal)) : '';
   const af = $('#modal-root [autofocus]');
   if (af) { af.focus(); if (af.value) af.setSelectionRange(af.value.length, af.value.length); }
 };
@@ -488,7 +495,17 @@ const A = {
     const t = M.addTask(el.dataset.title, { date: el.dataset.date, duration: 15, subRef: el.dataset.ref });
     if (t) toast('Aufgabe angelegt.', { label: 'Öffnen', fn: () => { ui.openTask = t.id; renderSheet(); } });
   },
-  // ---- Mail (Gmail) ----
+  // ---- Navigation: Reihenfolge ----
+  'nav-more': () => { ui.modal = { type: 'nav-more' }; renderModal(); },
+  'nav-edit': () => { ui.modal = null; renderModal(); location.hash = '#settings'; setTimeout(() => $('#nav-order')?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 80); },
+  'nav-move': (el) => {
+    const items = navItems(store.settings).map((n) => n.href), i = items.indexOf(el.dataset.href), j = i + +el.dataset.d;
+    if (i < 0 || j < 0 || j >= items.length) return;
+    [items[i], items[j]] = [items[j], items[i]];
+    store.saveSettings({ navOrder: items });
+  },
+  'nav-reset': () => store.saveSettings({ navOrder: [] }),
+  // ---- Mail (Gmail + Apple Mail) ----
   'mail-cid-save': () => {
     const v = ($('#gm-cid')?.value || '').trim();
     if (!/\.apps\.googleusercontent\.com$/.test(v)) return toast('Das sieht nicht nach einer Client-ID aus (endet auf .apps.googleusercontent.com).');
@@ -498,6 +515,13 @@ const A = {
   'mail-signin': async () => { try { await Ml.signIn(); } catch (e) { toast(e.message); renderMain(); } },
   'mail-signout': () => { if (confirm('Gmail auf diesem Gerät trennen? Deine Mails bleiben in Gmail.')) Ml.signOut(); },
   'mail-refresh': () => Ml.refresh(),
+  'mail-accounts': () => { ui.mailSetup = true; ui.mailOpen = null; renderMain(); },
+  'mail-accounts-go': () => { ui.mailSetup = true; ui.mailOpen = null; if (route().view === 'mail') renderMain(); else location.hash = '#mail'; },
+  'mail-setup-done': () => { ui.mailSetup = false; renderMain(); },
+  'mail-box': (el) => { ui.mailBox = el.dataset.v; renderMain(); },
+  'ic-connect': () => Ml.icConnect(),
+  'ic-refresh': () => Ml.icRetry(),
+  'ic-disconnect': () => { if (confirm('Apple Mail auf diesem Gerät trennen? Deine Mails bleiben in iCloud. Das Passwort bleibt im Schlüsselbund deines Macs (entfernen: siehe APPLEMAIL.md).')) Ml.icDisconnect(); },
   'mail-filter': (el) => { ui.mailFilter = el.dataset.v; renderMain(); },
   'mail-open': (el) => { if (ui.mailOpen === el.dataset.id && !isMobile()) { ui.mailOpen = null; renderMain(); } else Ml.openMail(el.dataset.id); },
   'mail-close': () => { ui.mailOpen = null; renderMain(); },
@@ -506,13 +530,13 @@ const A = {
   'mail-archive': async (el) => {
     try {
       const r = await Ml.archive(el.dataset.id);
-      toast('Archiviert.', { label: 'Rückgängig', fn: () => Ml.unarchive(r).catch((e) => toast(e.message)) });
+      if (r) toast('Archiviert.', { label: 'Rückgängig', fn: () => Ml.unarchive(r).catch((e) => toast(e.message)) });
     } catch (e) { toast(e.message === 'auth' ? 'Google-Anmeldung abgelaufen.' : e.message); }
   },
   'mail-task': (el) => {
     const m = Ml.mailById(el.dataset.id);
     if (!m) return;
-    const t = M.addTask(m.subject, { notes: `Mail von ${m.from.name} <${m.from.email}>\n${Ml.gmailLink(m)}`, duration: 15 });
+    const t = M.addTask(m.subject, { notes: `Mail von ${m.from.name} <${m.from.email}>${Ml.mailLink(m) ? '\n' + Ml.mailLink(m) : ''}`, duration: 15 });
     if (t) toast('Aufgabe angelegt (ohne Datum).', { label: 'Öffnen', fn: () => { ui.openTask = t.id; renderSheet(); } });
   },
   // ---- Tabs oben (Mac) ----
@@ -782,6 +806,36 @@ document.addEventListener('auxclick', (e) => {
   if (a) { e.preventDefault(); openTab(a.getAttribute('href')); }
 });
 document.addEventListener('mousedown', (e) => { if (e.button === 1 && e.target.closest('.ts-tab, #sidebar a, #main a[href^="#"]')) e.preventDefault(); }); // kein Auto-Scroll beim Mittelklick
+// Seitenleiste: Bereiche per Ziehen umsortieren (Mac)
+let navDrag = null;
+const side = $('#sidebar');
+side.addEventListener('dragstart', (e) => {
+  const a = e.target.closest?.('[data-nav]');
+  if (!a) return;
+  navDrag = a.dataset.nav;
+  e.dataTransfer.setData('text/plain', navDrag);
+  e.dataTransfer.effectAllowed = 'move';
+  requestAnimationFrame(() => a.classList.add('dragging'));
+});
+side.addEventListener('dragover', (e) => {
+  if (!navDrag) return;
+  e.preventDefault();
+  const items = [...side.querySelectorAll('[data-nav]')];
+  const before = items.find((a) => { const r = a.getBoundingClientRect(); return e.clientY < r.top + r.height / 2; });
+  items.forEach((a) => a.classList.remove('drop-before', 'drop-after'));
+  if (before) before.classList.add('drop-before'); else items[items.length - 1]?.classList.add('drop-after');
+  side.dataset.before = before ? before.dataset.nav : '';
+});
+side.addEventListener('drop', (e) => {
+  if (!navDrag) return;
+  e.preventDefault();
+  const before = side.dataset.before || null;
+  if (before !== navDrag) store.saveSettings({ navOrder: reorder(store.settings, navDrag, before) });
+});
+side.addEventListener('dragend', () => {
+  navDrag = null; delete side.dataset.before;
+  side.querySelectorAll('.drop-before, .drop-after, .dragging').forEach((a) => a.classList.remove('drop-before', 'drop-after', 'dragging'));
+});
 // Tabs umsortieren per Ziehen
 let tabDrag = null;
 const tabStrip = $('#tabstrip');
