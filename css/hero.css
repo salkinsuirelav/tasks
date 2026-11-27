@@ -79,11 +79,11 @@ html[data-design="hero"] ::selection { background: color-mix(in oklab, var(--h-a
 html[data-design="hero"] :is(.capture, .list, .col, .tcard, .hero, .daystats, .pcard, .stat, .panel, .cal-grid, .box) {
   background: var(--h-surface); border: 0; box-shadow: var(--h-shadow);
 }
-html[data-design="hero"] :is(.list, .col, .hero, .daystats, .pcard, .stat, .panel, .cal-grid.mini) { border-radius: var(--h-r-lg); }
-html[data-design="hero"] .pcard, html[data-design="hero"] .stat, html[data-design="hero"] .panel { padding: 20px; }
+html[data-design="hero"] :is(.list, .col, .hero, .daystats, .pcard, .stat, .panel, .cal-grid) { border-radius: var(--h-r-md); }
+html[data-design="hero"] .pcard, html[data-design="hero"] .stat, html[data-design="hero"] .panel { padding: 16px; }
 html[data-design="hero"] .pcard { transition: box-shadow .2s, transform .25s var(--ease-out); }
 @media (hover: hover) { html[data-design="hero"] .pcard:hover { box-shadow: var(--h-overlay-shadow); } }
-html[data-design="hero"] :is(.pcard .lbl, .stat .lbl, .panel h4) { text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 500; color: var(--muted); }
+html[data-design="hero"] :is(.pcard .lbl, .stat .lbl) { text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 500; color: var(--muted); }
 html[data-design="hero"] .pcard .pfoot, html[data-design="hero"] .sidebar-foot { border-color: var(--h-sep); }
 html[data-design="hero"] .pcard.add, html[data-design="hero"] .empty-hero { background: transparent; box-shadow: none; border: 1.5px dashed var(--h-border); }
 
@@ -101,7 +101,7 @@ html[data-design="hero"] .col-head { border-bottom: 0; padding: 4px 6px 8px; }
 html[data-design="hero"] .col-head .wd { font-weight: 600; }
 html[data-design="hero"] .col.today .col-head .num { color: var(--h-accent); font-weight: 600; }
 html[data-design="hero"] .col.overdue .col-head .wd { color: var(--danger); }
-html[data-design="hero"] .col .card { background: var(--h-surface-2); border: 0; border-radius: 14px; box-shadow: none; transition: background-color .15s, transform .25s var(--ease-out); }
+html[data-design="hero"] .col .card { background: var(--h-surface-2); border: 0; border-radius: 12px; box-shadow: none; transition: background-color .15s, transform .25s var(--ease-out); }
 html[data-design="hero"] .col .card:hover { background: var(--h-surface-3); }
 html[data-design="hero"] .col .card.rep { background: transparent; border: 1.5px dashed var(--h-border); }
 html[data-design="hero"] .col-add { border: 0; border-radius: var(--h-r-field); background: transparent; color: var(--muted); }
@@ -276,7 +276,7 @@ html[data-design="hero"] * { scrollbar-width: thin; scrollbar-color: color-mix(i
   }
   html[data-design="hero"] main { padding-bottom: calc(env(safe-area-inset-bottom) + 112px); }
   html[data-design="hero"] main.full { padding-bottom: 0; }
-  html[data-design="hero"] .cal-grid { margin-bottom: calc(env(safe-area-inset-bottom) + 92px); border-radius: var(--h-r-lg); }
+  html[data-design="hero"] .cal-grid { margin-bottom: calc(env(safe-area-inset-bottom) + 92px); border-radius: var(--h-r-md); }
   html[data-design="hero"] .timer-pill { bottom: calc(env(safe-area-inset-bottom) + 88px); }
   html[data-design="hero"] .toast { bottom: calc(env(safe-area-inset-bottom) + 92px); }
   html[data-design="hero"] .sheet { top: 5dvh; border-radius: 28px 28px 0 0; }
@@ -290,3 +290,105 @@ html[data-design="hero"] * { scrollbar-width: thin; scrollbar-color: color-mix(i
 
 /* Mac: Grundschrift 14px wie HeroUI (text-sm) */
 @media (min-width: 761px) { html[data-design="hero"] body { font-size: 14px; } }
+
+/* ===================================================================
+   v0.11.2: Proportionen wie im HeroUI-Pro-Layout (template-4.heroui.pro)
+   Kopfzeile 64px (Seitenleisten-Schalter + Titel 20px), Inhalt 32px Rand,
+   Karten 16px Radius + Innenabstand, Kennzahlen 24px, Kartentitel 16px, Text 14px.
+   =================================================================== */
+/* Kennzahl-Karten */
+html[data-design="hero"] :is(.pcard .lbl, .stat .lbl) { font-size: 14px; }
+html[data-design="hero"] .panel h4 { text-transform: none; letter-spacing: -0.01em; font-size: 16px; font-weight: 500; color: var(--text); margin: 0 0 12px; }
+html[data-design="hero"] .panel h4.fl { font-size: 14px; letter-spacing: 0; margin-bottom: 8px; }
+/* Trennlinie zwischen Seitenleiste und Inhalt wie im Template */
+html[data-design="hero"] .sidebar { box-shadow: inset -1px 0 0 rgba(0,0,0,.08); }
+html[data-design="hero"][data-theme="dark"] .sidebar { box-shadow: inset -1px 0 0 rgba(255,255,255,.07); }
+@media (prefers-color-scheme: dark) { html[data-design="hero"]:not([data-theme="light"]) .sidebar { box-shadow: inset -1px 0 0 rgba(255,255,255,.07); } }
+html[data-design="hero"] :is(.stat .big, .pcard .big) { font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: -0.025em; }
+html[data-design="hero"] .stat .big { margin-top: 12px; }
+html[data-design="hero"] .stat .big small { font-size: 13px; letter-spacing: 0; }
+html[data-design="hero"] .stats { gap: 12px; margin-bottom: 24px; }
+html[data-design="hero"] .pcard h3 { font-size: 16px; font-weight: 500; margin-bottom: 12px; gap: 8px; }
+html[data-design="hero"] .pcard .pfoot { font-size: 12px; margin-top: 12px; padding-top: 12px; color: var(--muted); }
+html[data-design="hero"] .grid { gap: 12px; }
+html[data-design="hero"] .panels { gap: 24px; margin-bottom: 24px; }
+html[data-design="hero"] .settings { gap: 16px; }
+
+/* Abschnitte + Zähler-Badges wie „Recent activity 8“ */
+html[data-design="hero"] .tsec { margin-bottom: 24px; }
+html[data-design="hero"] .tsec-title { font-size: 16px; letter-spacing: -0.01em; }
+html[data-design="hero"] .group-title { font-size: 14px; margin: 24px 0 8px; }
+html[data-design="hero"] :is(.tsec-title + .mono, .group-title > .mono) {
+  display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px;
+  background: color-mix(in oklab, var(--h-default) 80%, transparent); color: var(--text); font-family: var(--sans); font-size: 12px; font-weight: 500;
+}
+html[data-design="hero"] .tsec-sum { font-size: 13px; }
+
+/* Heute */
+html[data-design="hero"] .daystats { padding: 10px 16px; margin: 0 0 24px; }
+html[data-design="hero"] .daystats b { font-size: 16px; }
+html[data-design="hero"] .capture { padding: 4px 4px 4px 16px; margin-bottom: 12px; }
+html[data-design="hero"] .capture input { font-size: 14px; padding: 8px 0; }
+html[data-design="hero"] .tcard { padding: 12px 12px 12px 18px; }
+html[data-design="hero"] .tcard::before { top: 12px; bottom: 12px; }
+html[data-design="hero"] .row { padding: 10px 16px; }
+html[data-design="hero"] .hero { padding: 16px 20px 16px 24px; }
+html[data-design="hero"] .hero-title { font-size: 18px; font-weight: 600; margin: 4px 0 6px; }
+html[data-design="hero"] .hero-clock { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; }
+
+/* Plan */
+html[data-design="hero"] .board { gap: 12px; }
+html[data-design="hero"] .col { padding: 10px; }
+
+/* Eingaben 36px hoch wie HeroUI-Felder */
+html[data-design="hero"] :is(input, select, textarea) { padding: 8px 12px; }
+html[data-design="hero"] .sheet .title-in { font-size: 18px; }
+html[data-design="hero"] .modal h2 { font-size: 18px; }
+
+/* Projekt-Titel direkt in der Kopfzeile bearbeiten */
+html[data-design="hero"] .head h1 .title-in { background-color: transparent; padding: 2px 6px; margin-left: -6px; border-radius: 8px; }
+html[data-design="hero"] .head h1 .title-in:hover { background-color: var(--h-default); }
+html[data-design="hero"] .head h1 .title-in:focus { background-color: var(--h-surface); }
+
+/* Tabs + Buttons kompakt (h 32 wie im Template) */
+html[data-design="hero"] .tabs { padding: 3px; }
+html[data-design="hero"] .tabs button { height: 26px; padding: 0 12px; font-size: 13px; }
+html[data-design="hero"] .tabs .seg-pill { top: 3px; bottom: 3px; }
+html[data-design="hero"] .tab-row .btn { height: 32px; padding: 0 12px; }
+
+@media (min-width: 761px) {
+  /* Kopfzeile: klebt oben, 64px, Schalter links, Titel 20px, Aktionen rechts */
+  html[data-design="hero"] main { padding: 0 32px 40px; }
+  html[data-design="hero"] main.full { padding: 0; }
+  html[data-design="hero"] .cal-main { padding: 0 32px; }
+  html[data-design="hero"] .head {
+    position: sticky; top: 0; z-index: 20; height: 64px; margin: 0 -32px 16px; padding: 0 32px 0 16px;
+    align-items: center; flex-wrap: nowrap; gap: 12px; background: var(--h-bg);
+  }
+  html[data-design="hero"] .head-title { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+  html[data-design="hero"] .head h1 { font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
+  html[data-design="hero"] .head .sub { margin: 0; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  html[data-design="hero"] .head .actions { gap: 8px; flex-wrap: nowrap; flex: none; }
+  html[data-design="hero"] .head .btn { height: 32px; padding: 0 12px; font-size: 14px; }
+  html[data-design="hero"] .head .icon-btn:not(.nav-toggle) { width: 32px; height: 32px; background: var(--h-default); box-shadow: none; }
+  html[data-design="hero"] .head .icon-btn:not(.nav-toggle):hover { background: color-mix(in oklab, var(--h-default) 92%, var(--h-fg)); }
+  html[data-design="hero"] .head .icon-btn.nav-toggle { display: inline-grid !important; flex: none; width: 32px; height: 32px; background: transparent; box-shadow: none; color: var(--text); }
+  html[data-design="hero"] .head .icon-btn.nav-toggle:hover { background: var(--h-default); }
+  html[data-design="hero"] .head .nav-toggle svg.i { width: 18px; height: 18px; }
+  html[data-design="hero"] .head .actions svg.i { width: 16px; height: 16px; }
+  html[data-design="hero"] .proj-head .head-title { flex: 1; align-items: center; }
+  html[data-design="hero"] .proj-head h1 { flex: 1; gap: 8px; }
+  /* Schalter sitzt jetzt in der Kopfzeile – die eingeklappte Leiste zeigt nur Logo + Symbole */
+  html[data-design="hero"] .brand .collapse-btn { display: none; }
+  html[data-design="hero"] .today-log { top: 64px; }
+  html[data-design="hero"] .goalbar { margin: 0 0 12px; }
+}
+
+/* iPhone: Projekt-Kopf kompakt (nur Pfeil zurück, Titel kleiner) */
+@media (max-width: 760px) {
+  html[data-design="hero"] .proj-head h1 { font-size: 22px; gap: 6px; }
+  html[data-design="hero"] .head h1 .crumb span, html[data-design="hero"] .head h1 .crumb-sep { display: none; }
+  html[data-design="hero"] .head h1 .crumb svg.i { width: 20px; height: 20px; }
+  html[data-design="hero"] .head { margin-bottom: 16px; }
+  html[data-design="hero"] .head h1 { letter-spacing: -0.02em; }
+}
