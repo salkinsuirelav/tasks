@@ -14,9 +14,15 @@ const HOUR = 56; // Pixel pro Stunde im Kalender (gleich wie --hour in CSS)
 
 // ---------- Bausteine ----------
 const gear = `<a href="#settings" class="icon-btn mobile-only" aria-label="Einstellungen">${icon('gear')}</a>`;
-const head = (title, sub = '', actions = '') => `
-  <div class="head">
-    <div><h1>${title}</h1>${sub ? `<div class="sub">${sub}</div>` : ''}</div>
+// Seitenleisten-Schalter oben links in der Kopfzeile (Modern-Design, Mac) – wie im HeroUI-Pro-Layout
+const navToggle = () => {
+  const c = !!store.settings.navCollapsed;
+  return `<button class="icon-btn nav-toggle" data-action="toggle-nav" title="Seitenleiste ${c ? 'ausklappen' : 'einklappen'} (B)" aria-label="Seitenleiste ${c ? 'ausklappen' : 'einklappen'}">${icon(c ? 'expand' : 'collapse')}</button>`;
+};
+const head = (title, sub = '', actions = '', cls = '') => `
+  <div class="head ${cls}">
+    ${navToggle()}
+    <div class="head-title"><h1>${title}</h1>${sub ? `<div class="sub">${sub}</div>` : ''}</div>
     <div class="actions">${actions}${gear}</div>
   </div>`;
 
@@ -488,19 +494,11 @@ export function viewProject(id) {
   const done = ts.filter((t) => t.status === 'done').sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
   const ws = weekStart(today());
   return `
-    <a href="#projects" class="btn ghost small" style="margin:0 0 10px -8px">${icon('arrowLeft')} Projekte</a>
-    <div class="head">
-      <div style="display:flex;gap:12px;align-items:center;flex:1;min-width:240px">
-        ${projIcon(p, 26)}
-        <input class="title-in" style="font-size:28px;font-weight:700;border:0;background:transparent;padding:0" value="${esc(p.name)}" data-pfield="name" data-id="${p.id}">
-      </div>
-      <div class="actions">
-        ${p.archived
+    ${head(`<a href="#projects" class="crumb" title="Zurück zu Projekten">${icon('arrowLeft')}<span>Projekte</span></a><span class="crumb-sep">/</span>${projIcon(p, 20)}<input class="title-in" value="${esc(p.name)}" data-pfield="name" data-id="${p.id}" aria-label="Projektname">`, '',
+      `${p.archived
           ? `<button class="btn small" data-action="unarchive-project" data-id="${p.id}">Wieder aktivieren</button>`
           : `<button class="btn small" data-action="archive-project" data-id="${p.id}">${icon('check')} Abschließen</button>`}
-        <button class="btn small danger" data-action="delete-project" data-id="${p.id}">${icon('trash')} Löschen</button>
-      </div>
-    </div>
+        <button class="btn small danger" data-action="delete-project" data-id="${p.id}">${icon('trash')} Löschen</button>`, 'proj-head')}
     <div class="stats">
       <div class="stat"><div class="lbl">Stunden gesamt</div><div class="big">${fmtHours(totalMsForProject(id))}</div></div>
       <div class="stat"><div class="lbl">Diese Woche</div><div class="big">${fmtHours(weekMsForProject(id, ws))}</div></div>
@@ -514,13 +512,13 @@ export function viewProject(id) {
         ${done.length ? `<div class="group-title">Erledigt <span class="mono">${done.length}</span></div><div class="list">${done.slice(0, 30).map((t) => taskRow(t)).join('')}</div>` : ''}
       </div>
       <div class="panel" style="align-self:start">
-        <h4>Ziel</h4>
+        <h4 class="fl">Ziel</h4>
         <input data-pfield="goal" data-id="${id}" value="${esc(p.goal || '')}" placeholder="Woran merkst du, dass das Projekt fertig ist?" style="margin-bottom:18px">
-        <h4>Notizen</h4>
+        <h4 class="fl">Notizen</h4>
         <textarea data-pfield="notes" data-id="${id}" placeholder="Worum geht's? Links, Ideen…" style="min-height:160px;margin-bottom:18px">${esc(p.notes || '')}</textarea>
-        <h4>Symbol</h4>
+        <h4 class="fl">Symbol</h4>
         <div class="icons-pick" style="margin-bottom:18px">${iconPick(p.icon, `data-action="project-icon" data-id="${id}"`)}</div>
-        <h4>Farbe</h4>
+        <h4 class="fl">Farbe</h4>
         <div class="colors">${COLORS.map((c) => `<button class="${c === p.color ? 'on' : ''}" style="background:${c}" data-action="project-color" data-id="${id}" data-color="${c}"></button>`).join('')}</div>
       </div>
     </div>`;
@@ -665,7 +663,7 @@ export function viewSettings() {
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.11.1</p>
+      <p class="mono muted">Version 0.11.2</p>
     </div>`;
 }
 
