@@ -440,3 +440,14 @@ html[data-design="hero"] .ts-x:hover { background: var(--h-default); }
   html.has-tabs[data-design="hero"] .today-log { top: 56px; }
   html.has-tabs[data-design="hero"] .fin-side { top: 72px; }
 }
+
+/* ===== v0.15 Mail im Modern-Design ===== */
+html[data-design="hero"] .m-list { border: 0; box-shadow: var(--h-shadow); background: var(--h-surface); }
+html[data-design="hero"] :is(.m-row:hover, .m-row.on) { background: var(--h-surface-2); }
+html[data-design="hero"] .m-cat { background: var(--h-default); }
+html[data-design="hero"] .m-acts .icon-btn:hover, html[data-design="hero"] .m-r-bar .icon-btn:hover { background: var(--h-default); }
+html[data-design="hero"] .m-imgs { background: var(--h-default); }
+html[data-design="hero"] .m-steps code { background: var(--h-default); }
+@media (max-width: 760px) {
+  html[data-design="hero"] .m-reader { box-shadow: none; background: transparent; }
+}

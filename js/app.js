@@ -5,6 +5,7 @@ import * as V from './views.js';
 import * as F from './finance.js';
 import * as P from './portfolio.js';
 import * as T from './tabs.js';
+import * as Ml from './mail.js';
 import { ui, isMobile } from './ui.js';
 import { icon } from './icons.js';
 import { esc, toDateStr, today, addDays, weekStart, toMin, fromMin, nowMin, weekday, fmtClock, fmtDur, fmtHours, fmtMinutes, COLORS } from './util.js';
@@ -18,6 +19,7 @@ const HOUR = 56;
 // ---------- Navigation ----------
 const NAV = [
   { href: '#today', label: 'Heute', icon: 'sun' },
+  { href: '#mail', label: 'Mail', icon: 'mail' },
   { href: '#plan', label: 'Plan', icon: 'board' },
   { href: '#calendar', label: 'Kalender', icon: 'calendar' },
   { href: '#projects', label: 'Projekte', icon: 'folder' },
@@ -83,6 +85,7 @@ function renderTabs() {
 }
 // Scrollposition je Tab merken, damit ein Wechsel nicht nach oben springt
 const tabScroll = {};
+let mailScroll = { id: null, top: 0 };
 let pendingScroll = null;
 function tabSwitch(fn) {
   tabScroll[T.active().id] = main.scrollTop;
@@ -138,9 +141,10 @@ function renderMain() {
   const act = document.activeElement;
   const key = act?.dataset?.key;
   const sel = key && 'selectionStart' in act ? [act.selectionStart, act.selectionEnd] : null;
+  { const rd = $('.m-reader'), fr = $('.m-frame'); if (rd && fr) mailScroll = { id: fr.dataset.id, top: rd.scrollTop }; }
   const scroll = { board: $('.board')?.scrollLeft, cal: $('#cal-scroll')?.scrollTop, side: $('.side-list')?.scrollTop };
 
-  const views = { today: V.viewToday, inbox: V.viewToday, plan: V.viewPlan, calendar: V.viewCalendar, projects: V.viewProjects, project: () => V.viewProject(param), review: V.viewReview, finance: () => (param === 'portfolio' ? P.viewPortfolio() : F.viewFinance()), settings: V.viewSettings };
+  const views = { today: V.viewToday, inbox: V.viewToday, plan: V.viewPlan, calendar: V.viewCalendar, projects: V.viewProjects, project: () => V.viewProject(param), review: V.viewReview, finance: () => (param === 'portfolio' ? P.viewPortfolio() : F.viewFinance()), mail: Ml.viewMail, settings: V.viewSettings };
   main.classList.toggle('full', view === 'calendar');
   main.innerHTML = (views[view] || V.viewToday)();
   // Kalender-Kasten auf Heute: Höhe in ganzen Stunden, damit keine Uhrzeit halb abgeschnitten ist
@@ -166,6 +170,12 @@ function renderMain() {
     if (view === 'plan' && isMobile()) $('.col.today')?.scrollIntoView({ inline: 'start', block: 'nearest' });
   }
   lastView = view;
+  // Mail: Fenster so hoch wie die Mail, Leseposition beim Neuzeichnen halten
+  const fr = main.querySelector('.m-frame');
+  if (fr) {
+    const rd = main.querySelector('.m-reader'), keep = fr.dataset.id === mailScroll.id ? mailScroll.top : 0;
+    fr.addEventListener('load', () => { try { fr.style.height = fr.contentDocument.documentElement.scrollHeight + 'px'; } catch {} if (rd && keep) rd.scrollTop = keep; });
+  }
   main.querySelectorAll('.tabs').forEach((tb) => slidePill(tb, 'tabs:' + [...tb.querySelectorAll('button')].map((b) => b.dataset.v || b.textContent).join('|'), '.on', 'seg-pill'));
   applyFlash();
   if (key) {
@@ -278,6 +288,7 @@ function applyFinishedPlans() {
 store.subscribe(() => { applyTheme(); renderAll(); });
 F.onFx(() => { if (route().view === 'finance') renderMain(); }); // Wechselkurse sind da
 P.onPrices(() => { if (route().view === 'finance') renderMain(); }); // Krypto-Kurse sind da
+Ml.onMail(() => { if (route().view === 'mail') renderMain(); }); // Mails geladen / geändert
 window.addEventListener('hashchange', () => { ui.sideOpen = false; T.onNavigate(); renderMain(); renderPill(); applyPendingScroll(); });
 let resizeT;
 window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(renderMain, 200); });
@@ -476,6 +487,33 @@ const A = {
   'fin-task': (el) => {
     const t = M.addTask(el.dataset.title, { date: el.dataset.date, duration: 15, subRef: el.dataset.ref });
     if (t) toast('Aufgabe angelegt.', { label: 'Öffnen', fn: () => { ui.openTask = t.id; renderSheet(); } });
+  },
+  // ---- Mail (Gmail) ----
+  'mail-cid-save': () => {
+    const v = ($('#gm-cid')?.value || '').trim();
+    if (!/\.apps\.googleusercontent\.com$/.test(v)) return toast('Das sieht nicht nach einer Client-ID aus (endet auf .apps.googleusercontent.com).');
+    ui.mailCidEdit = false; store.saveSettings({ gmailClientId: v });
+  },
+  'mail-cid-edit': () => { ui.mailCidEdit = true; renderMain(); },
+  'mail-signin': async () => { try { await Ml.signIn(); } catch (e) { toast(e.message); renderMain(); } },
+  'mail-signout': () => { if (confirm('Gmail auf diesem Gerät trennen? Deine Mails bleiben in Gmail.')) Ml.signOut(); },
+  'mail-refresh': () => Ml.refresh(),
+  'mail-filter': (el) => { ui.mailFilter = el.dataset.v; renderMain(); },
+  'mail-open': (el) => { if (ui.mailOpen === el.dataset.id && !isMobile()) { ui.mailOpen = null; renderMain(); } else Ml.openMail(el.dataset.id); },
+  'mail-close': () => { ui.mailOpen = null; renderMain(); },
+  'mail-imgs': (el) => { Ml.st.imgs[el.dataset.id] = true; renderMain(); },
+  'mail-unread': async (el) => { ui.mailOpen = null; try { await Ml.setUnread(el.dataset.id, true); } catch (e) { toast(e.message === 'auth' ? 'Google-Anmeldung abgelaufen.' : e.message); } },
+  'mail-archive': async (el) => {
+    try {
+      const r = await Ml.archive(el.dataset.id);
+      toast('Archiviert.', { label: 'Rückgängig', fn: () => Ml.unarchive(r).catch((e) => toast(e.message)) });
+    } catch (e) { toast(e.message === 'auth' ? 'Google-Anmeldung abgelaufen.' : e.message); }
+  },
+  'mail-task': (el) => {
+    const m = Ml.mailById(el.dataset.id);
+    if (!m) return;
+    const t = M.addTask(m.subject, { notes: `Mail von ${m.from.name} <${m.from.email}>\n${Ml.gmailLink(m)}`, duration: 15 });
+    if (t) toast('Aufgabe angelegt (ohne Datum).', { label: 'Öffnen', fn: () => { ui.openTask = t.id; renderSheet(); } });
   },
   // ---- Tabs oben (Mac) ----
   'tab-select': (el) => { if (el.dataset.tab !== T.active().id) tabSwitch(() => T.select(el.dataset.tab)); },
@@ -797,6 +835,7 @@ document.addEventListener('keydown', (e) => {
   else if (el.id === 'slot-title') A['slot-task']();
   else if (el.id === 'p-name') A['save-project']();
   else if (el.id === 'quick-title') A['quick-save']();
+  else if (el.id === 'gm-cid') A['mail-cid-save']();
   else if (el.id === 'h-search') A['hold-search']();
   else if (el.closest('.pf-modal') && el.tagName === 'INPUT') A['save-holding']();
   else if (el.closest('.fin-modal') && el.tagName === 'INPUT' && el.type !== 'checkbox') A['save-sub']();
