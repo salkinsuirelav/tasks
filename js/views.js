@@ -1,4 +1,6 @@
 // Alle Ansichten. Jede Funktion gibt HTML als Text zurück, app.js setzt es in die Seite ein.
+import { enabled as tabsOn } from './tabs.js';
+import { st as mailSt } from './mail.js';
 import * as store from './store.js';
 import * as M from './model.js';
 import { ui, isMobile } from './ui.js';
@@ -619,6 +621,9 @@ export function viewSettings() {
         <p class="muted" style="font-size:13px;margin:10px 0 0">„Wie System“ folgt der Einstellung deines Macs bzw. iPhones (Hell/Dunkel/Automatisch).</p>
         <div class="theme-pick">${[['hero', 'Modern'], ['glass', 'Glass'], ['classic', 'Klassisch']].map(([d, l]) => `<button class="t-${d} ${curDesign() === d ? 'on' : ''}" data-action="design" data-v="${d}"><i></i>${l}</button>`).join('')}</div>
         <p class="muted" style="font-size:13px;margin:10px 0 0">Design gilt für dieses Gerät.</p>
+        <div class="field mac-only" style="margin:16px 0 0"><label>Tabs oben (Mac)</label>
+          <div class="seg"><button class="${tabsOn() ? 'on' : ''}" data-action="tabs-on" data-v="1">Ein</button><button class="${tabsOn() ? '' : 'on'}" data-action="tabs-on" data-v="0">Aus</button></div>
+          <p class="muted" style="font-size:13px;margin:8px 0 0">Mehrere Ansichten offen halten. ⌘-Klick auf einen Eintrag links öffnet ihn in einem neuen Tab. Tabs lassen sich verschieben.</p></div>
       </div>
       <div class="panel"><h4>Planung</h4>
         <div class="set-grid">
@@ -642,6 +647,11 @@ export function viewSettings() {
           <select id="base-cur" aria-label="Hauptwährung">${['EUR', 'USD', 'KRW', 'GBP', 'CHF'].map((c) => `<option ${c === (s.baseCurrency || 'EUR') ? 'selected' : ''}>${c}</option>`).join('')}</select>
         </div>
         <p class="muted" style="font-size:13px;margin:10px 0 0">Abos in anderen Währungen rechnet die App mit den Tageskursen der EZB um (frankfurter.dev, ohne Anmeldung).</p>
+      </div>
+      <div class="panel"><h4>Mail</h4>
+        ${mailSt.account ? `<p style="margin:0 0 10px">Gmail: <b>${esc(mailSt.account)}</b></p><button class="btn" data-action="mail-signout">${icon('logout')} Auf diesem Gerät trennen</button>`
+          : `<p class="muted" style="margin:0 0 10px">Noch kein Postfach verbunden.</p><a class="btn" href="#mail">${icon('mail')} Gmail einrichten</a>`}
+        <p class="muted" style="font-size:13px;margin:10px 0 0">Mails bleiben auf deinem Gerät, die App speichert sie nirgends. Apple Mail (iCloud) kommt über den Mac-Helfer dazu.</p>
       </div>
       <div class="panel"><h4>Backup</h4>
         <p class="muted" style="margin-top:0">Lädt alle Daten als JSON-Datei herunter. Am besten ab und zu in iCloud Drive speichern.</p>
@@ -670,7 +680,7 @@ export function viewSettings() {
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.13.0</p>
+      <p class="mono muted">Version 0.15.0</p>
     </div>`;
 }
 

@@ -428,3 +428,26 @@ html[data-design="hero"] :is(.pf-row, .pf-alloc-row):hover { background: var(--h
 html[data-design="hero"] .pf-picked { background: var(--h-default); }
 html[data-design="hero"] .pf-plot .gl { stroke: var(--h-sep); }
 html[data-design="hero"] .pf-kinds { border-top-color: var(--h-sep); }
+
+/* ===== v0.14 Tabs oben im Modern-Design (HeroSpace) ===== */
+html[data-design="hero"] .ts-tab:hover { background: color-mix(in oklab, var(--h-default) 70%, transparent); }
+html[data-design="hero"] .ts-tab.on { background: var(--h-surface); box-shadow: var(--h-shadow); }
+html[data-design="hero"] .ts-nav .icon-btn:hover:not(:disabled), html[data-design="hero"] .ts-add:hover:not(:disabled) { background: var(--h-default); }
+html[data-design="hero"] .ts-x:hover { background: var(--h-default); }
+@media (min-width: 761px) {
+  html.has-tabs[data-design="hero"] main { padding-top: 0; }
+  html.has-tabs[data-design="hero"] .head { height: 56px; }
+  html.has-tabs[data-design="hero"] .today-log { top: 56px; }
+  html.has-tabs[data-design="hero"] .fin-side { top: 72px; }
+}
+
+/* ===== v0.15 Mail im Modern-Design ===== */
+html[data-design="hero"] .m-list { border: 0; box-shadow: var(--h-shadow); background: var(--h-surface); }
+html[data-design="hero"] :is(.m-row:hover, .m-row.on) { background: var(--h-surface-2); }
+html[data-design="hero"] .m-cat { background: var(--h-default); }
+html[data-design="hero"] .m-acts .icon-btn:hover, html[data-design="hero"] .m-r-bar .icon-btn:hover { background: var(--h-default); }
+html[data-design="hero"] .m-imgs { background: var(--h-default); }
+html[data-design="hero"] .m-steps code { background: var(--h-default); }
+@media (max-width: 760px) {
+  html[data-design="hero"] .m-reader { box-shadow: none; background: transparent; }
+}

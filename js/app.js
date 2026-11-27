@@ -4,6 +4,8 @@ import * as M from './model.js';
 import * as V from './views.js';
 import * as F from './finance.js';
 import * as P from './portfolio.js';
+import * as T from './tabs.js';
+import * as Ml from './mail.js';
 import { ui, isMobile } from './ui.js';
 import { icon } from './icons.js';
 import { esc, toDateStr, today, addDays, weekStart, toMin, fromMin, nowMin, weekday, fmtClock, fmtDur, fmtHours, fmtMinutes, COLORS } from './util.js';
@@ -17,6 +19,7 @@ const HOUR = 56;
 // ---------- Navigation ----------
 const NAV = [
   { href: '#today', label: 'Heute', icon: 'sun' },
+  { href: '#mail', label: 'Mail', icon: 'mail' },
   { href: '#plan', label: 'Plan', icon: 'board' },
   { href: '#calendar', label: 'Kalender', icon: 'calendar' },
   { href: '#projects', label: 'Projekte', icon: 'folder' },
@@ -46,6 +49,57 @@ function renderNav() {
     </div>`;
   $('#tabbar').innerHTML = `<i class="tab-pill"></i>` + NAV.map((n) => `<a class="${active(n.href) ? 'active' : ''}" href="${n.href}">${icon(n.icon)}<span>${n.label}</span></a>`).join('');
   slidePill($('#tabbar'), 'tabbar', '.active');
+  renderTabs();
+}
+
+// ---------- Tabs oben (Mac) ----------
+// Titel + Symbol eines Tabs aus seiner Adresse
+function tabMeta(hash) {
+  const [v, prm] = (hash.slice(1) || 'today').split('/');
+  if (v === 'project') { const p = store.get('projects', prm); return p ? { label: p.name, ic: V.projIcon(p, 16) } : { label: 'Projekt', ic: icon('folder') }; }
+  if (v === 'finance') return prm === 'portfolio' ? { label: 'Portfolio', ic: icon('pie') } : { label: 'Finanzen', ic: icon('wallet') };
+  if (v === 'settings') return { label: 'Einstellungen', ic: icon('gear') };
+  const n = NAV.find((x) => x.href === '#' + v) || NAV[0];
+  return { label: n.label, ic: icon(n.icon) };
+}
+const desktop = () => !window.matchMedia('(max-width: 760px)').matches;
+function renderTabs() {
+  const on = T.enabled();
+  document.documentElement.classList.toggle('has-tabs', on);
+  const box = $('#tabstrip');
+  const act = T.active();
+  document.title = `${tabMeta(act.hash).label} – Tasks`;
+  if (!on || !desktop()) { box.innerHTML = ''; return; }
+  const tabs = T.list();
+  box.innerHTML = `
+    <div class="ts-nav">
+      <button class="icon-btn" data-action="tab-back" title="Zurück" ${T.canBack() ? '' : 'disabled'}>${icon('left')}</button>
+      <button class="icon-btn" data-action="tab-fwd" title="Vor" ${T.canFwd() ? '' : 'disabled'}>${icon('right')}</button>
+    </div>
+    <div class="ts-tabs" role="tablist">${tabs.map((t) => {
+      const m = tabMeta(t.hash);
+      return `<div class="ts-tab ${t.id === act.id ? 'on' : ''}" role="tab" aria-selected="${t.id === act.id}" data-action="tab-select" data-tab="${t.id}" draggable="true" title="${esc(m.label)}">
+        ${m.ic}<span class="ts-l">${esc(m.label)}</span>${tabs.length > 1 ? `<button class="ts-x" data-action="tab-close" data-tab="${t.id}" title="Tab schließen" aria-label="Tab schließen">${icon('x')}</button>` : ''}</div>`;
+    }).join('')}</div>
+    <button class="icon-btn ts-add" data-action="tab-new" title="Neuer Tab" ${tabs.length >= 12 ? 'disabled' : ''}>${icon('plus')}</button>`;
+}
+// Scrollposition je Tab merken, damit ein Wechsel nicht nach oben springt
+const tabScroll = {};
+let mailScroll = { id: null, top: 0 };
+let pendingScroll = null;
+function tabSwitch(fn) {
+  tabScroll[T.active().id] = main.scrollTop;
+  const changed = fn();
+  pendingScroll = tabScroll[T.active().id] ?? 0;
+  if (!changed) { renderMain(); renderPill(); applyPendingScroll(); }
+}
+function applyPendingScroll() { if (pendingScroll != null) { main.scrollTop = pendingScroll; pendingScroll = null; } }
+function openTab(hash) {
+  tabSwitch(() => {
+    const before = location.hash || '#today';
+    if (!T.open(hash)) { toast('Höchstens 12 Tabs.'); return false; }
+    return before !== hash;
+  });
 }
 
 // ---------- Design: Glass (Standard) oder Klassisch + Animationen ----------
@@ -87,9 +141,10 @@ function renderMain() {
   const act = document.activeElement;
   const key = act?.dataset?.key;
   const sel = key && 'selectionStart' in act ? [act.selectionStart, act.selectionEnd] : null;
+  { const rd = $('.m-reader'), fr = $('.m-frame'); if (rd && fr) mailScroll = { id: fr.dataset.id, top: rd.scrollTop }; }
   const scroll = { board: $('.board')?.scrollLeft, cal: $('#cal-scroll')?.scrollTop, side: $('.side-list')?.scrollTop };
 
-  const views = { today: V.viewToday, inbox: V.viewToday, plan: V.viewPlan, calendar: V.viewCalendar, projects: V.viewProjects, project: () => V.viewProject(param), review: V.viewReview, finance: () => (param === 'portfolio' ? P.viewPortfolio() : F.viewFinance()), settings: V.viewSettings };
+  const views = { today: V.viewToday, inbox: V.viewToday, plan: V.viewPlan, calendar: V.viewCalendar, projects: V.viewProjects, project: () => V.viewProject(param), review: V.viewReview, finance: () => (param === 'portfolio' ? P.viewPortfolio() : F.viewFinance()), mail: Ml.viewMail, settings: V.viewSettings };
   main.classList.toggle('full', view === 'calendar');
   main.innerHTML = (views[view] || V.viewToday)();
   // Kalender-Kasten auf Heute: Höhe in ganzen Stunden, damit keine Uhrzeit halb abgeschnitten ist
@@ -115,6 +170,12 @@ function renderMain() {
     if (view === 'plan' && isMobile()) $('.col.today')?.scrollIntoView({ inline: 'start', block: 'nearest' });
   }
   lastView = view;
+  // Mail: Fenster so hoch wie die Mail, Leseposition beim Neuzeichnen halten
+  const fr = main.querySelector('.m-frame');
+  if (fr) {
+    const rd = main.querySelector('.m-reader'), keep = fr.dataset.id === mailScroll.id ? mailScroll.top : 0;
+    fr.addEventListener('load', () => { try { fr.style.height = fr.contentDocument.documentElement.scrollHeight + 'px'; } catch {} if (rd && keep) rd.scrollTop = keep; });
+  }
   main.querySelectorAll('.tabs').forEach((tb) => slidePill(tb, 'tabs:' + [...tb.querySelectorAll('button')].map((b) => b.dataset.v || b.textContent).join('|'), '.on', 'seg-pill'));
   applyFlash();
   if (key) {
@@ -227,7 +288,8 @@ function applyFinishedPlans() {
 store.subscribe(() => { applyTheme(); renderAll(); });
 F.onFx(() => { if (route().view === 'finance') renderMain(); }); // Wechselkurse sind da
 P.onPrices(() => { if (route().view === 'finance') renderMain(); }); // Krypto-Kurse sind da
-window.addEventListener('hashchange', () => { ui.sideOpen = false; renderMain(); renderPill(); });
+Ml.onMail(() => { if (route().view === 'mail') renderMain(); }); // Mails geladen / geändert
+window.addEventListener('hashchange', () => { ui.sideOpen = false; T.onNavigate(); renderMain(); renderPill(); applyPendingScroll(); });
 let resizeT;
 window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(renderMain, 200); });
 
@@ -426,6 +488,44 @@ const A = {
     const t = M.addTask(el.dataset.title, { date: el.dataset.date, duration: 15, subRef: el.dataset.ref });
     if (t) toast('Aufgabe angelegt.', { label: 'Öffnen', fn: () => { ui.openTask = t.id; renderSheet(); } });
   },
+  // ---- Mail (Gmail) ----
+  'mail-cid-save': () => {
+    const v = ($('#gm-cid')?.value || '').trim();
+    if (!/\.apps\.googleusercontent\.com$/.test(v)) return toast('Das sieht nicht nach einer Client-ID aus (endet auf .apps.googleusercontent.com).');
+    ui.mailCidEdit = false; store.saveSettings({ gmailClientId: v });
+  },
+  'mail-cid-edit': () => { ui.mailCidEdit = true; renderMain(); },
+  'mail-signin': async () => { try { await Ml.signIn(); } catch (e) { toast(e.message); renderMain(); } },
+  'mail-signout': () => { if (confirm('Gmail auf diesem Gerät trennen? Deine Mails bleiben in Gmail.')) Ml.signOut(); },
+  'mail-refresh': () => Ml.refresh(),
+  'mail-filter': (el) => { ui.mailFilter = el.dataset.v; renderMain(); },
+  'mail-open': (el) => { if (ui.mailOpen === el.dataset.id && !isMobile()) { ui.mailOpen = null; renderMain(); } else Ml.openMail(el.dataset.id); },
+  'mail-close': () => { ui.mailOpen = null; renderMain(); },
+  'mail-imgs': (el) => { Ml.st.imgs[el.dataset.id] = true; renderMain(); },
+  'mail-unread': async (el) => { ui.mailOpen = null; try { await Ml.setUnread(el.dataset.id, true); } catch (e) { toast(e.message === 'auth' ? 'Google-Anmeldung abgelaufen.' : e.message); } },
+  'mail-archive': async (el) => {
+    try {
+      const r = await Ml.archive(el.dataset.id);
+      toast('Archiviert.', { label: 'Rückgängig', fn: () => Ml.unarchive(r).catch((e) => toast(e.message)) });
+    } catch (e) { toast(e.message === 'auth' ? 'Google-Anmeldung abgelaufen.' : e.message); }
+  },
+  'mail-task': (el) => {
+    const m = Ml.mailById(el.dataset.id);
+    if (!m) return;
+    const t = M.addTask(m.subject, { notes: `Mail von ${m.from.name} <${m.from.email}>\n${Ml.gmailLink(m)}`, duration: 15 });
+    if (t) toast('Aufgabe angelegt (ohne Datum).', { label: 'Öffnen', fn: () => { ui.openTask = t.id; renderSheet(); } });
+  },
+  // ---- Tabs oben (Mac) ----
+  'tab-select': (el) => { if (el.dataset.tab !== T.active().id) tabSwitch(() => T.select(el.dataset.tab)); },
+  'tab-close': (el) => {
+    let r = null;
+    tabSwitch(() => { r = T.close(el.dataset.tab); return r ? r.changed : false; });
+    if (r) toast('Tab geschlossen.', { label: 'Rückgängig', fn: () => tabSwitch(() => T.restore(r)) });
+  },
+  'tab-new': () => openTab('#today'),
+  'tab-back': () => tabSwitch(() => T.back()),
+  'tab-fwd': () => tabSwitch(() => T.forward()),
+  'tabs-on': (el) => { T.setEnabled(el.dataset.v === '1'); renderMain(); },
   // ---- Finanzen: Portfolio ----
   'fin-area': (el) => { location.hash = '#' + el.dataset.v; },
   'pf-range': (el) => { ui.pfRange = +el.dataset.v; renderMain(); },
@@ -664,6 +764,52 @@ document.addEventListener('click', (e) => {
   if (fn) { e.preventDefault(); fn(el, e); }
 });
 
+// Tabs: Cmd/Strg-Klick oder Mittelklick auf einen Link in der Seitenleiste öffnet ihn in einem neuen Tab,
+// Mittelklick auf einen Tab schließt ihn
+const tabsActive = () => T.enabled() && desktop();
+document.addEventListener('click', (e) => {
+  if (!(e.metaKey || e.ctrlKey) || !tabsActive()) return;
+  const a = e.target.closest('#sidebar a[href^="#"], #main a[href^="#"]');
+  if (!a) return;
+  e.preventDefault(); e.stopPropagation();
+  openTab(a.getAttribute('href'));
+}, true);
+document.addEventListener('auxclick', (e) => {
+  if (e.button !== 1 || !tabsActive()) return;
+  const tab = e.target.closest('.ts-tab');
+  if (tab) { e.preventDefault(); if (T.list().length > 1) A['tab-close']({ dataset: { tab: tab.dataset.tab } }); return; }
+  const a = e.target.closest('#sidebar a[href^="#"], #main a[href^="#"]');
+  if (a) { e.preventDefault(); openTab(a.getAttribute('href')); }
+});
+document.addEventListener('mousedown', (e) => { if (e.button === 1 && e.target.closest('.ts-tab, #sidebar a, #main a[href^="#"]')) e.preventDefault(); }); // kein Auto-Scroll beim Mittelklick
+// Tabs umsortieren per Ziehen
+let tabDrag = null;
+const tabStrip = $('#tabstrip');
+tabStrip.addEventListener('dragstart', (e) => {
+  const t = e.target.closest('.ts-tab');
+  if (!t) return;
+  tabDrag = t.dataset.tab;
+  e.dataTransfer.setData('text/plain', 'tab');
+  e.dataTransfer.effectAllowed = 'move';
+  requestAnimationFrame(() => t.classList.add('dragging'));
+});
+tabStrip.addEventListener('dragover', (e) => {
+  if (!tabDrag) return;
+  e.preventDefault();
+  const tabs = [...tabStrip.querySelectorAll('.ts-tab')];
+  const before = tabs.find((t) => { const r = t.getBoundingClientRect(); return e.clientX < r.left + r.width / 2; });
+  const id = before ? before.dataset.tab : null;
+  tabs.forEach((t) => t.classList.toggle('drop-before', !!before && t === before && t.dataset.tab !== tabDrag));
+  tabStrip.querySelector('.ts-tabs').classList.toggle('drop-end', !before);
+  tabStrip.dataset.before = id || '';
+});
+tabStrip.addEventListener('drop', (e) => {
+  if (!tabDrag) return;
+  e.preventDefault();
+  T.move(tabDrag, tabStrip.dataset.before || null);
+});
+tabStrip.addEventListener('dragend', () => { tabDrag = null; delete tabStrip.dataset.before; renderTabs(); });
+
 // ---------- Tippen ----------
 document.addEventListener('keydown', (e) => {
   const el = e.target;
@@ -689,6 +835,7 @@ document.addEventListener('keydown', (e) => {
   else if (el.id === 'slot-title') A['slot-task']();
   else if (el.id === 'p-name') A['save-project']();
   else if (el.id === 'quick-title') A['quick-save']();
+  else if (el.id === 'gm-cid') A['mail-cid-save']();
   else if (el.id === 'h-search') A['hold-search']();
   else if (el.closest('.pf-modal') && el.tagName === 'INPUT') A['save-holding']();
   else if (el.closest('.fin-modal') && el.tagName === 'INPUT' && el.type !== 'checkbox') A['save-sub']();
@@ -715,7 +862,7 @@ function shortcut(e) {
   const id = actionFor(store.settings, e.key);
   if (!id) return false;
   const { view } = route();
-  const navTo = { heute: '#today', inbox: '#inbox', plan: '#plan', calendar: '#calendar', projects: '#projects', review: '#review', settings: '#settings' };
+  const navTo = { heute: '#today', inbox: '#inbox', plan: '#plan', calendar: '#calendar', projects: '#projects', review: '#review', finance: '#finance', settings: '#settings' };
   const step = (d) => {
     if (view === 'plan') A['plan-nav']({ dataset: { d: String(d * 7) } });
     else if (view === 'calendar') A['cal-nav']({ dataset: { d: String(d * (isMobile() ? 1 : 7)) } });
@@ -736,6 +883,9 @@ function shortcut(e) {
     done: () => ui.openTask && A.toggle({ dataset: { id: ui.openTask } }),
     focus: () => ui.openTask && A.focus({ dataset: { id: ui.openTask } }),
     help: () => { ui.modal = { type: 'keys' }; renderModal(); },
+    tabnew: () => T.enabled() && desktop() && A['tab-new'](),
+    tabclose: () => T.enabled() && desktop() && T.list().length > 1 && A['tab-close']({ dataset: { tab: T.active().id } }),
+    tabnext: () => T.enabled() && desktop() && tabSwitch(() => T.cycle(1)),
   };
   e.preventDefault();
   if (navTo[id]) { ui.openTask = null; renderSheet(); location.hash = navTo[id]; } else run[id]?.();
@@ -1004,7 +1154,9 @@ document.addEventListener('dragend', () => {
 // Beim Start als Home-Bildschirm-App immer in der Inbox öffnen (ältere Installationen haben noch #plan als Startadresse gespeichert)
 const standalone = navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
 let launched = false; try { launched = !!sessionStorage.getItem('launched'); sessionStorage.setItem('launched', '1'); } catch {}
-if (!location.hash || location.hash === '#inbox' || (standalone && !launched)) location.replace('#today');
+const startHash = !location.hash || location.hash === '#inbox' || (standalone && !launched) ? '#today' : location.hash;
+T.init(startHash); // Tabs: passender Tab wird aktiv, sonst öffnet der aktive Tab diese Ansicht
+if (T.active().hash !== location.hash) history.replaceState(null, '', T.active().hash); // ohne hashchange
 applyTheme();
 renderAll();
 store.initSync();
