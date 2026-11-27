@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="de" data-design="glass">
+<html lang="de" data-design="hero" data-motion>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
@@ -13,16 +13,21 @@
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
   <link rel="icon" type="image/png" sizes="64x64" href="favicon-64.png">
-  <meta name="theme-color" content="#f4f3ef" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#121211" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f5f5f5" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)">
   <script>
     // Hell/Dunkel sofort setzen, damit nichts aufblitzt
     try { const t = JSON.parse(localStorage.getItem('taskapp-settings') || '{}').theme; if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch {}
     // Design (Glass/Klassisch) pro Gerät, ebenfalls vor dem ersten Zeichnen
-    window.applyDesign = function (d) { document.documentElement.dataset.design = d; };
-    try { window.applyDesign(localStorage.getItem('taskapp-design') || 'glass'); } catch (e) { window.applyDesign('glass'); }
+    // v0.11: HeroUI-Look ist neuer Standard (eigener Schlüssel, damit alle Geräte einmal umspringen)
+    window.applyDesign = function (d) { const h = document.documentElement; h.dataset.design = d; if (d === 'classic') delete h.dataset.motion; else h.dataset.motion = ''; };
+    try { window.applyDesign(localStorage.getItem('taskapp-design-v2') || 'hero'); } catch (e) { window.applyDesign('hero'); }
   </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="css/hero.css">
 </head>
 <body>
   <div class="app">

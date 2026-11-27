@@ -47,9 +47,9 @@ function renderNav() {
 
 // ---------- Design: Glass (Standard) oder Klassisch + Animationen ----------
 // Pro Gerät gespeichert; index.html setzt es schon vor dem ersten Zeichnen. Im klassischen Design blendet CSS alles hier aus.
-const design = () => { try { return localStorage.getItem('taskapp-design') || 'glass'; } catch { return 'glass'; } };
-const glass = () => design() === 'glass' && !matchMedia('(prefers-reduced-motion: reduce)').matches;
-function setDesign(d) { try { localStorage.setItem('taskapp-design', d); } catch {} window.applyDesign?.(d); applyTheme(); renderAll(); }
+const design = () => { try { return localStorage.getItem('taskapp-design-v2') || 'hero'; } catch { return 'hero'; } };
+const glass = () => design() !== 'classic' && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+function setDesign(d) { try { localStorage.setItem('taskapp-design-v2', d); } catch {} window.applyDesign?.(d); applyTheme(); renderAll(); }
 // Pille gleitet von der alten zur neuen Position (FLIP): alte Position merken, nach dem Neuzeichnen dort ansetzen und loslaufen lassen
 const pillPos = {};
 function slidePill(box, key, onSel = '.on', cls = 'tab-pill') {
@@ -167,7 +167,7 @@ function applyTheme() {
   if (t === 'system') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
   document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.remove());
   const meta = document.createElement('meta');
-  meta.name = 'theme-color'; meta.content = design() === 'glass' ? (isDark() ? '#0f1112' : '#f1f1ed') : isDark() ? '#121211' : '#f4f3ef';
+  meta.name = 'theme-color'; meta.content = design() === 'hero' ? (isDark() ? '#09090b' : '#f5f5f5') : design() === 'glass' ? (isDark() ? '#0f1112' : '#f1f1ed') : isDark() ? '#121211' : '#f4f3ef';
   document.head.append(meta);
 }
 darkMQ.addEventListener?.('change', applyTheme);

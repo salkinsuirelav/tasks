@@ -20,7 +20,7 @@ const head = (title, sub = '', actions = '') => `
     <div class="actions">${actions}${gear}</div>
   </div>`;
 
-const curDesign = () => { try { return localStorage.getItem('taskapp-design') || 'glass'; } catch { return 'glass'; } };
+const curDesign = () => { try { return localStorage.getItem('taskapp-design-v2') || 'hero'; } catch { return 'hero'; } };
 const chipPrio = (p) => (p ? `<span class="chip p-${p}">${p === 'frog' ? '🐸 ' : ''}${prioLabel(p)}</span>` : '');
 // Projekt-Symbol: gewähltes Icon in Projektfarbe, sonst ein Farbpunkt
 export const projIcon = (p, size = 14) => p?.icon
@@ -619,7 +619,7 @@ export function viewSettings() {
       <div class="panel"><h4>Darstellung</h4>
         <div class="seg">${[['system', 'Wie System'], ['light', 'Hell'], ['dark', 'Dunkel']].map(([v, l]) => `<button class="${(s.theme || 'system') === v ? 'on' : ''}" data-action="theme" data-v="${v}">${l}</button>`).join('')}</div>
         <p class="muted" style="font-size:13px;margin:10px 0 0">„Wie System“ folgt der Einstellung deines Macs bzw. iPhones (Hell/Dunkel/Automatisch).</p>
-        <div class="theme-pick">${[['glass', 'Glass'], ['classic', 'Klassisch']].map(([d, l]) => `<button class="t-${d} ${curDesign() === d ? 'on' : ''}" data-action="design" data-v="${d}"><i></i>${l}</button>`).join('')}</div>
+        <div class="theme-pick">${[['hero', 'Modern'], ['glass', 'Glass'], ['classic', 'Klassisch']].map(([d, l]) => `<button class="t-${d} ${curDesign() === d ? 'on' : ''}" data-action="design" data-v="${d}"><i></i>${l}</button>`).join('')}</div>
         <p class="muted" style="font-size:13px;margin:10px 0 0">Design gilt für dieses Gerät.</p>
       </div>
       <div class="panel"><h4>Planung</h4>
@@ -665,7 +665,7 @@ export function viewSettings() {
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.10.4</p>
+      <p class="mono muted">Version 0.11.0</p>
     </div>`;
 }
 
