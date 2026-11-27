@@ -448,6 +448,8 @@ html[data-design="hero"] .m-cat { background: var(--h-default); }
 html[data-design="hero"] .m-acts .icon-btn:hover, html[data-design="hero"] .m-r-bar .icon-btn:hover { background: var(--h-default); }
 html[data-design="hero"] .m-imgs { background: var(--h-default); }
 html[data-design="hero"] .m-steps code { background: var(--h-default); }
+html[data-design="hero"] .m-note:not(.bad) { background: var(--h-default); }
+html[data-design="hero"] .m-att-i { border-color: var(--h-sep); background: var(--h-surface); }
 @media (max-width: 760px) {
   html[data-design="hero"] .m-reader { box-shadow: none; background: transparent; }
 }

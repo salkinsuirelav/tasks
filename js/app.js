@@ -505,7 +505,7 @@ const A = {
     store.saveSettings({ navOrder: items });
   },
   'nav-reset': () => store.saveSettings({ navOrder: [] }),
-  // ---- Mail (Gmail) ----
+  // ---- Mail (Gmail + Apple Mail) ----
   'mail-cid-save': () => {
     const v = ($('#gm-cid')?.value || '').trim();
     if (!/\.apps\.googleusercontent\.com$/.test(v)) return toast('Das sieht nicht nach einer Client-ID aus (endet auf .apps.googleusercontent.com).');
@@ -515,6 +515,13 @@ const A = {
   'mail-signin': async () => { try { await Ml.signIn(); } catch (e) { toast(e.message); renderMain(); } },
   'mail-signout': () => { if (confirm('Gmail auf diesem Gerät trennen? Deine Mails bleiben in Gmail.')) Ml.signOut(); },
   'mail-refresh': () => Ml.refresh(),
+  'mail-accounts': () => { ui.mailSetup = true; ui.mailOpen = null; renderMain(); },
+  'mail-accounts-go': () => { ui.mailSetup = true; ui.mailOpen = null; if (route().view === 'mail') renderMain(); else location.hash = '#mail'; },
+  'mail-setup-done': () => { ui.mailSetup = false; renderMain(); },
+  'mail-box': (el) => { ui.mailBox = el.dataset.v; renderMain(); },
+  'ic-connect': () => Ml.icConnect(),
+  'ic-refresh': () => Ml.icRetry(),
+  'ic-disconnect': () => { if (confirm('Apple Mail auf diesem Gerät trennen? Deine Mails bleiben in iCloud. Das Passwort bleibt im Schlüsselbund deines Macs (entfernen: siehe APPLEMAIL.md).')) Ml.icDisconnect(); },
   'mail-filter': (el) => { ui.mailFilter = el.dataset.v; renderMain(); },
   'mail-open': (el) => { if (ui.mailOpen === el.dataset.id && !isMobile()) { ui.mailOpen = null; renderMain(); } else Ml.openMail(el.dataset.id); },
   'mail-close': () => { ui.mailOpen = null; renderMain(); },
@@ -523,13 +530,13 @@ const A = {
   'mail-archive': async (el) => {
     try {
       const r = await Ml.archive(el.dataset.id);
-      toast('Archiviert.', { label: 'Rückgängig', fn: () => Ml.unarchive(r).catch((e) => toast(e.message)) });
+      if (r) toast('Archiviert.', { label: 'Rückgängig', fn: () => Ml.unarchive(r).catch((e) => toast(e.message)) });
     } catch (e) { toast(e.message === 'auth' ? 'Google-Anmeldung abgelaufen.' : e.message); }
   },
   'mail-task': (el) => {
     const m = Ml.mailById(el.dataset.id);
     if (!m) return;
-    const t = M.addTask(m.subject, { notes: `Mail von ${m.from.name} <${m.from.email}>\n${Ml.gmailLink(m)}`, duration: 15 });
+    const t = M.addTask(m.subject, { notes: `Mail von ${m.from.name} <${m.from.email}>${Ml.mailLink(m) ? '\n' + Ml.mailLink(m) : ''}`, duration: 15 });
     if (t) toast('Aufgabe angelegt (ohne Datum).', { label: 'Öffnen', fn: () => { ui.openTask = t.id; renderSheet(); } });
   },
   // ---- Tabs oben (Mac) ----

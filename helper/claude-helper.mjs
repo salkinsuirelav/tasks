@@ -6,6 +6,7 @@
 // Sicherheit:
 // - Claude darf hier NUR im Web suchen/lesen. Keine Befehle ausführen, keine Dateien ändern.
 // - Deine Zugangsdaten liegen nur lokal in ~/.tasks-helper.json (nur für dich lesbar).
+// - Apple Mail (iCloud): eigener Teil in mail-icloud.mjs, Passwort im macOS-Schlüsselbund.
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -18,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { getFirestore, collection, query, where, onSnapshot, doc, getDoc, getDocs, updateDoc, setDoc } from 'firebase/firestore';
+import { handleMail } from './mail-icloud.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CRED_FILE = path.join(os.homedir(), '.tasks-helper.json');
@@ -123,7 +125,7 @@ async function main() {
   const base = ['users', user.uid];
 
   // Lebenszeichen, damit die App "Mac-Helfer online" anzeigt
-  const beat = () => setDoc(doc(db, ...base, 'meta', 'helper'), { id: 'helper', lastSeen: Date.now(), host: os.hostname().replace(/\.local$/, ''), features: ['nutrition-image'], updatedAt: Date.now(), createdAt: Date.now() }).catch((e) => log('Heartbeat-Fehler:', e.message));
+  const beat = () => setDoc(doc(db, ...base, 'meta', 'helper'), { id: 'helper', lastSeen: Date.now(), host: os.hostname().replace(/\.local$/, ''), features: ['nutrition-image', 'mail-icloud'], updatedAt: Date.now(), createdAt: Date.now() }).catch((e) => log('Heartbeat-Fehler:', e.message));
   beat();
   setInterval(beat, 60000);
 
@@ -161,6 +163,7 @@ async function main() {
   // können so einen Header nicht ohne Erlaubnis mitschicken, damit kann keine fremde Seite Aufgaben anlegen.
   const server = http.createServer((req, res) => {
     const reply = (code, text) => { res.writeHead(code, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end(text); };
+    if (handleMail(req, res)) return; // Apple Mail (iCloud) für die Task-App, siehe mail-icloud.mjs
     if (req.method === 'GET' && req.url === '/ping') return reply(200, 'ok');
     if (req.method === 'GET' && req.url.startsWith('/menubar')) return reply(200, menubarText(live));
     if (req.method === 'POST' && req.url.startsWith('/stop') && req.headers['x-tasks']) { stopRunning().then(() => reply(200, 'Timer gestoppt'), (e) => reply(500, e.message)); return; }

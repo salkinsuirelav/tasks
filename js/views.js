@@ -1,6 +1,6 @@
 // Alle Ansichten. Jede Funktion gibt HTML als Text zurück, app.js setzt es in die Seite ein.
 import { enabled as tabsOn } from './tabs.js';
-import { st as mailSt } from './mail.js';
+import { st as mailSt, ic as mailIc } from './mail.js';
 import { navItems, BAR } from './nav.js';
 import * as store from './store.js';
 import * as M from './model.js';
@@ -657,9 +657,10 @@ export function viewSettings() {
         <p class="muted" style="font-size:13px;margin:10px 0 0">Abos in anderen Währungen rechnet die App mit den Tageskursen der EZB um (frankfurter.dev, ohne Anmeldung).</p>
       </div>
       <div class="panel"><h4>Mail</h4>
-        ${mailSt.account ? `<p style="margin:0 0 10px">Gmail: <b>${esc(mailSt.account)}</b></p><button class="btn" data-action="mail-signout">${icon('logout')} Auf diesem Gerät trennen</button>`
-          : `<p class="muted" style="margin:0 0 10px">Noch kein Postfach verbunden.</p><a class="btn" href="#mail">${icon('mail')} Gmail einrichten</a>`}
-        <p class="muted" style="font-size:13px;margin:10px 0 0">Mails bleiben auf deinem Gerät, die App speichert sie nirgends. Apple Mail (iCloud) kommt über den Mac-Helfer dazu.</p>
+        ${mailSt.account || mailIc.account ? `${mailSt.account ? `<p style="margin:0 0 6px">Gmail: <b>${esc(mailSt.account)}</b></p>` : ''}${mailIc.account ? `<p style="margin:0 0 6px">Apple Mail: <b>${esc(mailIc.account)}</b> <span class="muted">(über den Mac-Helfer)</span></p>` : ''}`
+          : '<p class="muted" style="margin:0 0 10px">Noch kein Postfach verbunden.</p>'}
+        <button class="btn" data-action="mail-accounts-go" style="margin-top:4px">${icon('mail')} Konten verwalten</button>
+        <p class="muted" style="font-size:13px;margin:10px 0 0">Mails bleiben auf deinem Gerät, die App speichert sie nirgends. Apple Mail (iCloud) geht nur auf dem Mac, auf dem der Helfer läuft.</p>
       </div>
       <div class="panel"><h4>Backup</h4>
         <p class="muted" style="margin-top:0">Lädt alle Daten als JSON-Datei herunter. Am besten ab und zu in iCloud Drive speichern.</p>
@@ -688,7 +689,7 @@ export function viewSettings() {
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.16.0</p>
+      <p class="mono muted">Version 0.17.0</p>
     </div>`;
 }
 

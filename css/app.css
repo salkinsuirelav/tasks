@@ -1140,7 +1140,9 @@ html[data-motion] .toast { animation: toast-in .5s var(--spring); }
   .pf-head > .head-title { padding-right: 84px; }
   .pf-head .actions, .mail-head .actions { display: contents; }
   .mail-head .actions [data-action="mail-refresh"] { position: absolute; top: 0; right: 42px; width: 32px; height: 32px; }
-  .mail-head .actions [data-action="mail-signout"] { display: none; }
+  .mail-head .actions [data-action="mail-accounts"] { display: none; }
+  .mail-head .actions .btn { position: absolute; top: 0; right: 42px; height: 32px; }
+  .m-box { margin-left: 0; }
   .mail-head > .head-title { padding-right: 84px; }
   .pf-head .actions .btn.primary { position: absolute; top: 0; right: 42px; width: 32px; height: 32px; padding: 0; border-radius: 999px; display: inline-grid; place-items: center; }
   .pf-kpi-v { flex-direction: column; align-items: flex-start; }
@@ -1281,6 +1283,26 @@ html.has-tabs .mail-wrap.split { height: calc(100dvh - 160px); }
   .m-reader { border: 0; background: transparent; box-shadow: none; padding: 0; }
   .m-r-bar { top: 0; margin: 0 -4px; }
 }
+
+/* ===================================================================
+   v0.17: Apple Mail (iCloud) über den Mac-Helfer, gemeinsamer Posteingang
+   =================================================================== */
+.m-box { margin-left: auto; }
+.m-cat.ic i { background: #0090ff; }
+.m-cat.gm i { background: #ea4335; }
+.m-acc-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.m-ol { padding-left: 18px; display: grid; gap: 4px; }
+.m-err { color: var(--danger); margin: 0; }
+.m-note { display: flex; align-items: center; gap: 10px; font-size: 13px; line-height: 1.45; background: var(--line-soft); border-radius: 12px; padding: 8px 10px 8px 12px; margin: 0 0 12px; }
+.m-note svg.i { width: 16px; height: 16px; color: var(--muted); flex: none; }
+.m-note span { flex: 1; min-width: 0; }
+.m-note.bad { background: color-mix(in oklab, var(--danger) 10%, transparent); }
+.m-att { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.m-att-i { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); font-size: 13px; max-width: 100%; min-width: 0; }
+.m-att-i svg.i { width: 15px; height: 15px; color: var(--muted); flex: none; }
+.m-att-i b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; }
+.m-att-i small { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.m-att-n { font-size: 12px; flex-basis: 100%; }
 
 /* ===================================================================
    v0.16: Navigation sortieren + iPhone-Leiste mit „Mehr“

@@ -29,7 +29,7 @@ launchctl bootout "$DOMAIN/$LABEL" 2>/dev/null
 
 echo "2/4  Dateien nach $APP kopieren und Pakete laden …"
 mkdir -p "$APP" "$HOME/Library/LaunchAgents" "$HOME/Library/Logs"
-cp "$SRC/claude-helper.mjs" "$SRC/package.json" "$SRC/package-lock.json" "$APP/" || fail "Kopieren fehlgeschlagen."
+cp "$SRC/claude-helper.mjs" "$SRC/mail-icloud.mjs" "$SRC/package.json" "$SRC/package-lock.json" "$APP/" || fail "Kopieren fehlgeschlagen."
 cp "$SRC/../js/config.js" "$APP/config.js" || fail "config.js kopieren fehlgeschlagen."
 (cd "$APP" && npm install --omit=dev --no-fund --no-audit --loglevel=error) || fail "npm install fehlgeschlagen. Internet da?"
 

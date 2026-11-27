@@ -1,5 +1,7 @@
 # Gmail in der Task-App einrichten
 
+> Apple Mail (iCloud) richtest du separat ein: [APPLEMAIL.md](APPLEMAIL.md).
+
 Einmalig, dauert etwa 10 Minuten. Danach meldest du dich in der App nur noch mit Google an.
 
 **Warum das nötig ist:** Google lässt eine App erst an Gmail, wenn sie eine eigene „Client-ID“ hat. Die erstellst du in deinem eigenen Google-Cloud-Projekt. Das ist kostenlos, und nur du kannst dich darüber anmelden.
