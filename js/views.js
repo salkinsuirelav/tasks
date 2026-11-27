@@ -19,10 +19,10 @@ const navToggle = () => {
   const c = !!store.settings.navCollapsed;
   return `<button class="icon-btn nav-toggle" data-action="toggle-nav" title="Seitenleiste ${c ? 'ausklappen' : 'einklappen'} (B)" aria-label="Seitenleiste ${c ? 'ausklappen' : 'einklappen'}">${icon(c ? 'expand' : 'collapse')}</button>`;
 };
-const head = (title, sub = '', actions = '', cls = '') => `
+export const head = (title, sub = '', actions = '', cls = '', after = '') => `
   <div class="head ${cls}">
     ${navToggle()}
-    <div class="head-title"><h1>${title}</h1>${sub ? `<div class="sub">${sub}</div>` : ''}</div>
+    <div class="head-title"><h1>${title}</h1>${sub ? `<div class="sub">${sub}</div>` : ''}${after}</div>
     <div class="actions">${actions}${gear}</div>
   </div>`;
 
@@ -636,6 +636,13 @@ export function viewSettings() {
         <div class="field" style="margin:4px 0 0"><label>Am Wochenende einplanen (Auto-Plan + Claude)</label>
           <div class="seg"><button class="${s.planWeekends !== false ? 'on' : ''}" data-action="plan-weekends" data-v="1">Ja</button><button class="${s.planWeekends === false ? 'on' : ''}" data-action="plan-weekends" data-v="0">Nein, nur Mo–Fr</button></div></div>
       </div>
+      <div class="panel"><h4>Finanzen</h4>
+        <div class="set-grid">
+          <div class="set-lbl">Hauptwährung <span class="muted">(Summen + Abo-Kalender)</span></div>
+          <select id="base-cur" aria-label="Hauptwährung">${['EUR', 'USD', 'KRW', 'GBP', 'CHF'].map((c) => `<option ${c === (s.baseCurrency || 'EUR') ? 'selected' : ''}>${c}</option>`).join('')}</select>
+        </div>
+        <p class="muted" style="font-size:13px;margin:10px 0 0">Abos in anderen Währungen rechnet die App mit den Tageskursen der EZB um (frankfurter.dev, ohne Anmeldung).</p>
+      </div>
       <div class="panel"><h4>Backup</h4>
         <p class="muted" style="margin-top:0">Lädt alle Daten als JSON-Datei herunter. Am besten ab und zu in iCloud Drive speichern.</p>
         <div class="inline" style="max-width:420px">
@@ -663,7 +670,7 @@ export function viewSettings() {
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.11.2</p>
+      <p class="mono muted">Version 0.13.0</p>
     </div>`;
 }
 

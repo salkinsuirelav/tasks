@@ -2,6 +2,8 @@
 import * as store from './store.js';
 import * as M from './model.js';
 import * as V from './views.js';
+import * as F from './finance.js';
+import * as P from './portfolio.js';
 import { ui, isMobile } from './ui.js';
 import { icon } from './icons.js';
 import { esc, toDateStr, today, addDays, weekStart, toMin, fromMin, nowMin, weekday, fmtClock, fmtDur, fmtHours, fmtMinutes, COLORS } from './util.js';
@@ -19,6 +21,7 @@ const NAV = [
   { href: '#calendar', label: 'Kalender', icon: 'calendar' },
   { href: '#projects', label: 'Projekte', icon: 'folder' },
   { href: '#review', label: 'Rückblick', icon: 'chart' },
+  { href: '#finance', label: 'Finanzen', icon: 'wallet' },
 ];
 const route = () => { const [view, param] = (location.hash.slice(1) || 'today').split('/'); return { view, param }; };
 
@@ -86,7 +89,7 @@ function renderMain() {
   const sel = key && 'selectionStart' in act ? [act.selectionStart, act.selectionEnd] : null;
   const scroll = { board: $('.board')?.scrollLeft, cal: $('#cal-scroll')?.scrollTop, side: $('.side-list')?.scrollTop };
 
-  const views = { today: V.viewToday, inbox: V.viewToday, plan: V.viewPlan, calendar: V.viewCalendar, projects: V.viewProjects, project: () => V.viewProject(param), review: V.viewReview, settings: V.viewSettings };
+  const views = { today: V.viewToday, inbox: V.viewToday, plan: V.viewPlan, calendar: V.viewCalendar, projects: V.viewProjects, project: () => V.viewProject(param), review: V.viewReview, finance: () => (param === 'portfolio' ? P.viewPortfolio() : F.viewFinance()), settings: V.viewSettings };
   main.classList.toggle('full', view === 'calendar');
   main.innerHTML = (views[view] || V.viewToday)();
   // Kalender-Kasten auf Heute: Höhe in ganzen Stunden, damit keine Uhrzeit halb abgeschnitten ist
@@ -154,7 +157,7 @@ function dragToClose(el) {
 }
 const renderModal = () => {
   if (route().view === 'calendar') renderMain(); // markierte Zeit im Kalender ein-/ausblenden
-  $('#modal-root').innerHTML = ui.modal ? V.modalHTML(ui.modal) : '';
+  $('#modal-root').innerHTML = ui.modal ? (P.isPfModal(ui.modal) ? P.pfModalHTML(ui.modal) : F.isFinModal(ui.modal) ? F.finModalHTML(ui.modal) : V.modalHTML(ui.modal)) : '';
   const af = $('#modal-root [autofocus]');
   if (af) { af.focus(); if (af.value) af.setSelectionRange(af.value.length, af.value.length); }
 };
@@ -222,6 +225,8 @@ function applyFinishedPlans() {
 ['gesturestart', 'gesturechange'].forEach((ev) => document.addEventListener(ev, (e) => e.preventDefault(), { passive: false }));
 
 store.subscribe(() => { applyTheme(); renderAll(); });
+F.onFx(() => { if (route().view === 'finance') renderMain(); }); // Wechselkurse sind da
+P.onPrices(() => { if (route().view === 'finance') renderMain(); }); // Krypto-Kurse sind da
 window.addEventListener('hashchange', () => { ui.sideOpen = false; renderMain(); renderPill(); });
 let resizeT;
 window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(renderMain, 200); });
@@ -397,6 +402,61 @@ const A = {
     const on = el.parentElement.querySelectorAll('button.on');
     if (on.length === 1 && el.classList.contains('on')) return toast('Mindestens ein Tag muss ausgewählt sein.');
     el.classList.toggle('on');
+  },
+  // ---- Finanzen: Abos ----
+  'fin-view': (el) => { ui.finView = el.dataset.v; renderMain(); },
+  'fin-month': (el) => { const d = +el.dataset.d; ui.finMonth = d ? F.monthShift(ui.finMonth || F.monthStart(today()), d) : F.monthStart(today()); renderMain(); },
+  'fin-range': (el) => { ui.finRange = +el.dataset.v; renderMain(); },
+  'fin-cat': (el) => { ui.finCat = el.dataset.c; renderMain(); },
+  'fin-list-tab': (el) => { ui.finListTab = el.dataset.v; renderMain(); },
+  'fin-day': (el) => { ui.modal = { type: 'fin-day', date: el.dataset.date }; renderModal(); },
+  'new-sub': (el) => { ui.modal = { type: 'sub', sub: { anchor: el.dataset.date || today(), currency: F.baseCur(), cycle: 'month' } }; renderModal(); },
+  'edit-sub': (el) => { const s = store.get('subs', el.dataset.id); if (s) { ui.modal = { type: 'sub', sub: { ...s } }; renderModal(); } },
+  'save-sub': () => {
+    const r = F.readSubForm(ui.modal.sub);
+    if (r.error) return toast(r.error);
+    store.put('subs', r.sub);
+    ui.modal = null; renderModal();
+  },
+  'delete-sub': (el) => {
+    if (!confirm('Abo löschen? Tipp: Mit „Gekündigt zum“ bleibt es in den Ausgaben der letzten Monate sichtbar.')) return;
+    store.remove('subs', el.dataset.id); ui.modal = null; renderModal();
+  },
+  'fin-task': (el) => {
+    const t = M.addTask(el.dataset.title, { date: el.dataset.date, duration: 15, subRef: el.dataset.ref });
+    if (t) toast('Aufgabe angelegt.', { label: 'Öffnen', fn: () => { ui.openTask = t.id; renderSheet(); } });
+  },
+  // ---- Finanzen: Portfolio ----
+  'fin-area': (el) => { location.hash = '#' + el.dataset.v; },
+  'pf-range': (el) => { ui.pfRange = +el.dataset.v; renderMain(); },
+  'new-holding': () => { ui.modal = { type: 'holding', h: { kind: 'crypto' } }; renderModal(); },
+  'edit-holding': (el) => { const h = store.get('holdings', el.dataset.id); if (h) { ui.modal = { type: 'holding', h: { ...h, prices: [...(h.prices || [])] } }; renderModal(); } },
+  'hold-kind': (el) => {
+    const m = ui.modal; P.captureHolding(m);
+    if (m.h.kind === 'crypto' && el.dataset.v !== 'crypto') Object.assign(m.h, { cgId: null, image: null, name: '', symbol: '' }); // Münze passt nicht zu Aktie/Bargeld
+    m.h.kind = el.dataset.v; m.err = null; m.results = null; renderModal();
+  },
+  'hold-search': async () => {
+    P.captureHolding(ui.modal);
+    const m = ui.modal, q = (m.q || '').trim();
+    if (!q) return toast('Bitte einen Namen oder ein Kürzel eingeben.');
+    m.err = null;
+    try { m.results = await P.searchCoins(q); } catch (e) { m.results = null; m.err = e.message || 'Suche fehlgeschlagen.'; }
+    if (ui.modal === m) renderModal();
+  },
+  'hold-pick': (el) => { P.captureHolding(ui.modal); P.pickCoin(ui.modal, +el.dataset.i); renderModal(); $('#h-qty')?.focus(); },
+  'hold-unpick': () => { P.captureHolding(ui.modal); Object.assign(ui.modal.h, { cgId: null, image: null }); ui.modal.results = null; renderModal(); },
+  'save-holding': () => {
+    const r = P.finishHolding(ui.modal);
+    if (r.error) return toast(r.error);
+    store.put('holdings', r.h);
+    ui.modal = null; renderModal();
+  },
+  'delete-holding': (el) => {
+    if (!confirm('Position löschen?')) return;
+    const h = store.get('holdings', el.dataset.id);
+    store.remove('holdings', el.dataset.id); ui.modal = null; renderModal();
+    if (h) toast('Position gelöscht.', { label: 'Rückgängig', fn: () => store.put('holdings', h) });
   },
   'delete-block': (el) => { store.remove('blocks', el.dataset.id); ui.modal = null; renderModal(); },
   'cal-slot': (el, e) => {
@@ -629,6 +689,9 @@ document.addEventListener('keydown', (e) => {
   else if (el.id === 'slot-title') A['slot-task']();
   else if (el.id === 'p-name') A['save-project']();
   else if (el.id === 'quick-title') A['quick-save']();
+  else if (el.id === 'h-search') A['hold-search']();
+  else if (el.closest('.pf-modal') && el.tagName === 'INPUT') A['save-holding']();
+  else if (el.closest('.fin-modal') && el.tagName === 'INPUT' && el.type !== 'checkbox') A['save-sub']();
   else if (el.id === 'ai-reply') A['ai-reply']($('[data-action="ai-reply"]'));
 });
 
@@ -795,6 +858,7 @@ document.addEventListener('change', async (e) => {
   }
   if (el.id === 'b-repeat') { $('#b-days').hidden = el.value !== 'days'; return; }
   if (el.id === 'push-lead') { M.setPushPrefs({ lead: +el.value }); return; }
+  if (el.id === 'base-cur') { store.saveSettings({ baseCurrency: el.value }); return; }
   if (el.dataset.setting) {
     const v = +el.value;
     const st = el.dataset.setting === 'dayStart' ? v : store.settings.dayStart, en = el.dataset.setting === 'dayEnd' ? v : store.settings.dayEnd;

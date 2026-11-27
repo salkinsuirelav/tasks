@@ -392,3 +392,39 @@ html[data-design="hero"] .tab-row .btn { height: 32px; padding: 0 12px; }
   html[data-design="hero"] .head { margin-bottom: 16px; }
   html[data-design="hero"] .head h1 { letter-spacing: -0.02em; }
 }
+
+/* ===== v0.12 Finanzen im Modern-Design ===== */
+html:root[data-design="hero"] { --fin: oklch(0.62 0.16 279); --fin-track: var(--h-default); }
+html[data-design="hero"] .fin-badge { background: color-mix(in oklab, var(--h-default) 80%, transparent); }
+html[data-design="hero"] :is(.fin-row, .fin-cat):hover { background: var(--h-surface-2); }
+html[data-design="hero"] .fin-cat.on { background: var(--h-default); }
+html[data-design="hero"] .fc { background: color-mix(in oklab, var(--h-surface-2) 55%, var(--h-surface)); }
+html[data-design="hero"] .fc:hover { background: var(--h-surface-2); }
+html[data-design="hero"] .fc.has { background: var(--h-surface-2); }
+html[data-design="hero"] .fc.has:hover { background: var(--h-surface-3); }
+html[data-design="hero"] .fin-month { border: 0; box-shadow: 0 0 0 1px var(--h-border) inset; background: var(--h-surface); }
+html[data-design="hero"] .fin-month:hover { background: var(--h-surface-2); }
+html[data-design="hero"] .fin-month-nav .icon-btn { background: transparent; }
+html[data-design="hero"] .fin-month-nav .icon-btn:hover { background: var(--h-default); }
+html[data-design="hero"] .fin-table { background: color-mix(in oklab, var(--h-default) 70%, transparent); }
+html[data-design="hero"] .fin-tbody { box-shadow: var(--h-shadow); }
+html[data-design="hero"] .fin-tr { border-bottom-color: var(--h-sep); }
+html[data-design="hero"] .fin-tr:hover { background: var(--h-surface-2); }
+html[data-design="hero"] .fin-delta { background: var(--h-default); }
+html[data-design="hero"] .fin-bars-foot { border-top-color: var(--h-sep); }
+html[data-design="hero"] .sub-logo { background: color-mix(in oklab, var(--c) 15%, var(--h-surface)); }
+html[data-design="hero"] .fin-side .fin-task { background: transparent; }
+html[data-design="hero"] .fin-side .fin-task:hover { background: var(--h-default); }
+@media (min-width: 761px) {
+  html[data-design="hero"] .fin-side { top: 80px; }
+}
+
+/* ===== v0.13 Portfolio im Modern-Design ===== */
+html:root[data-design="hero"] { --pf-up: oklch(0.6 0.15 150); --pf-down: oklch(0.6 0.21 25); }
+html[data-design="hero"] .pf-pill { background: var(--h-default); }
+html[data-design="hero"] .pf-hold-list { border: 0; box-shadow: var(--h-shadow); background: var(--h-surface); }
+html[data-design="hero"] .pf-row { border-bottom-color: var(--h-sep); }
+html[data-design="hero"] :is(.pf-row, .pf-alloc-row):hover { background: var(--h-surface-2); }
+html[data-design="hero"] .pf-picked { background: var(--h-default); }
+html[data-design="hero"] .pf-plot .gl { stroke: var(--h-sep); }
+html[data-design="hero"] .pf-kinds { border-top-color: var(--h-sep); }
