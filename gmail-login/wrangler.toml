@@ -1,0 +1,5 @@
+# Tasks · Gmail-Login-Dienst. Wird von setup.command auf Cloudflare hochgeladen.
+name = "tasks-gmail-login"
+main = "src/index.js"
+compatibility_date = "2025-06-01"
+workers_dev = true   # öffentliche Adresse …workers.dev, die App ruft sie auf

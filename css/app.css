@@ -1512,3 +1512,8 @@ html[data-design="hero"] .set-cats button.on { background: var(--h-surface); box
   .set-cats::-webkit-scrollbar { display: none; }
   .set-cats button { flex: none; }
 }
+/* v0.22: Gmail dauerhaft angemeldet */
+.m-perm { display: grid; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+.m-perm.ok { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.m-perm.ok svg.i { width: 14px; height: 14px; color: #30a46c; }
+.m-perm .btn { justify-self: start; }

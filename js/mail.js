@@ -28,6 +28,47 @@ export const st = { account: ls(ACC), list: null, loading: false, error: null, f
 export const ic = { account: ls(ICL), list: null, loading: false, error: null, code: null, v: null, busy: false, folder: 'inbox', cache: {}, seq: 0 };
 export const connected = () => !!st.account || !!ic.account;
 export const hasToken = () => !!tok && tok.exp > Date.now();
+// Dauerhaft angemeldet (ohne Pop-up): eigener Login-Dienst (Cloudflare Worker, gmail-login/, Anleitung GMAIL-LOGIN.md)
+// tauscht mit dem Client-Secret den Anmelde-Code gegen einen Dauer-Schlüssel. Der liegt nur auf diesem Gerät
+// (localStorage), nie in Firebase. Die Adresse des Dienstes ist kein Geheimnis und synchronisiert (meta/gmailLogin).
+const RT = 'taskapp-grt';
+let rt = ls(RT);
+export const loginService = () => String(store.get('meta', 'gmailLogin')?.url || '').replace(/\/+$/, '');
+export const permanent = () => !!loginService() && !!rt;
+async function gx(path, body) {
+  let r;
+  try { r = await fetch(loginService() + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); }
+  catch { throw new Error('Login-Dienst nicht erreichbar. Bist du online?'); }
+  let j = {};
+  try { j = await r.json(); } catch {}
+  if (!r.ok) throw Object.assign(new Error(j.message || `Login-Dienst: Fehler ${r.status}`), { code: j.error || 'error' });
+  return j;
+}
+let refreshP = null, refreshTimer = null;
+const setTok = (at, exp) => {
+  tok = { at, exp: Date.now() + (Number(exp || 3600) - 60) * 1000 }; saveTok();
+  clearTimeout(refreshTimer); // 4 Minuten vor Ablauf still erneuern
+  if (permanent()) refreshTimer = setTimeout(() => silentRefresh().catch(() => {}), Math.max(5000, tok.exp - Date.now() - 4 * 60000));
+};
+export const refreshingNow = () => !!refreshP;
+let refreshFail = 0;
+// Beim Öffnen von Mail: abgelaufen → still erneuern (nach Fehler 1 Minute Pause, sonst Dauerschleife)
+function autoRefresh() {
+  if (!st.account || hasToken() || !permanent() || refreshP || Date.now() - refreshFail < 60000) return;
+  silentRefresh().catch(() => { refreshFail = Date.now(); });
+}
+export function silentRefresh() {
+  if (!permanent()) return Promise.reject(new Error('auth'));
+  return (refreshP ||= gx('/refresh', { refresh_token: rt })
+    .then((j) => { setTok(j.access_token, j.expires_in); }, (e) => { if (e.code === 'invalid_grant') { rt = null; lsSet(RT, null); } throw e; })
+    .finally(() => { refreshP = null; notify(); }));
+}
+export function saveLoginService(url) {
+  url = String(url || '').trim().replace(/\/+$/, '');
+  if (url && !/^https:\/\/[a-z0-9.-]+(:\d+)?$/i.test(url)) throw new Error('Das sieht nicht nach der Adresse aus (https://…workers.dev).');
+  store.put('meta', { id: 'gmailLogin', url });
+  if (!url) { rt = null; lsSet(RT, null); }
+}
 const both = () => !!st.account && !!ic.account;
 // Ordner, für Gmail und iCloud gleich: [Schlüssel, Name, Symbol]
 export const FOLDERS = [['inbox', 'Posteingang', 'inbox'], ['archive', 'Archiv', 'archive'], ['sent', 'Gesendet', 'send'], ['spam', 'Spam', 'spam'], ['trash', 'Papierkorb', 'trash']];
@@ -52,7 +93,8 @@ const loadGis = () => gisP ||= new Promise((res, rej) => {
 export async function signIn() {
   if (!clientId()) throw new Error('Zuerst die Client-ID eintragen.');
   if (!window.google?.accounts?.oauth2) await loadGis(); // schon geladen: Pop-up öffnet noch im selben Klick
-  await new Promise((res, rej) => {
+  if (loginService()) await signInCode();
+  else await new Promise((res, rej) => {
     const c = window.google.accounts.oauth2.initTokenClient({
       client_id: clientId(), scope: SCOPE, login_hint: st.account || undefined,
       prompt: st.account ? '' : 'consent',
@@ -69,12 +111,27 @@ export async function signIn() {
   st.error = null; ui.mailSetup = false;
   return gmRefresh();
 }
+// Mit Login-Dienst: Anmelde-Code holen (Pop-up, einmal je Gerät), der Dienst tauscht ihn gegen Schlüssel
+async function signInCode() {
+  const code = await new Promise((res, rej) => {
+    const c = window.google.accounts.oauth2.initCodeClient({
+      client_id: clientId(), scope: SCOPE, ux_mode: 'popup', login_hint: st.account || undefined,
+      callback: (r) => (r.error ? rej(new Error(r.error === 'access_denied' ? 'Zugriff wurde nicht erlaubt.' : r.error)) : res(r.code)),
+      error_callback: (e) => rej(new Error(e?.type === 'popup_closed' ? 'Anmeldefenster geschlossen.' : 'Anmeldung fehlgeschlagen.')),
+    });
+    c.requestCode();
+  });
+  const j = await gx('/token', { code });
+  if (j.refresh_token) { rt = j.refresh_token; lsSet(RT, rt); }
+  setTok(j.access_token, j.expires_in);
+  if (!j.refresh_token && !rt) throw new Error('Google hat keinen Dauer-Schlüssel geschickt. Einmal unter myaccount.google.com/permissions den Zugriff deiner Task-App entfernen, dann nochmal „Dauerhaft anmelden“.');
+}
 // Automatisch erneuern: Google gibt Web-Apps den Zugriff immer nur für 1 Stunde. Beim ersten Klick in Mail
 // (oder auf „Mail“) holt die App einen neuen. Google fragt dabei nichts, das Fenster blitzt nur kurz auf.
 // Ein Pop-up geht nur direkt aus einem Klick. Klappt es nicht, 1 Minute Pause, dann bleibt „Weiter mit Google“.
 let renewing = false, renewFail = 0;
 export const renewingNow = () => renewing;
-export const needsRenew = () => !!st.account && !!clientId() && !renewing && Date.now() - renewFail > 60000 && (!tok || tok.exp - Date.now() < 5 * 60000);
+export const needsRenew = () => !!st.account && !!clientId() && !permanent() && !renewing && Date.now() - renewFail > 60000 && (!tok || tok.exp - Date.now() < 5 * 60000);
 export function autoRenew() {
   if (!needsRenew()) return;
   renewing = true;
@@ -85,15 +142,19 @@ export const preloadGis = () => { if (st.account && clientId()) loadGis().catch(
 export function signOut() {
   if (tok && window.google?.accounts?.oauth2) try { window.google.accounts.oauth2.revoke(tok.at, () => {}); } catch {}
   if (mailById(ui.mailOpen)?.src === 'gm') ui.mailOpen = null;
-  tok = null; saveTok(); st.account = null; lsSet(ACC, null); st.list = null; st.cache = {}; st.error = null;
+  tok = null; saveTok(); rt = null; lsSet(RT, null); clearTimeout(refreshTimer); st.account = null; lsSet(ACC, null); st.list = null; st.cache = {}; st.error = null;
   notify();
 }
 
 // ---------- Gmail-API ----------
-async function g(path, opts = {}) {
-  if (!hasToken()) { tok = null; saveTok(); throw new Error('auth'); }
+async function g(path, opts = {}, again = true) {
+  if (!hasToken()) {
+    tok = null; saveTok();
+    if (!permanent()) throw new Error('auth');
+    try { await silentRefresh(); } catch { throw new Error('auth'); } // still neu holen, ohne Pop-up
+  }
   const r = await fetch(API + path, { ...opts, headers: { Authorization: `Bearer ${tok.at}`, ...(opts.body ? { 'Content-Type': 'application/json' } : {}) } });
-  if (r.status === 401) { tok = null; saveTok(); throw new Error('auth'); }
+  if (r.status === 401) { tok = null; saveTok(); if (again && permanent()) return g(path, opts, false); throw new Error('auth'); }
   if (!r.ok) throw Object.assign(new Error(`Gmail antwortet gerade nicht (${r.status}).`), { status: r.status });
   return r.status === 204 ? null : r.json();
 }
@@ -369,12 +430,22 @@ const groupOf = (at) => {
 const fsize = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1).replace('.', ',')} MB` : `${Math.max(1, Math.round(n / 1e3))} KB`);
 const errLine = (s) => `<p class="fin-note m-err">${esc(s)}</p>`;
 
+// Dauerhaft angemeldet: Status bzw. Einrichten (Adresse des Login-Dienstes eintragen)
+function permCard() {
+  const svc = loginService();
+  if (permanent()) return `<p class="fin-note m-perm ok">${icon('check')} Dauerhaft angemeldet auf diesem Gerät, ohne Pop-up. <a href="#" data-action="mail-svc-edit">Dienst ändern</a></p>`;
+  if (svc && !ui.mailSvcEdit) return `<div class="m-perm"><p class="fin-note" style="margin:0">Login-Dienst ist eingerichtet. Auf diesem Gerät einmal anmelden, danach ohne Pop-up.</p>
+    <button class="btn primary small" data-action="mail-signin">${icon('lock')} Dauerhaft anmelden</button></div>`;
+  return `<div class="m-perm"><p class="fin-note" style="margin:0"><b>Ohne Pop-up angemeldet bleiben:</b> einmal den Login-Dienst einrichten (<a href="https://github.com/salkinsuirelav/tasks/blob/main/GMAIL-LOGIN.md" target="_blank" rel="noopener">GMAIL-LOGIN.md</a>, ca. 10 Min.), dann hier die Adresse eintragen.</p>
+    <div class="pf-search"><input id="gm-svc" value="${esc(svc)}" placeholder="https://tasks-gmail-login.….workers.dev" autocomplete="off" spellcheck="false"><button class="btn" data-action="mail-svc-save">Speichern</button></div></div>`;
+}
 function gmCard() {
   const cid = clientId();
   if (st.account) return `
       <div class="panel m-acc">
         <div class="m-acc-h"><span class="m-acc-ic gm">${icon('mail')}</span><div><h4>Gmail</h4><p class="muted">Verbunden: <b>${esc(st.account)}</b></p></div></div>
-        <div class="m-acc-btns">${hasToken() ? '' : `<button class="btn primary" data-action="mail-signin">${icon('mail')} Weiter mit Google</button>`}<button class="btn" data-action="mail-signout">${icon('logout')} Trennen</button></div>
+        <div class="m-acc-btns">${hasToken() || permanent() ? '' : `<button class="btn primary" data-action="mail-signin">${icon('mail')} Weiter mit Google</button>`}<button class="btn" data-action="mail-signout">${icon('logout')} Trennen</button></div>
+        ${permCard()}
       </div>`;
   return `
       <div class="panel m-acc">
@@ -479,7 +550,7 @@ function reader(m) {
 // Hinweise oben (abgelaufene Anmeldung, Helfer aus, Fehler)
 function notes() {
   const out = [];
-  if (st.account && !hasToken()) out.push(renewing ? `<div class="m-note">${icon('refresh')}<span><b>Gmail:</b> Anmeldung wird erneuert …</span></div>`
+  if (st.account && !hasToken()) out.push(renewing || refreshP ? `<div class="m-note">${icon('refresh')}<span><b>Gmail:</b> Anmeldung wird erneuert …</span></div>`
     : `<div class="m-note">${icon('lock')}<span><b>Gmail:</b> Anmeldung abgelaufen (Google erlaubt nur 1 Stunde).</span><button class="btn small primary" data-action="mail-signin">Weiter mit Google</button></div>`);
   else if (st.account && st.error) out.push(`<div class="m-note bad"><span><b>Gmail:</b> ${esc(st.error)}</span><button class="btn small" data-action="mail-refresh">Nochmal</button></div>`);
   if (ic.account && ic.error) out.push(`<div class="m-note bad"><span><b>Apple Mail:</b> ${esc(ic.error)}${['setup', 'auth', 'old'].includes(ic.code) ? ` <a href="${GUIDE}" target="_blank" rel="noopener">Anleitung</a>` : ''}</span><button class="btn small" data-action="ic-refresh">Nochmal</button></div>`);
@@ -507,6 +578,7 @@ export function viewMail() {
   const fo = folder();
   if (st.folder !== fo || ic.folder !== fo) useFolder(fo);
   if (st.account && !hasToken()) preloadGis();
+  autoRefresh();
   if (st.account && hasToken() && !st.list && !st.loading && !st.error) gmRefresh();
   if (ic.account && !ic.list && !ic.loading && !ic.error) icRefresh();
   const items = shown(false);
@@ -521,7 +593,7 @@ export function viewMail() {
   const sub = [st.account, ic.account].filter(Boolean).map(esc).join(' · ');
   const top = head('Mail', sub, actions, 'mail-head', tabs);
   // Nur Gmail und die Stunde ist um: große Karte wie bisher
-  if (st.account && !ic.account && !hasToken()) return `${top}${renewing ? '<div class="m-load muted">Google-Anmeldung wird erneuert …</div>' : `
+  if (st.account && !ic.account && !hasToken()) return `${top}${renewing || refreshP ? '<div class="m-load muted">Google-Anmeldung wird erneuert …</div>' : `
     <div class="panel fin-empty"><span class="fin-empty-ic">${icon('lock')}</span><h3>Google-Anmeldung abgelaufen</h3>
       <p class="muted">Google gibt der App immer nur für eine Stunde Zugriff. Normalerweise erneuert die App das beim ersten Klick selbst. Hier geht es von Hand, ohne neue Bestätigung.</p>
       <button class="btn primary" data-action="mail-signin">${icon('mail')} Weiter mit Google</button>
