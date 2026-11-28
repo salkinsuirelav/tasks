@@ -28,7 +28,10 @@ Einmalig, dauert etwa 10 Minuten, am besten am Mac. Danach meldest du dich in de
 3. **Zielgruppe:** **Extern** → **Weiter**.
 4. **Kontaktdaten:** deine Adresse → **Weiter**.
 5. Richtlinie bestätigen → **Weiter** → **Erstellen**.
-6. Links **Zielgruppe** → unten bei **Testnutzer** → **+ Nutzer hinzufügen** → deine Gmail-Adresse → **Speichern**.
+6. **Wichtig, sonst kommt „Fehler 403: access_denied“:** Testnutzer eintragen.
+   Direktlink: [console.cloud.google.com/auth/audience](https://console.cloud.google.com/auth/audience) (oben muss das Projekt **Tasks** ausgewählt sein).
+   Auf der Seite „Zielgruppe“ ganz nach **unten** scrollen → Abschnitt **Testnutzer** → **+ Add users** / **Nutzer hinzufügen** → deine Gmail-Adresse → **Speichern**.
+   In älteren Ansichten: ☰ → APIs und Dienste → OAuth-Zustimmungsbildschirm → ganz unten „Testnutzer“.
    Den Status **„Testen“** lässt du so. „Veröffentlichen“ brauchst du nicht.
 
 ## 4. Client-ID erstellen
@@ -66,7 +69,7 @@ Einmalig, dauert etwa 10 Minuten, am besten am Mac. Danach meldest du dich in de
 | Meldung | Lösung |
 |---|---|
 | **Fehler 400: origin_mismatch** | Schritt 4.3: Die JavaScript-Quelle muss genau `https://salkinsuirelav.github.io` sein. Nach dem Ändern 5 Min warten. |
-| **Fehler 403: access_denied** („… hat die Überprüfung nicht abgeschlossen“) | Schritt 3.6: Deine Gmail-Adresse fehlt bei den Testnutzern. |
+| **Fehler 403: access_denied** („Zugriff blockiert: Die Überprüfung … wurde nicht abgeschlossen“) | Schritt 3.6: Deine Gmail-Adresse fehlt bei den Testnutzern. Direktlink: [console.cloud.google.com/auth/audience](https://console.cloud.google.com/auth/audience) |
 | „Bitte beim Google-Login das Häkchen für Gmail setzen“ | Nochmal anmelden und das Gmail-Häkchen setzen. |
 | „Gmail antwortet gerade nicht (403)“ | Schritt 2: Gmail-API ist im Projekt nicht aktiviert (oder ein anderes Projekt war ausgewählt). |
 | Anmeldefenster geht nicht auf | Pop-ups für `salkinsuirelav.github.io` im Browser erlauben. |
