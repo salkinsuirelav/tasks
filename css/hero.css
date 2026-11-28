@@ -467,3 +467,10 @@ html[data-design="hero"] .m-fab { background: var(--h-accent); border-radius: 99
 @media (max-width: 760px) {
   html[data-design="hero"] .modal.compose { border-radius: 0; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
 }
+
+/* ===== v0.19 Kredite im Modern-Design ===== */
+html[data-design="hero"] .lo-card { padding: 18px 20px 12px; }
+@media (max-width: 760px) { html[data-design="hero"] .lo-card { padding: 16px 16px 10px; } }
+html[data-design="hero"] :is(.lo-edit:hover, .lo-more:hover) { background: var(--h-default); }
+html[data-design="hero"] :is(.lo-plan, .lo-pf) { border-color: var(--h-sep); }
+html[data-design="hero"] .lo-x { background: var(--h-default); }

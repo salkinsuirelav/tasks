@@ -1393,3 +1393,71 @@ body:has(#pill-root .timer-pill) .m-fab { bottom: calc(136px + env(safe-area-ins
 .nav-label:hover .nav-label-t svg.chev, .nav-label-t:focus-visible svg.chev, .nav-label-t.shut svg.chev { opacity: .75; }
 .nav-label-t.shut svg.chev { transform: none; }
 .app.nav-collapsed .nav-label-t { padding: 2px; }
+
+/* ===================================================================
+   v0.19: Finanzen → Kredite
+   =================================================================== */
+.lo-kpis { margin-bottom: 24px; }
+.lo-kpi-sub { display: block; font-size: 12.5px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lo-main { gap: 14px; }
+.lo-card { display: grid; gap: 14px; padding: 18px 20px 12px; }
+.lo-top { display: flex; align-items: center; gap: 12px; cursor: pointer; min-width: 0; }
+.lo-t { display: grid; gap: 1px; min-width: 0; flex: 1; }
+.lo-t b { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lo-t small { color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lo-rest { display: grid; text-align: right; justify-items: end; }
+.lo-rest small { color: var(--muted); font-size: 12px; }
+.lo-rest b { font-size: 18px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.lo-edit { width: 30px; height: 30px; background: transparent; border: 0; box-shadow: none; color: var(--muted); flex: none; }
+.lo-edit:hover { background: var(--line-soft); color: var(--text); }
+.lo-edit svg.i { width: 15px; height: 15px; }
+.lo-bar { height: 8px; border-radius: 99px; background: var(--fin-track); overflow: hidden; }
+.lo-bar i { display: block; height: 100%; border-radius: 99px; background: var(--fin); min-width: 8px; }
+.lo-nums { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.lo-card.fin .lo-nums { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.lo-nums > div { display: grid; gap: 1px; min-width: 0; }
+.lo-nums span { font-size: 12px; color: var(--muted); }
+.lo-nums b { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lo-nums small { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lo-more { justify-self: start; display: inline-flex; align-items: center; gap: 4px; border: 0; background: none; color: var(--muted); font-size: 12.5px; padding: 4px 8px; margin: -2px -8px 0; border-radius: 8px; cursor: pointer; }
+.lo-more:hover { color: var(--text); background: var(--line-soft); }
+.lo-more svg.i { width: 12px; height: 12px; transform: rotate(90deg); transition: transform .2s; }
+.lo-card.open .lo-more svg.i { transform: rotate(-90deg); }
+.lo-card.fin { opacity: .85; }
+.lo-card.bad { border-color: color-mix(in oklab, var(--danger) 40%, transparent); }
+.lo-done-h { margin-top: 10px; }
+.lo-plan { border-top: 1px solid var(--line-soft); padding-top: 8px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.lo-pr { display: grid; grid-template-columns: 56px 64px repeat(3, minmax(0, 1fr)); gap: 10px; padding: 6px 8px; border-radius: 8px; align-items: baseline; }
+.lo-pr > span:nth-child(n+3) { text-align: right; white-space: nowrap; }
+.lo-pr small { color: var(--muted); font-size: 11.5px; }
+.lo-ph { color: var(--muted); font-size: 12px; }
+.lo-pr.past { color: var(--muted); }
+.lo-pr.cur { background: var(--fin-soft); }
+.lo-pf { font-weight: 600; border-top: 1px solid var(--line-soft); border-radius: 0; margin-top: 4px; padding-top: 8px; }
+.lo-int { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 6px; }
+.lo-int > div { display: grid; gap: 1px; font-size: 12.5px; }
+.lo-int b { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.loan-modal { max-width: 560px; }
+.lo-prev { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; line-height: 1.5; background: var(--fin-soft); border-radius: 12px; padding: 10px 12px; margin: 2px 0 12px; }
+.lo-prev svg.i { width: 15px; height: 15px; flex: none; margin-top: 2px; color: var(--fin); }
+.lo-prev > span.muted { display: flex; gap: 8px; }
+.lo-prev .m-err { color: var(--danger); }
+.lo-opt { margin: 0 0 8px; }
+.lo-opt summary { cursor: pointer; font-size: 13px; color: var(--muted); padding: 4px 0 10px; }
+.lo-opt summary:hover { color: var(--text); }
+.lo-xs { display: grid; gap: 4px; margin-bottom: 6px; }
+.lo-x { display: flex; align-items: center; gap: 10px; font-size: 13.5px; padding: 4px 4px 4px 10px; background: var(--line-soft); border-radius: 10px; }
+.lo-x span { flex: 1; }
+.lo-x .icon-btn { width: 26px; height: 26px; background: transparent; border: 0; box-shadow: none; }
+.lo-xadd { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; }
+.lo-hint { margin: 0; }
+@media (max-width: 760px) {
+  .lo-card { padding: 16px 16px 10px; }
+  .lo-nums, .lo-card.fin .lo-nums { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 14px; }
+  .lo-rest b { font-size: 16px; }
+  .lo-pr { grid-template-columns: 50px 26px repeat(3, minmax(0, 1fr)); gap: 6px; padding: 6px 4px; font-size: 12px; }
+  .lo-pf small { display: none; }
+  .lo-ph { font-size: 11px; }
+  .lo-xadd { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .lo-xadd .btn { grid-column: 1 / -1; justify-content: center; }
+}

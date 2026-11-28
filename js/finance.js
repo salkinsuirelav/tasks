@@ -7,6 +7,7 @@ import { ui } from './ui.js';
 import { icon } from './icons.js';
 import { head } from './views.js';
 import { esc, today, addDays, parseDate, weekStart, longDate, COLORS } from './util.js';
+import { loanSubs, loanCharges } from './loanmath.js';
 
 // ---------- Grundlagen ----------
 export const CYCLES = {
@@ -51,6 +52,7 @@ export function amountAt(s, d) {
 }
 // Alle Abbuchungen eines Abos im Zeitraum [from, to)
 export function chargesOf(s, from, to) {
+  if (s.loan) return loanCharges(s, from, to); // Kreditraten kommen aus dem Tilgungsplan
   const anchor = s.anchor;
   if (!anchor) return [];
   const first = s.trial ? anchor : (s.since && s.since < anchor ? s.since : anchor);
@@ -95,7 +97,7 @@ export function toBase(v, cur) {
 }
 export function ensureFx() {
   const b = baseCur();
-  const need = [...new Set([...store.all('subs'), ...store.all('holdings')].map((s) => s.currency).filter((c) => c && c !== b))];
+  const need = [...new Set([...store.all('subs'), ...store.all('holdings'), ...store.all('loans')].map((s) => s.currency).filter((c) => c && c !== b))];
   if (!need.length || fxBusy) return;
   const fresh = fx?.base === b && fx.day === today() && need.every((c) => fx.rates?.[c]);
   if (fresh || (fx?.failAt && Date.now() - fx.failAt < 10 * 60000)) return;
@@ -130,7 +132,7 @@ export function money(v, cur = baseCur(), dec) {
 const missingNote = (missing) => (missing.size
   ? `<p class="fin-note">${[...missing].join(', ')}-Beträge sind nicht mitgerechnet, weil gerade kein Wechselkurs geladen werden konnte.</p>` : '');
 const fxNote = () => {
-  const foreign = store.all('subs').some((s) => s.currency && s.currency !== baseCur());
+  const foreign = [...store.all('subs'), ...store.all('loans')].some((s) => s.currency && s.currency !== baseCur());
   return foreign && fx?.date && fx.base === baseCur() ? `<p class="fin-note">Fremdwährungen umgerechnet mit EZB-Kursen vom ${shortDate(fx.date)}</p>` : '';
 };
 
@@ -144,7 +146,7 @@ export function logo(s, size = 28) {
 
 // ---------- Bausteine ----------
 const subRow = (s, sub, right, extra = '') => `
-  <div class="fin-row" data-action="edit-sub" data-id="${s.id}">${logo(s, 28)}
+  <div class="fin-row" data-action="${s.loan ? 'edit-loan' : 'edit-sub'}" data-id="${s.id}">${logo(s, 28)}
     <div class="fin-row-t"><b>${esc(s.name)}</b><small>${sub}</small></div>
     <span class="fin-row-v">${right}</span>${extra}</div>`;
 const badge = (n) => `<span class="fin-badge">${n}</span>`;
@@ -168,22 +170,23 @@ export function viewFinance() {
   ensureFx();
   const v = ui.finView || 'calendar';
   const all = subs();
+  const pay = [...all, ...loanSubs()]; // Kalender und Übersicht zeigen auch Kreditraten
   const views = [['calendar', 'calendar', 'Kalender'], ['list', 'list', 'Liste'], ['spending', 'chart', 'Ausgaben']];
   const actions = `
     <div class="tabs fin-tabs">${views.map(([id, ic, l]) => `<button class="${v === id ? 'on' : ''}" data-action="fin-view" data-v="${id}" title="${l}">${icon(ic)}<span class="lbl-long">${l}</span></button>`).join('')}</div>
     <button class="btn primary" data-action="new-sub" title="Neues Abo">${icon('plus')}<span class="lbl-long">Abo</span></button>`;
   let body;
-  if (!all.length) body = empty();
-  else if (v === 'list') body = grid(listView(all), overview(all, monthStart(today())));
+  if (!pay.length) body = empty();
+  else if (v === 'list') body = grid(listView(all), overview(pay, monthStart(today())));
   else if (v === 'spending') body = grid(spendingView(all), byCategory(all));
   else {
     const m0 = ui.finMonth || monthStart(today());
-    body = grid(calendarView(all, m0), overview(all, m0));
+    body = grid(calendarView(pay, m0), overview(pay, m0));
   }
   return `${head('Finanzen', '', actions, 'fin-head', areaTabs('finance'))}${body}`;
 }
 // Abos | Portfolio direkt neben dem Titel (wie „Subscriptions ⌄“ bei HeroSpace)
-export const areaTabs = (cur) => `<div class="tabs fin-area">${[['finance', 'Abos'], ['finance/portfolio', 'Portfolio']].map(([h, l]) => `<button class="${cur === h ? 'on' : ''}" data-action="fin-area" data-v="${h}">${l}</button>`).join('')}</div>`;
+export const areaTabs = (cur) => `<div class="tabs fin-area">${[['finance', 'Abos'], ['finance/loans', 'Kredite'], ['finance/portfolio', 'Portfolio']].map(([h, l]) => `<button class="${cur === h ? 'on' : ''}" data-action="fin-area" data-v="${h}">${l}</button>`).join('')}</div>`;
 const grid = (mainHTML, side) => `<div class="fin-grid"><div class="fin-main">${mainHTML}</div><aside class="fin-side panel">${side}</aside></div>`;
 const empty = () => `
   <div class="panel fin-empty">
@@ -207,8 +210,8 @@ function calendarView(all, m0) {
     const cs = byDay[d] || [];
     const out = d < m0 || d >= m1;
     const amt = sumBase(cs).total;
-    const tag = cs.some((c) => c.trialEnd) ? 'Testende' : cs.some((c) => cyc(c.s).months >= 12) ? 'Jährlich' : '';
-    const act = cs.length === 1 ? `data-action="edit-sub" data-id="${cs[0].s.id}"` : cs.length ? 'data-action="fin-day"' : 'data-action="new-sub"';
+    const tag = cs.some((c) => c.loan === 'last') ? 'Letzte Rate' : cs.some((c) => c.trialEnd) ? 'Testende' : cs.some((c) => !c.loan && cyc(c.s).months >= 12) ? 'Jährlich' : '';
+    const act = cs.length === 1 ? `data-action="${cs[0].s.loan ? 'edit-loan' : 'edit-sub'}" data-id="${cs[0].s.id}"` : cs.length ? 'data-action="fin-day"' : 'data-action="new-sub"';
     cells.push(`<div class="fc ${out ? 'out' : ''} ${cs.length ? 'has' : ''} ${d === t ? 'today' : ''} ${d < t ? 'past' : ''}" ${act} data-date="${d}" title="${esc(longDate(d))}">
       <div class="fc-top"><span class="fc-d">${parseDate(d).getDate()}</span>${cs.length ? `<span class="fc-amt">${money(amt)}</span>` : ''}</div>
       ${cs.length ? `<div class="fc-bot"><span class="fc-logos">${cs.slice(0, 3).map((c) => logo(c.s, 20)).join('')}${cs.length > 3 ? `<span class="fc-more">+${cs.length - 3}</span>` : ''}</span>${tag ? `<span class="fc-tag">${tag}</span>` : ''}</div>` : ''}
@@ -254,10 +257,13 @@ function overview(all, m0) {
     </div>
     ${look.length ? `<div class="fin-sec fin-look"><div class="fin-sec-h">Einen Blick wert ${badge(look.length)}</div>${look.join('')}</div>` : ''}
     <div class="fin-sec"><div class="fin-sec-h">Demnächst ${badge(up.length)}<span class="fin-sec-sum">${money(sumBase(up).total)}</span></div>
-      ${up.length ? up.slice(0, 8).map((c) => subRow(c.s, `<span class="${c.date === t ? 'warn' : ''}">${when(c.date)}</span>${c.trialEnd ? ' · Testphase endet' : cyc(c.s).months >= 12 ? ' · Jährlich' : ''}`, money(c.amount, c.s.currency))).join('') : '<p class="muted fin-none">In den nächsten 30 Tagen wird nichts abgebucht.</p>'}
+      ${up.length ? up.slice(0, 8).map((c) => subRow(c.s, `<span class="${c.date === t ? 'warn' : ''}">${when(c.date)}</span>${chargeNote(c)}`, money(c.amount, c.s.currency))).join('') : '<p class="muted fin-none">In den nächsten 30 Tagen wird nichts abgebucht.</p>'}
       ${up.length > 8 ? `<p class="muted fin-none">und ${up.length - 8} weitere</p>` : ''}
     </div>`;
 }
+// Zusatz hinter dem Datum: Testphase, jährlich oder welche Kreditrate
+const chargeNote = (c) => (c.loan === 'extra' ? ' · Sondertilgung' : c.loan === 'last' ? ' · letzte Kreditrate 🎉' : c.loan ? ` · Kreditrate ${c.n}/${c.of}`
+  : c.trialEnd ? ' · Testphase endet' : cyc(c.s).months >= 12 ? ' · Jährlich' : '');
 // Hinweise, bei denen sich eine Entscheidung lohnt – jeweils als Aufgabe übernehmbar
 function lookItems(all) {
   const t = today(), items = [];
@@ -265,7 +271,7 @@ function lookItems(all) {
     ? `<span class="fin-done" title="Aufgabe ist angelegt">${icon('check')}</span>`
     : `<button class="icon-btn fin-task" data-action="fin-task" data-ref="${ref}" data-title="${esc(title)}" data-date="${date < t ? t : date}" title="Als Aufgabe anlegen">${icon('plus')}</button>`);
   for (const s of all) {
-    if (status(s).id === 'ended') continue;
+    if (s.loan || status(s).id === 'ended') continue;
     if (s.trial && s.anchor >= t && s.anchor <= addDays(t, 14)) {
       items.push(subRow(s, `Testphase endet ${when(s.anchor).replace(/^(Heute|Morgen)$/, (m) => m.toLowerCase())} · danach ${money(s.amount, s.currency)} pro ${cyc(s).per}`, '',
         taskBtn(`${s.id}:trial:${s.anchor}`, `${s.name}: Testphase endet – behalten oder kündigen?`, addDays(s.anchor, -1))));
@@ -421,11 +427,11 @@ export function finModalHTML(m) {
         ${s.id ? `<button class="btn danger" data-action="delete-sub" data-id="${s.id}" style="margin-right:auto">${icon('trash')} Löschen</button>` : ''}
         <button class="btn" data-action="close-modal">Abbrechen</button><button class="btn primary" data-action="save-sub">Speichern</button></div>`;
   } else if (m.type === 'fin-day') {
-    const cs = chargesAll(subs(), m.date, addDays(m.date, 1));
+    const cs = chargesAll([...subs(), ...loanSubs()], m.date, addDays(m.date, 1));
     inner = `
       <h2>${esc(longDate(m.date))}</h2>
       <p>${plural(cs.length, 'Abbuchung', 'Abbuchungen')} · ${money(sumBase(cs).total)}</p>
-      <div class="fin-day-list">${cs.map((c) => subRow(c.s, `${cyc(c.s).label}${c.trialEnd ? ' · Testphase endet' : ''}`, money(c.amount, c.s.currency || baseCur()))).join('')}</div>
+      <div class="fin-day-list">${cs.map((c) => subRow(c.s, c.loan ? chargeNote(c).slice(3) : `${cyc(c.s).label}${c.trialEnd ? ' · Testphase endet' : ''}`, money(c.amount, c.s.currency || baseCur()))).join('')}</div>
       <div class="foot"><button class="btn" data-action="new-sub" data-date="${m.date}">${icon('plus')} Abo an diesem Tag</button><button class="btn primary" data-action="close-modal">Fertig</button></div>`;
   }
   return `<div class="overlay modal-overlay" data-action="close-modal"></div><div class="modal fin-modal" role="dialog">${inner}</div>`;

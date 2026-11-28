@@ -6,6 +6,7 @@ import * as F from './finance.js';
 import * as P from './portfolio.js';
 import * as T from './tabs.js';
 import * as Ml from './mail.js';
+import * as Lo from './loans.js';
 import { NAV, BAR, navItems, reorder } from './nav.js';
 import { ui, isMobile } from './ui.js';
 import { icon } from './icons.js';
@@ -54,7 +55,7 @@ function renderNav() {
 function tabMeta(hash) {
   const [v, prm] = (hash.slice(1) || 'today').split('/');
   if (v === 'project') { const p = store.get('projects', prm); return p ? { label: p.name, ic: V.projIcon(p, 16) } : { label: 'Projekt', ic: icon('folder') }; }
-  if (v === 'finance') return prm === 'portfolio' ? { label: 'Portfolio', ic: icon('pie') } : { label: 'Finanzen', ic: icon('wallet') };
+  if (v === 'finance') return prm === 'portfolio' ? { label: 'Portfolio', ic: icon('pie') } : prm === 'loans' ? { label: 'Kredite', ic: icon('coins') } : { label: 'Finanzen', ic: icon('wallet') };
   if (v === 'settings') return { label: 'Einstellungen', ic: icon('gear') };
   const n = NAV.find((x) => x.href === '#' + v) || NAV[0];
   return { label: n.label, ic: icon(n.icon) };
@@ -141,7 +142,7 @@ function renderMain() {
   { const rd = $('.m-reader'), fr = $('.m-frame'); if (rd && fr) mailScroll = { id: fr.dataset.id, top: rd.scrollTop }; }
   const scroll = { board: $('.board')?.scrollLeft, cal: $('#cal-scroll')?.scrollTop, side: $('.side-list')?.scrollTop };
 
-  const views = { today: V.viewToday, inbox: V.viewToday, plan: V.viewPlan, calendar: V.viewCalendar, projects: V.viewProjects, project: () => V.viewProject(param), review: V.viewReview, finance: () => (param === 'portfolio' ? P.viewPortfolio() : F.viewFinance()), mail: Ml.viewMail, settings: V.viewSettings };
+  const views = { today: V.viewToday, inbox: V.viewToday, plan: V.viewPlan, calendar: V.viewCalendar, projects: V.viewProjects, project: () => V.viewProject(param), review: V.viewReview, finance: () => (param === 'portfolio' ? P.viewPortfolio() : param === 'loans' ? Lo.viewLoans() : F.viewFinance()), mail: Ml.viewMail, settings: V.viewSettings };
   main.classList.toggle('full', view === 'calendar');
   main.innerHTML = (views[view] || V.viewToday)();
   // Kalender-Kasten auf Heute: Höhe in ganzen Stunden, damit keine Uhrzeit halb abgeschnitten ist
@@ -226,7 +227,7 @@ function moreHTML() {
 }
 const renderModal = () => {
   if (route().view === 'calendar') renderMain(); // markierte Zeit im Kalender ein-/ausblenden
-  $('#modal-root').innerHTML = ui.modal ? (ui.modal.type === 'nav-more' ? moreHTML() : Ml.isCompose(ui.modal) ? Ml.composeHTML(ui.modal) : P.isPfModal(ui.modal) ? P.pfModalHTML(ui.modal) : F.isFinModal(ui.modal) ? F.finModalHTML(ui.modal) : V.modalHTML(ui.modal)) : '';
+  $('#modal-root').innerHTML = ui.modal ? (ui.modal.type === 'nav-more' ? moreHTML() : Ml.isCompose(ui.modal) ? Ml.composeHTML(ui.modal) : Lo.isLoanModal(ui.modal) ? Lo.loanModalHTML(ui.modal) : P.isPfModal(ui.modal) ? P.pfModalHTML(ui.modal) : F.isFinModal(ui.modal) ? F.finModalHTML(ui.modal) : V.modalHTML(ui.modal)) : '';
   const af = $('#modal-root [autofocus]');
   if (af) { af.focus(); if (af.value) af.setSelectionRange(af.value.length, af.value.length); }
 };
@@ -521,6 +522,25 @@ const A = {
   'delete-sub': (el) => {
     if (!confirm('Abo löschen? Tipp: Mit „Gekündigt zum“ bleibt es in den Ausgaben der letzten Monate sichtbar.')) return;
     store.remove('subs', el.dataset.id); ui.modal = null; renderModal();
+  },
+  // ---- Finanzen: Kredite ----
+  'new-loan': () => { ui.modal = { type: 'loan', l: { currency: F.baseCur(), cycle: 'month', extra: [] } }; renderModal(); },
+  'edit-loan': (el) => { const l = store.get('loans', el.dataset.id); if (l) { ui.modal = { type: 'loan', l: { ...l, extra: [...(l.extra || [])] } }; renderModal(); } },
+  'loan-toggle': (el) => { ui.loanOpen = ui.loanOpen === el.dataset.id ? null : el.dataset.id; renderMain(); },
+  'loan-extra-add': () => { const err = Lo.addExtra(ui.modal); if (err) return toast(err); renderModal(); },
+  'loan-extra-del': (el) => { Lo.delExtra(ui.modal, +el.dataset.i); renderModal(); },
+  'save-loan': () => {
+    const r = Lo.readLoanForm(ui.modal);
+    if (r.error) return toast(r.error);
+    store.put('loans', r.loan);
+    ui.modal = null; renderModal();
+    if (!r.loan.id && store.all('loans').length === 1) toast('Gespeichert. Die Raten stehen jetzt auch im Abo-Kalender.');
+  },
+  'delete-loan': (el) => {
+    const l = store.get('loans', el.dataset.id);
+    if (!l || !confirm(`„${l.name}“ löschen?`)) return;
+    store.remove('loans', l.id); ui.modal = null; renderModal();
+    toast('Kredit gelöscht.', { label: 'Rückgängig', fn: () => store.put('loans', l) });
   },
   'fin-task': (el) => {
     const t = M.addTask(el.dataset.title, { date: el.dataset.date, duration: 15, subRef: el.dataset.ref });
@@ -951,6 +971,7 @@ document.addEventListener('keydown', (e) => {
   else if (el.id === 'gm-cid') A['mail-cid-save']();
   else if (el.id === 'h-search') A['hold-search']();
   else if (el.closest('.pf-modal') && el.tagName === 'INPUT') A['save-holding']();
+  else if (el.closest('.loan-modal')) { if (/^lx-/.test(el.id)) A['loan-extra-add'](); else if (el.tagName === 'INPUT') A['save-loan'](); }
   else if (el.closest('.fin-modal') && el.tagName === 'INPUT' && el.type !== 'checkbox') A['save-sub']();
   else if (el.id === 'ai-reply') A['ai-reply']($('[data-action="ai-reply"]'));
 });
@@ -1082,6 +1103,7 @@ document.addEventListener('input', (e) => {
   const el = e.target;
   if (el.id === 'slot-title' && ui.modal) ui.modal.title = el.value;
   if (el.closest?.('.compose')) Ml.composeInput(el);
+  if (el.closest?.('.loan-modal') && !/^lx-/.test(el.id) && Lo.isLoanModal(ui.modal)) Lo.updatePreview(ui.modal);
   if (el.dataset.field === 'notes') saveNotes(ui.openTask, el.value);
   if (el.dataset.pfield) saveProjectField(el.dataset.id, el.dataset.pfield, el.value);
 });
