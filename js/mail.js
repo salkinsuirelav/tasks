@@ -75,7 +75,7 @@ async function g(path, opts = {}) {
   if (!hasToken()) { tok = null; saveTok(); throw new Error('auth'); }
   const r = await fetch(API + path, { ...opts, headers: { Authorization: `Bearer ${tok.at}`, ...(opts.body ? { 'Content-Type': 'application/json' } : {}) } });
   if (r.status === 401) { tok = null; saveTok(); throw new Error('auth'); }
-  if (!r.ok) throw new Error(`Gmail antwortet gerade nicht (${r.status}).`);
+  if (!r.ok) throw Object.assign(new Error(`Gmail antwortet gerade nicht (${r.status}).`), { status: r.status });
   return r.status === 204 ? null : r.json();
 }
 // Mehrere Abrufe gleichzeitig, aber nicht alle auf einmal
@@ -120,6 +120,14 @@ function bodyOf(p, kind) {
   if (p.mimeType === kind && p.body?.data) return b64(p.body.data);
   for (const c of p.parts || []) { const r = bodyOf(c, kind); if (r) return r; }
   return null;
+}
+// Anhänge (ohne eingebettete Bilder mit Content-ID)
+function attsOf(p, out = []) {
+  if (!p) return out;
+  const ph = (n) => (p.headers || []).find((h) => h.name.toLowerCase() === n)?.value || '';
+  if (p.filename && p.body?.attachmentId && !(ph('content-id') && !/^attachment/i.test(ph('content-disposition')))) out.push({ name: p.filename, size: p.body.size || 0, type: p.mimeType || '' });
+  for (const c of p.parts || []) attsOf(c, out);
+  return out;
 }
 
 // ---------- Apple Mail (iCloud) über den Mac-Helfer ----------
@@ -196,7 +204,11 @@ export async function openMail(id) {
         if (f.mid && !m.mid) m.mid = f.mid;
       } else {
         const full = await g(`/messages/${id}?format=full`);
-        st.full[id] = { html: bodyOf(full.payload, 'text/html'), text: bodyOf(full.payload, 'text/plain'), to: hdr(full, 'To'), cc: hdr(full, 'Cc') };
+        // Kopfzeilen fürs Antworten merken (richtiger Verlauf: Message-ID, References, Reply-To)
+        st.full[id] = {
+          html: bodyOf(full.payload, 'text/html'), text: bodyOf(full.payload, 'text/plain'), to: hdr(full, 'To'), cc: hdr(full, 'Cc'),
+          attachments: attsOf(full.payload), subject: hdr(full, 'Subject'), mid: hdr(full, 'Message-ID'), refs: hdr(full, 'References'), replyTo: hdr(full, 'Reply-To'),
+        };
       }
     } catch (e) { icStale(e); st.full[id] = { error: e.message === 'auth' ? 'Google-Anmeldung abgelaufen.' : e.message }; }
   }
@@ -273,7 +285,7 @@ function gmCard() {
       </div>`;
   return `
       <div class="panel m-acc">
-        <div class="m-acc-h"><span class="m-acc-ic gm">${icon('mail')}</span><div><h4>Gmail</h4><p class="muted">Posteingang lesen, archivieren, als gelesen markieren, Mail → Aufgabe</p></div></div>
+        <div class="m-acc-h"><span class="m-acc-ic gm">${icon('mail')}</span><div><h4>Gmail</h4><p class="muted">Posteingang lesen, archivieren, Mails schreiben und beantworten, Mail → Aufgabe</p></div></div>
         ${cid && !ui.mailCidEdit ? `<button class="btn primary" data-action="mail-signin">${icon('mail')} Mit Google anmelden</button>
           <p class="fin-note">Client-ID ist eingetragen. <a href="#" data-action="mail-cid-edit">Ändern</a></p>`
         : `<p class="m-steps">Einmalig: In der Google Cloud Console ein kleines Projekt anlegen und dort eine <b>Client-ID</b> erstellen (Webanwendung, Herkunft <code>https://salkinsuirelav.github.io</code>, Gmail-API aktivieren). Die genaue Anleitung steht in <a href="https://github.com/salkinsuirelav/tasks/blob/main/MAIL.md" target="_blank" rel="noopener">MAIL.md</a>.</p>
@@ -342,11 +354,16 @@ function reader(m) {
   } else body = `<div class="m-plain">${esc(f.text || m.snippet).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>')}</div>`;
   const hasRemote = f?.html && /<img[^>]+src=["']?https?:/i.test(f.html);
   const link = mailLink(m);
-  const att = f?.attachments?.length ? `<div class="m-att">${f.attachments.map((a) => `<span class="m-att-i" title="${esc(a.type)}">${icon('clip')}<b>${esc(a.name)}</b><small>${fsize(a.size)}</small></span>`).join('')}<small class="muted m-att-n">Anhänge öffnest du in Apple Mail.</small></div>` : '';
+  // Antworten/Weiterleiten: Gmail (iCloud folgt über den Mac-Helfer)
+  const rep = canSend(m.src) && f && !f.error, all = rep && canReplyAll(m);
+  const att = f?.attachments?.length ? `<div class="m-att">${f.attachments.map((a) => `<span class="m-att-i" title="${esc(a.type)}">${icon('clip')}<b>${esc(a.name)}</b><small>${fsize(a.size)}</small></span>`).join('')}<small class="muted m-att-n">Anhänge öffnest du in ${m.src === 'ic' ? 'Apple Mail' : 'Gmail'}.</small></div>` : '';
   return `<div class="m-reader panel">
     <div class="m-r-bar">
       ${isMobile() ? `<button class="icon-btn" data-action="mail-close" title="Zurück">${icon('arrowLeft')}</button>` : `<button class="icon-btn" data-action="mail-close" title="Schließen">${icon('x')}</button>`}
       <span class="m-r-sp"></span>
+      ${rep ? `<button class="icon-btn" data-action="mail-reply" data-id="${m.id}" title="Antworten">${icon('reply')}</button>
+      ${all ? `<button class="icon-btn" data-action="mail-replyall" data-id="${m.id}" title="Allen antworten">${icon('replyAll')}</button>` : ''}
+      <button class="icon-btn" data-action="mail-forward" data-id="${m.id}" title="Weiterleiten">${icon('forward')}</button><span class="m-r-div"></span>` : ''}
       <button class="icon-btn" data-action="mail-task" data-id="${m.id}" title="Als Aufgabe übernehmen">${icon('check')}</button>
       <button class="icon-btn" data-action="mail-unread" data-id="${m.id}" title="Als ungelesen markieren">${icon('mail')}</button>
       <button class="icon-btn" data-action="mail-archive" data-id="${m.id}" title="Archivieren">${icon('archive')}</button>
@@ -358,6 +375,11 @@ function reader(m) {
     ${f?.truncated ? '<p class="fin-note" style="margin:0">Sehr große Mail: Nur der Anfang ist geladen. Den Rest siehst du in Apple Mail.</p>' : ''}
     ${body}
     ${att}
+    ${rep ? `<div class="m-reply">
+      <button class="btn" data-action="mail-reply" data-id="${m.id}">${icon('reply')} Antworten</button>
+      ${all ? `<button class="btn" data-action="mail-replyall" data-id="${m.id}">${icon('replyAll')} Allen antworten</button>` : ''}
+      <button class="btn" data-action="mail-forward" data-id="${m.id}">${icon('forward')} Weiterleiten</button>
+    </div>` : ''}
   </div>`;
 }
 
@@ -381,7 +403,8 @@ export function viewMail() {
   const items = allMail().filter((m) => boxF === 'all' || m.src === boxF);
   const unread = items.filter((m) => m.unread).length;
   const filter = ui.mailFilter || 'all';
-  const actions = `<button class="icon-btn" data-action="mail-refresh" title="Neu laden">${icon('refresh')}</button>
+  const write = canSend() ? `<button class="btn primary m-compose" data-action="mail-compose" title="Neue Mail">${icon('pen')} Schreiben</button>` : '';
+  const actions = `${write}<button class="icon-btn" data-action="mail-refresh" title="Neu laden">${icon('refresh')}</button>
     <button class="icon-btn" data-action="mail-accounts" title="Konten (Gmail, Apple Mail)">${icon('user')}</button>`;
   const tabs = `<div class="tabs m-filter">${[['all', 'Posteingang'], ['unread', `Ungelesen${unread ? `<span class="n">${unread}</span>` : ''}`]].map(([v, l]) => `<button class="${filter === v ? 'on' : ''}" data-action="mail-filter" data-v="${v}">${l}</button>`).join('')}</div>`
     + (both() ? `<div class="tabs m-box">${[['all', 'Alle'], ['gm', 'Gmail'], ['ic', 'iCloud']].map(([v, l]) => `<button class="${boxF === v ? 'on' : ''}" data-action="mail-box" data-v="${v}">${l}</button>`).join('')}</div>` : '');
@@ -404,6 +427,220 @@ export function viewMail() {
   const rows = list.map((m) => { const gname = groupOf(m.at); const h = gname !== lastG ? `<div class="m-group">${gname}</div>` : ''; lastG = gname; return h + row(m, compact); }).join('');
   const listHTML = `<div class="m-list ${compact ? 'compact' : ''}">${rows || `<p class="muted fin-none" style="padding:24px">${filter === 'unread' ? 'Alles gelesen.' : 'Posteingang leer. 🎉'}</p>`}</div>`;
   if (open && isMobile()) return reader(open);
+  const fab = canSend() && isMobile() ? `<button class="m-fab" data-action="mail-compose" aria-label="Neue Mail">${icon('pen')}</button>` : '';
   return `${top}${notes()}
-    <div class="mail-wrap ${open ? 'split' : ''}">${listHTML}${open ? reader(open) : ''}</div>`;
+    <div class="mail-wrap ${open ? 'split' : ''}">${listHTML}${open ? reader(open) : ''}</div>${fab}`;
+}
+
+// ---------- Schreiben, Antworten, Weiterleiten ----------
+// Gmail: über die Gmail-API (die Berechtigung gmail.modify erlaubt Senden schon, kein neuer Login nötig).
+// Gesendet wird reiner Text. Gmail setzt Absender, Datum und Message-ID selbst und legt die Mail unter „Gesendet“ ab.
+export const canSend = (src) => (src === 'gm' || !src) && !!st.account;
+export const isCompose = (m) => m?.type === 'compose';
+const me = () => (st.account || '').toLowerCase();
+const EMAIL = /^[^\s@<>(),;:"]+@[^\s@<>(),;:"]+\.[^\s@<>(),;:"]{2,}$/;
+// "A <a@x>, \"Doe, John\" <j@x>; b@y" → [{name, email, raw}]
+export function splitAddrs(s) {
+  const out = []; let cur = '', q = false, a = false;
+  for (const ch of String(s || '')) {
+    if (ch === '"' && !a) q = !q;
+    else if (ch === '<' && !q) a = true;
+    else if (ch === '>' && !q) a = false;
+    if ((ch === ',' || ch === ';') && !q && !a) { out.push(cur); cur = ''; } else cur += ch;
+  }
+  out.push(cur);
+  return out.map((x) => x.trim()).filter(Boolean).map((raw) => {
+    const m = raw.match(/^(.*?)\s*<([^>]*)>\s*$/);
+    const email = (m ? m[2] : raw).trim(), name = m ? m[1].trim().replace(/^"(.*)"$/, '$1').replace(/\\(.)/g, '$1') : '';
+    return { name, email, raw };
+  });
+}
+const showAddr = (a) => (a.name && a.name.toLowerCase() !== a.email.toLowerCase() ? `${/[,;"<>]/.test(a.name) ? `"${a.name.replace(/"/g, '')}"` : a.name} <${a.email}>` : a.email);
+const uniq = (list, skip = []) => {
+  const seen = new Set(skip.map((x) => x.toLowerCase()));
+  return list.filter((a) => { const k = a.email.toLowerCase(); if (!a.email || seen.has(k) || k === me()) return false; seen.add(k); return true; });
+};
+
+// MIME-Kopfzeilen: Umlaute als =?UTF-8?B?…?= (höchstens 39 Byte je Stück, damit Zeilen unter 78 Zeichen bleiben; kein Zeichen wird zerteilt)
+const utf8 = (s) => new TextEncoder().encode(s);
+const b64bytes = (u8) => { let bin = ''; for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode(...u8.subarray(i, i + 0x8000)); return btoa(bin); };
+function encWord(s) {
+  if (/^[\x20-\x7e]*$/.test(s)) return s;
+  const parts = []; let cur = '';
+  for (const ch of s) { if (utf8(cur + ch).length > 39) { parts.push(cur); cur = ch; } else cur += ch; }
+  if (cur) parts.push(cur);
+  return parts.map((p) => `=?UTF-8?B?${b64bytes(utf8(p))}?=`).join('\r\n ');
+}
+const hdrAddr = (a) => (!a.name ? a.email : /^[\x20-\x7e]*$/.test(a.name) ? `"${a.name.replace(/["\\]/g, '\\$&')}" <${a.email}>` : `${encWord(a.name)} <${a.email}>`);
+const rfcDate = (d = new Date()) => d.toUTCString().replace('GMT', '+0000');
+export function buildRaw({ to, cc, bcc, subject, body, inReplyTo, references }) {
+  const H = [];
+  const addr = (k, list) => { if (list.length) H.push(`${k}: ${list.map(hdrAddr).join(',\r\n ')}`); };
+  addr('To', to); addr('Cc', cc); addr('Bcc', bcc);
+  H.push(`Subject: ${encWord(subject || '')}`, `Date: ${rfcDate()}`);
+  if (inReplyTo) H.push(`In-Reply-To: ${inReplyTo}`);
+  if (references) H.push(`References: ${references}`);
+  H.push('MIME-Version: 1.0', 'Content-Type: text/plain; charset="UTF-8"', 'Content-Transfer-Encoding: base64');
+  const b = b64bytes(utf8(String(body || '').replace(/\r?\n/g, '\r\n'))).replace(/.{76}/g, '$&\r\n');
+  const msg = `${H.join('\r\n')}\r\n\r\n${b}\r\n`;
+  return b64bytes(utf8(msg)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+// HTML-Mail als Text (fürs Zitat). DOMParser lädt keine Bilder und führt nichts aus.
+function htmlToText(html) {
+  const d = new DOMParser().parseFromString(html || '', 'text/html');
+  d.querySelectorAll('style,script,head,title').forEach((e) => e.remove());
+  d.querySelectorAll('br').forEach((e) => e.replaceWith('\n'));
+  d.querySelectorAll('li').forEach((e) => e.prepend('• '));
+  d.querySelectorAll('p,div,tr,li,h1,h2,h3,h4,h5,h6,blockquote,table').forEach((e) => e.append('\n'));
+  return (d.body?.textContent || '').replace(/\u00a0/g, ' ').replace(/[ \t]+\n/g, '\n').replace(/\n[ \t]+/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+const textOf = (m) => { const f = st.full[m.id] || {}; return (f.text || htmlToText(f.html) || m.snippet || '').replace(/\r\n/g, '\n').trim(); };
+const whenDE = (at) => { const d = new Date(at); return `${d.toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} um ${d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}`; };
+const quote = (t) => t.split('\n').map((l) => (l.startsWith('>') ? '>' + l : l ? '> ' + l : '>')).join('\n');
+
+// Wer bekommt die Antwort? Antworten: Reply-To bzw. Absender. Allen: zusätzlich alle aus An/Cc außer mir.
+function replyTargets(m) {
+  const f = st.full[m.id] || {};
+  const sender = splitAddrs(f.replyTo).length ? splitAddrs(f.replyTo) : [{ name: m.from.name === m.from.email ? '' : m.from.name, email: m.from.email }];
+  const mine = m.from.email.toLowerCase() === me();
+  const to = mine ? splitAddrs(f.to) : sender;
+  const toAll = uniq([...to, ...(mine ? [] : splitAddrs(f.to))]);
+  const ccAll = uniq(splitAddrs(f.cc), toAll.map((a) => a.email));
+  return { to: uniq(to), toAll, ccAll };
+}
+export const canReplyAll = (m) => { const r = replyTargets(m); return r.toAll.length + r.ccAll.length > r.to.length; };
+
+export function composeFor(kind, id) {
+  const c = { type: 'compose', kind, to: '', cc: '', bcc: '', subject: '', body: '', showCc: false, err: null };
+  const m = id && mailById(id);
+  if (kind !== 'new' && m) {
+    const f = st.full[m.id] || {};
+    const subj = f.subject || (m.subject === '(ohne Betreff)' ? '' : m.subject);
+    c.ref = m.id; c.threadId = m.threadId;
+    if (f.mid) { c.inReplyTo = f.mid; c.references = [f.refs, f.mid].filter(Boolean).join(' ').trim(); }
+    const from = `${m.from.name && m.from.name !== m.from.email ? m.from.name + ' ' : ''}<${m.from.email}>`;
+    if (kind === 'fwd') {
+      c.subject = /^\s*(fwd?|wg)\s*:/i.test(subj) ? subj : `Fwd: ${subj}`;
+      c.body = `\n\n---------- Weitergeleitete Nachricht ----------\nVon: ${from}\nDatum: ${whenDE(m.at)}\nBetreff: ${subj}\n${f.to ? `An: ${f.to}\n` : ''}${f.cc ? `Cc: ${f.cc}\n` : ''}\n${textOf(m)}\n`;
+      c.attNote = (f.attachments || []).length;
+    } else {
+      const r = replyTargets(m);
+      const to = kind === 'all' ? r.toAll : r.to, cc = kind === 'all' ? r.ccAll : [];
+      c.to = to.map(showAddr).join(', '); c.cc = cc.map(showAddr).join(', '); c.showCc = cc.length > 0;
+      c.subject = /^\s*(re|aw|antw)\s*:/i.test(subj) ? subj : `Re: ${subj}`;
+      c.body = `\n\nAm ${whenDE(m.at)} schrieb ${from}:\n${quote(textOf(m))}\n`;
+    }
+  }
+  c.init = JSON.stringify([c.to, c.cc, c.bcc, c.subject, c.body]);
+  return c;
+}
+export function captureCompose(c) {
+  const v = (id) => document.getElementById(id)?.value;
+  for (const [k, id] of [['to', 'c-to'], ['cc', 'c-cc'], ['bcc', 'c-bcc'], ['subject', 'c-subj'], ['body', 'c-body']]) { const x = v(id); if (x != null) c[k] = x; }
+}
+export const composeDirty = (c) => JSON.stringify([c.to, c.cc, c.bcc, c.subject, c.body]) !== c.init;
+// Prüfen und fertig machen. Wirft einen Fehler mit verständlichem Text.
+export function prepareSend(c) {
+  const lists = {};
+  for (const k of ['to', 'cc', 'bcc']) {
+    lists[k] = splitAddrs(c[k]);
+    const bad = lists[k].find((a) => !EMAIL.test(a.email));
+    if (bad) throw new Error(`„${bad.raw}“ ist keine gültige Adresse.`);
+  }
+  if (!lists.to.length) throw new Error(lists.cc.length || lists.bcc.length ? 'Bitte mindestens eine Adresse bei „An“ eintragen.' : 'An wen soll die Mail gehen?');
+  return { ...lists, subject: c.subject.trim(), body: c.body, threadId: c.threadId, inReplyTo: c.inReplyTo, references: c.references };
+}
+export async function send(p) {
+  if (!canSend('gm')) throw new Error('Zum Senden zuerst Gmail verbinden.');
+  try {
+    await g('/messages/send', { method: 'POST', body: JSON.stringify({ raw: buildRaw(p), ...(p.threadId ? { threadId: p.threadId } : {}) }) });
+  } catch (e) {
+    if (e.status === 400) throw new Error('Gmail hat die Mail abgelehnt. Stimmen die Adressen?');
+    if (e.status === 403) throw new Error('Gmail erlaubt das Senden gerade nicht (403). Einmal bei Gmail trennen und neu anmelden.');
+    throw e;
+  }
+  for (const a of [...p.to, ...p.cc, ...p.bcc]) sent.set(a.email.toLowerCase(), a);
+}
+
+// Vorschläge beim Tippen der Adresse: alle Absender und Empfänger aus den geladenen Mails
+const sent = new Map();
+function contacts() {
+  const map = new Map(sent);
+  const add = (a) => { const k = (a.email || '').toLowerCase(); if (!EMAIL.test(k) || k === me() || /no-?reply|mailer-daemon/.test(k)) return; const o = map.get(k); if (!o || (!o.name && a.name)) map.set(k, { name: a.name && a.name !== a.email ? a.name : '', email: a.email }); };
+  for (const m of allMail()) add(m.from);
+  for (const f of Object.values(st.full)) { splitAddrs(f.to).forEach(add); splitAddrs(f.cc).forEach(add); }
+  return [...map.values()];
+}
+let sug = null; // { el, items, i }
+const sugBox = (el) => el.closest('.c-row')?.querySelector('.c-sug');
+function hideSug() { if (sug) { const b = sugBox(sug.el); if (b) b.hidden = true; } sug = null; }
+export function composeInput(el) {
+  if (!/^c-(to|cc|bcc)$/.test(el.id)) return;
+  const v = el.value.slice(0, el.selectionStart ?? el.value.length);
+  const tok = v.split(/[,;]/).pop().trim().toLowerCase();
+  const have = new Set(splitAddrs(el.value).map((a) => a.email.toLowerCase()));
+  // Treffer am Wortanfang zuerst; „le“ soll Lea finden, nicht jede …@example.com
+  const score = (a) => {
+    const n = a.name.toLowerCase(), e = a.email.toLowerCase(), local = e.split('@')[0];
+    if (n.startsWith(tok) || e.startsWith(tok)) return 0;
+    if (n.split(/\s+/).some((x) => x.startsWith(tok)) || local.split(/[._-]/).some((x) => x.startsWith(tok))) return 1;
+    if (tok.length >= 3 && (local.includes(tok) || n.includes(tok))) return 2;
+    return /[@.]/.test(tok) && e.includes(tok) ? 3 : 9;
+  };
+  const items = !tok ? [] : contacts().filter((a) => !have.has(a.email.toLowerCase())).map((a) => [score(a), a]).filter(([x]) => x < 9).sort((x, y) => x[0] - y[0]).map(([, a]) => a).slice(0, 5);
+  const box = sugBox(el);
+  if (!box || !items.length) return hideSug();
+  sug = { el, items, i: 0 };
+  drawSug();
+}
+function drawSug() {
+  const box = sugBox(sug.el);
+  box.innerHTML = sug.items.map((a, i) => `<div class="c-sug-i ${i === sug.i ? 'on' : ''}" data-action="compose-pick" data-i="${i}">${avatar({ name: a.name || a.email, email: a.email }, 24)}<span>${a.name ? `<b>${esc(a.name)}</b> ` : ''}<span class="muted">${esc(a.email)}</span></span></div>`).join('');
+  box.hidden = false;
+}
+export function composePick(i) {
+  if (!sug) return;
+  const { el, items } = sug, a = items[i ?? sug.i];
+  const pos = el.selectionStart ?? el.value.length;
+  const before = el.value.slice(0, pos), after = el.value.slice(pos);
+  const cut = Math.max(before.lastIndexOf(','), before.lastIndexOf(';'));
+  const head = cut >= 0 ? before.slice(0, cut + 1) + ' ' : '';
+  const rest = after.replace(/^[^,;]*[,;]?\s*/, '');
+  el.value = `${head}${showAddr(a)}, ${rest}`;
+  const caret = head.length + showAddr(a).length + 2;
+  hideSug(); el.focus(); el.setSelectionRange(caret, caret);
+}
+// Pfeiltasten/Enter/Tab/Esc in der Vorschlagsliste. true = Taste gehört der Liste.
+export function composeKey(e) {
+  if (!sug || e.target !== sug.el) return false;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); sug.i = (sug.i + (e.key === 'ArrowDown' ? 1 : -1) + sug.items.length) % sug.items.length; drawSug(); return true; }
+  if ((e.key === 'Enter' || e.key === 'Tab') && !e.isComposing && !e.metaKey && !e.ctrlKey) { e.preventDefault(); composePick(); return true; }
+  if (e.key === 'Escape') { hideSug(); return true; }
+  return false;
+}
+export const composeBlur = (el) => { if (sug && el !== sug.el) hideSug(); };
+
+export function composeHTML(c) {
+  const title = { new: 'Neue Mail', reply: 'Antworten', all: 'Allen antworten', fwd: 'Weiterleiten' }[c.kind] || 'Neue Mail';
+  const row = (id, label, val, extra = '') => `<div class="c-row"><label for="${id}">${label}</label><input id="${id}" value="${esc(val)}" ${id === 'c-subj' ? '' : 'inputmode="email" autocapitalize="off"'} autocomplete="off" spellcheck="false" ${extra}>${id === 'c-to' && !c.showCc ? '<button class="c-ccb" data-action="compose-cc" title="Kopie (Cc) und Blindkopie (Bcc)">Cc/Bcc</button>' : ''}${id === 'c-subj' ? '' : '<div class="c-sug" hidden></div>'}</div>`;
+  const focusTo = c.kind === 'new' || c.kind === 'fwd';
+  return `<div class="overlay modal-overlay" data-action="close-modal"></div>
+  <div class="modal compose" role="dialog" aria-label="${title}">
+    <div class="c-head">
+      <button class="icon-btn c-x" data-action="compose-close" title="Schließen (Esc)">${icon('x')}</button>
+      <h2>${title}</h2>
+      <button class="btn primary small c-send-m" data-action="compose-send">${icon('send')} Senden</button>
+    </div>
+    <div class="c-fields">
+      <div class="c-row c-from"><label>Von</label><span>${esc(st.account || '')}</span></div>
+      ${row('c-to', 'An', c.to, focusTo ? 'autofocus' : '')}
+      ${c.showCc ? row('c-cc', 'Cc', c.cc) + row('c-bcc', 'Bcc', c.bcc) : ''}
+      ${row('c-subj', 'Betreff', c.subject)}
+    </div>
+    <textarea id="c-body" class="c-body" placeholder="Nachricht" ${focusTo ? '' : 'autofocus'}>\n${esc(c.body)}</textarea>
+    ${c.attNote ? `<p class="fin-note c-note">${icon('clip')} ${c.attNote === 1 ? 'Der Anhang wird' : `Die ${c.attNote} Anhänge werden`} nicht mitgeschickt. Dafür die Mail in Gmail weiterleiten.</p>` : ''}
+    ${c.err ? `<p class="fin-note m-err c-err">${esc(c.err)}</p>` : ''}
+    <div class="foot c-foot"><span class="muted c-hint"><kbd>⌘</kbd> <kbd>Enter</kbd> sendet</span><button class="btn primary" data-action="compose-send">${icon('send')} Senden</button></div>
+  </div>`;
 }

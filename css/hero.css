@@ -322,7 +322,6 @@ html[data-design="hero"] :is(.tsec-title + .mono, .group-title > .mono) {
   display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px;
   background: color-mix(in oklab, var(--h-default) 80%, transparent); color: var(--text); font-family: var(--sans); font-size: 12px; font-weight: 500;
 }
-html[data-design="hero"] .tsec-sum { font-size: 13px; }
 
 /* Heute */
 html[data-design="hero"] .daystats { padding: 10px 16px; margin: 0 0 24px; }
@@ -458,3 +457,13 @@ html[data-design="hero"] .m-att-i { border-color: var(--h-sep); background: var(
 html[data-design="hero"] .more-sheet { background: var(--h-surface); box-shadow: var(--h-overlay-shadow), 0 0 0 1px var(--h-sep); }
 html[data-design="hero"] .more-item { background: var(--h-default); }
 html[data-design="hero"] .tabbar a.active svg.i { color: var(--h-accent); }
+
+/* ===== v0.18 Mail schreiben im Modern-Design ===== */
+html[data-design="hero"] .modal.compose { padding: 0; }
+html[data-design="hero"] :is(.c-row, .modal .c-foot) { border-color: var(--h-sep); }
+html[data-design="hero"] :is(.c-head .c-x:hover, .c-ccb:hover, .c-sug-i:hover, .c-sug-i.on) { background: var(--h-default); }
+html[data-design="hero"] .c-sug { background: var(--h-surface); border: 0; box-shadow: var(--h-overlay-shadow); }
+html[data-design="hero"] .m-fab { background: var(--h-accent); border-radius: 999px; box-shadow: var(--h-overlay-shadow); }
+@media (max-width: 760px) {
+  html[data-design="hero"] .modal.compose { border-radius: 0; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+}

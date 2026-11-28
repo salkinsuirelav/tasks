@@ -147,7 +147,6 @@ export function viewToday() {
   const done = M.doneToday();
   const inbox = M.openTasks().filter((t) => !t.date).sort(byPrio);
   const selProj = projs.find((p) => p.id === ui.todayProj)?.id || projs[0]?.id || '';
-  const sumOf = (arr) => arr.reduce((a, t) => a + M.trackedFor(t.id), 0);
 
   const card = (t, i) => {
     const p = M.project(t.projectId), on = t.id === liveId, ms = M.trackedFor(t.id);
@@ -165,7 +164,7 @@ export function viewToday() {
     : '';
   const section = (title, items, cap, extra = '', count = items.length) => `
     <section class="tsec">
-      <div class="tsec-head"><span class="tsec-title">${title}</span><span class="mono muted">${count}</span><span class="mono muted tsec-sum">${sumOf(items) ? fmtDur(sumOf(items)) : ''}</span>${extra}</div>
+      <div class="tsec-head"><span class="tsec-title">${title}</span><span class="mono muted">${count}</span>${extra}</div>
       ${cap}
       ${items.length ? `<div class="tlist">${items.map(card).join('')}</div>` : ''}
     </section>`;
@@ -689,7 +688,7 @@ export function viewSettings() {
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
       </div>
       <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.17.0</p>
+      <p class="mono muted">Version 0.18.0</p>
     </div>`;
 }
 

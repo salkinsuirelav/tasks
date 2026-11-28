@@ -28,13 +28,14 @@ function renderNav() {
   const syncColor = { online: '#30a46c', offline: '#e2a336', error: '#e5484d', connecting: '#e2a336', 'signed-out': '#e2a336' }[sy.status] || 'var(--faint)';
   const syncText = { off: 'Nur lokal', online: 'Synchronisiert', offline: 'Offline', error: 'Sync-Fehler', connecting: 'Verbinde…', 'signed-out': 'Nicht angemeldet' }[sy.status];
   const collapsed = !!store.settings.navCollapsed;
+  const projShut = !!store.settings.navProjHidden; // Projekte in der Seitenleiste zugeklappt
   $('.app').classList.toggle('nav-collapsed', collapsed);
   $('#sidebar').innerHTML = `
     <div class="brand"><img class="brand-logo" src="favicon.svg" alt=""><span class="txt">Tasks</span>
       <button class="icon-btn collapse-btn" data-action="toggle-nav" title="Seitenleiste ${collapsed ? 'ausklappen' : 'einklappen'} (B)">${icon(collapsed ? 'expand' : 'collapse')}</button></div>
     ${navItems(store.settings).map((n) => `<a class="nav-item ${active(n.href) ? 'active' : ''}" href="${n.href}" title="${n.label}" draggable="true" data-nav="${n.href}">${icon(n.icon)}<span class="lbl">${n.label}</span>${n.href === '#inbox' && M.aiNewCount() ? '<span class="ai-dot" title="Claude ist mit Aufgaben fertig"></span>' : ''}${n.href === '#inbox' && inboxCount ? `<span class="count">${inboxCount}</span>` : ''}</a>`).join('')}
-    <div class="nav-label"><span class="txt">Projekte</span> <button class="icon-btn" style="width:24px;height:24px" data-action="new-project" title="Neues Projekt">${icon('plus')}</button></div>
-    ${M.projects().map((p) => `<a class="nav-item ${view === 'project' && param === p.id ? 'active' : ''}" href="#project/${p.id}" title="${esc(p.name)}">${V.projIcon(p, 16)}<span class="lbl">${esc(p.name)}</span><span class="count">${M.openTasks().filter((t) => t.projectId === p.id).length || ''}</span></a>`).join('')}
+    <div class="nav-label"><button class="nav-label-t ${projShut ? 'shut' : ''}" data-action="toggle-nav-proj" title="Projekte ${projShut ? 'einblenden' : 'ausblenden'}" aria-expanded="${!projShut}"><span class="txt">Projekte</span>${icon('right', 'chev')}</button> <button class="icon-btn" style="width:24px;height:24px" data-action="new-project" title="Neues Projekt">${icon('plus')}</button></div>
+    ${projShut ? '' : M.projects().map((p) => `<a class="nav-item ${view === 'project' && param === p.id ? 'active' : ''}" href="#project/${p.id}" title="${esc(p.name)}">${V.projIcon(p, 16)}<span class="lbl">${esc(p.name)}</span><span class="count">${M.openTasks().filter((t) => t.projectId === p.id).length || ''}</span></a>`).join('')}
     <div class="sidebar-foot">
       <a class="nav-item ${view === 'settings' ? 'active' : ''}" href="#settings" title="Einstellungen">${icon('gear')}<span class="lbl">Einstellungen</span></a>
       <div class="sync-pill" title="${syncText}"><span class="dot" style="background:${syncColor}"></span><span class="txt">${syncText}</span></div>
@@ -225,7 +226,7 @@ function moreHTML() {
 }
 const renderModal = () => {
   if (route().view === 'calendar') renderMain(); // markierte Zeit im Kalender ein-/ausblenden
-  $('#modal-root').innerHTML = ui.modal ? (ui.modal.type === 'nav-more' ? moreHTML() : P.isPfModal(ui.modal) ? P.pfModalHTML(ui.modal) : F.isFinModal(ui.modal) ? F.finModalHTML(ui.modal) : V.modalHTML(ui.modal)) : '';
+  $('#modal-root').innerHTML = ui.modal ? (ui.modal.type === 'nav-more' ? moreHTML() : Ml.isCompose(ui.modal) ? Ml.composeHTML(ui.modal) : P.isPfModal(ui.modal) ? P.pfModalHTML(ui.modal) : F.isFinModal(ui.modal) ? F.finModalHTML(ui.modal) : V.modalHTML(ui.modal)) : '';
   const af = $('#modal-root [autofocus]');
   if (af) { af.focus(); if (af.value) af.setSelectionRange(af.value.length, af.value.length); }
 };
@@ -311,6 +312,35 @@ setInterval(() => {
   });
 }, 1000);
 setInterval(() => { if (['calendar', 'today'].includes(route().view) && !ui.drag && !document.activeElement?.matches?.('input,textarea,select')) renderMain(); }, 60000);
+
+// ---------- Mail senden mit „Rückgängig“ ----------
+let pendingSend = null;
+function openCompose(c) {
+  ui.modal = c; renderModal();
+  // Antworten: Schreibmarke über das Zitat, nicht ans Ende
+  const b = $('#c-body');
+  if (b && document.activeElement === b) { b.setSelectionRange(0, 0); b.scrollTop = 0; }
+}
+function queueSend(c, p) {
+  const who = p.to[0].name || p.to[0].email, more = p.to.length + p.cc.length + p.bcc.length - 1;
+  const t = setTimeout(async () => {
+    pendingSend = null;
+    try {
+      await Ml.send(p);
+      toast(`Gesendet an ${who}${more > 0 ? ` und ${more} weitere` : ''}.`);
+    } catch (e) {
+      // Nichts geht verloren: Fenster mit allem wieder öffnen
+      c.err = e.message === 'auth' ? 'Google-Anmeldung abgelaufen. Klick nochmal auf Senden.' : e.message;
+      if (!ui.modal) { ui.modal = c; renderModal(); }
+      toast('Nicht gesendet.');
+    }
+  }, 5000);
+  pendingSend = t;
+  toast('Wird gesendet …', { label: 'Rückgängig', fn: () => { clearTimeout(t); pendingSend = null; ui.modal = c; renderModal(); } });
+}
+window.addEventListener('beforeunload', (e) => {
+  if (pendingSend || (Ml.isCompose(ui.modal) && (Ml.captureCompose(ui.modal), Ml.composeDirty(ui.modal)))) { e.preventDefault(); e.returnValue = ''; }
+});
 
 // ---------- Toast ----------
 let toastT;
@@ -428,6 +458,7 @@ const A = {
   'toggle-nav': () => store.saveSettings({ navCollapsed: !store.settings.navCollapsed }),
   theme: (el) => store.saveSettings({ theme: el.dataset.v }),
   design: (el) => setDesign(el.dataset.v),
+  'toggle-nav-proj': () => store.saveSettings({ navProjHidden: !store.settings.navProjHidden }),
   'toggle-side': () => { if (isMobile()) { ui.sideOpen = !ui.sideOpen; renderMain(); } else store.saveSettings({ sidebar: !store.settings.sidebar }); },
 
   'auto-plan': () => {
@@ -532,6 +563,30 @@ const A = {
       const r = await Ml.archive(el.dataset.id);
       if (r) toast('Archiviert.', { label: 'Rückgängig', fn: () => Ml.unarchive(r).catch((e) => toast(e.message)) });
     } catch (e) { toast(e.message === 'auth' ? 'Google-Anmeldung abgelaufen.' : e.message); }
+  },
+  // Schreiben / Antworten / Weiterleiten (Gmail). Nach „Senden“ 5 Sekunden Zeit für „Rückgängig“.
+  'mail-compose': () => openCompose(Ml.composeFor('new')),
+  'mail-reply': (el) => openCompose(Ml.composeFor('reply', el.dataset.id)),
+  'mail-replyall': (el) => openCompose(Ml.composeFor('all', el.dataset.id)),
+  'mail-forward': (el) => openCompose(Ml.composeFor('fwd', el.dataset.id)),
+  'compose-cc': () => { Ml.captureCompose(ui.modal); ui.modal.showCc = true; renderModal(); $('#c-cc')?.focus(); },
+  'compose-pick': (el) => Ml.composePick(+el.dataset.i),
+  'compose-close': () => {
+    const c = ui.modal; if (!Ml.isCompose(c)) return;
+    Ml.captureCompose(c);
+    if (Ml.composeDirty(c) && !confirm('Entwurf verwerfen? Er wird nirgends gespeichert.')) return;
+    ui.modal = null; renderModal();
+  },
+  'compose-send': async () => {
+    const c = ui.modal; if (!Ml.isCompose(c)) return;
+    Ml.captureCompose(c);
+    let p;
+    try { p = Ml.prepareSend(c); } catch (e) { c.err = e.message; renderModal(); return; }
+    // Abgelaufene Google-Anmeldung direkt aus diesem Klick erneuern (Pop-up braucht einen Klick)
+    if (!Ml.hasToken()) { try { await Ml.signIn(); } catch (e) { c.err = e.message; if (ui.modal === c) renderModal(); return; } }
+    if (!p.subject && !confirm('Ohne Betreff senden?')) return;
+    c.err = null; ui.modal = null; renderModal();
+    queueSend(c, p);
   },
   'mail-task': (el) => {
     const m = Ml.mailById(el.dataset.id);
@@ -755,7 +810,7 @@ const A = {
     toast(`${n} Aufgaben gelöscht. Backup liegt in deinen Downloads.`);
   },
   'seed-demo': () => { M.seedDemo(); toast('Beispieldaten geladen.'); },
-  'close-modal': () => { const m = ui.modal; ui.modal = null; renderModal(); if (m?.type === 'repeat-move') { renderMain(); renderSheet(); } },
+  'close-modal': () => { if (Ml.isCompose(ui.modal)) return A['compose-close'](); const m = ui.modal; ui.modal = null; renderModal(); if (m?.type === 'repeat-move') { renderMain(); renderSheet(); } },
   'repeat-move': (el) => {
     const m = ui.modal; ui.modal = null; renderModal();
     if (el.dataset.mode === 'one') { const c = M.moveOneOccurrence(m.id, m.occ, m.changes); if (ui.openTask === m.id && c) ui.openTask = c.id; toast('Nur dieser Termin wurde verschoben.'); }
@@ -868,6 +923,10 @@ tabStrip.addEventListener('dragend', () => { tabDrag = null; delete tabStrip.dat
 document.addEventListener('keydown', (e) => {
   const el = e.target;
   if (ui.recordKey) return recordKey(e);
+  if (Ml.isCompose(ui.modal)) {
+    if (Ml.composeKey(e)) return;
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); A['compose-send'](); return; }
+  }
   if (e.key === 'Escape') {
     if (ui.modal) A['close-modal'](); else if (ui.openTask) A['close-sheet'](); else if (ui.focusTask) A['close-focus']();
     return;
@@ -1022,9 +1081,12 @@ const saveProjectField = debounce((id, k, v) => store.patch('projects', id, { [k
 document.addEventListener('input', (e) => {
   const el = e.target;
   if (el.id === 'slot-title' && ui.modal) ui.modal.title = el.value;
+  if (el.closest?.('.compose')) Ml.composeInput(el);
   if (el.dataset.field === 'notes') saveNotes(ui.openTask, el.value);
   if (el.dataset.pfield) saveProjectField(el.dataset.id, el.dataset.pfield, el.value);
 });
+
+document.addEventListener('focusin', (e) => { if (Ml.isCompose(ui.modal)) Ml.composeBlur(e.target); });
 
 document.addEventListener('change', async (e) => {
   const el = e.target;
