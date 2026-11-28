@@ -1517,3 +1517,8 @@ html[data-design="hero"] .set-cats button.on { background: var(--h-surface); box
 .m-perm.ok { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .m-perm.ok svg.i { width: 14px; height: 14px; color: #30a46c; }
 .m-perm .btn { justify-self: start; }
+/* v0.22.1: iPhone – Leiste in der offenen Mail bleibt oben stehen, mit festem Hintergrund (Text läuft darunter durch) */
+@media (max-width: 760px) {
+  .m-reader .m-r-bar { top: 0; z-index: 5; background: var(--bg); margin: calc(-1 * env(safe-area-inset-top)) -16px 0; padding: calc(env(safe-area-inset-top) + 6px) 12px 6px; box-shadow: 0 1px 0 var(--line-soft); }
+  html[data-design="glass"] .m-reader .m-r-bar { background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+}
