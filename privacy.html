@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tasks – Datenschutz</title>
+<style>
+  :root { color-scheme: light dark; --bg: #fafafa; --fg: #18181b; --muted: #52525b; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #111113; --fg: #f4f4f5; --muted: #a1a1aa; } }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  main { max-width: 680px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 26px; margin: 0 0 4px; } h2 { font-size: 18px; margin: 28px 0 6px; }
+  p, li { color: var(--muted); } a { color: inherit; }
+</style>
+</head>
+<body>
+<main>
+<h1>Datenschutzerklärung – Tasks</h1>
+<p>Stand: 28. November 2026</p>
+
+<p>„Tasks“ ist eine private Aufgaben-App für den eigenen Gebrauch des Entwicklers. Sie ist nicht für die Öffentlichkeit bestimmt.</p>
+
+<h2>Gmail-Zugriff</h2>
+<ul>
+  <li>Die App greift nur nach deiner ausdrücklichen Anmeldung bei Google auf dein Gmail-Postfach zu (Berechtigung <code>gmail.modify</code>), um Mails anzuzeigen, als gelesen zu markieren, zu archivieren, zu löschen und zu senden.</li>
+  <li>Mail-Inhalte werden nur in deinem Browser verarbeitet. Sie werden nicht auf Servern des Entwicklers gespeichert, nicht an Dritte weitergegeben und nicht für Werbung oder zum Training von KI-Modellen verwendet.</li>
+  <li>Ein optionaler Login-Dienst (Cloudflare Worker) tauscht nur Anmelde-Schlüssel bei Google ein. Er speichert nichts und sieht keine Mails.</li>
+  <li>Die Nutzung von Daten aus Google-APIs hält sich an die <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, einschließlich der Anforderungen zur eingeschränkten Nutzung (Limited Use).</li>
+</ul>
+
+<h2>Sonstige Daten</h2>
+<p>Aufgaben und Einstellungen werden im Konto des Nutzers in Google Firebase gespeichert, damit sie zwischen den eigenen Geräten synchronisieren. Mail-Inhalte gehören nicht dazu.</p>
+
+<h2>Widerruf</h2>
+<p>Den Zugriff kannst du jederzeit unter <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a> entfernen.</p>
+
+<h2>Kontakt</h2>
+<p>Über <a href="https://github.com/salkinsuirelav/tasks">github.com/salkinsuirelav/tasks</a>.</p>
+</main>
+</body>
+</html>
