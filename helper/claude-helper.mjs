@@ -125,7 +125,7 @@ async function main() {
   const base = ['users', user.uid];
 
   // Lebenszeichen, damit die App "Mac-Helfer online" anzeigt
-  const beat = () => setDoc(doc(db, ...base, 'meta', 'helper'), { id: 'helper', lastSeen: Date.now(), host: os.hostname().replace(/\.local$/, ''), features: ['nutrition-image', 'mail-icloud', 'mail-send'], updatedAt: Date.now(), createdAt: Date.now() }).catch((e) => log('Heartbeat-Fehler:', e.message));
+  const beat = () => setDoc(doc(db, ...base, 'meta', 'helper'), { id: 'helper', lastSeen: Date.now(), host: os.hostname().replace(/\.local$/, ''), features: ['nutrition-image', 'mail-icloud', 'mail-send', 'mail-folders'], updatedAt: Date.now(), createdAt: Date.now() }).catch((e) => log('Heartbeat-Fehler:', e.message));
   beat();
   setInterval(beat, 60000);
 

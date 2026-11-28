@@ -8,8 +8,9 @@
 //   In ~/.tasks-helper-mail.json steht nur deine iCloud-Adresse.
 // - Antworten bekommt nur die Task-App (Herkunft https://salkinsuirelav.github.io) und nur über 127.0.0.1.
 // - Mails werden nur durchgereicht, nirgends gespeichert und nicht protokolliert. Nichts davon landet in Firebase.
-// - Die App kann lesen, als gelesen/ungelesen markieren, ins Archiv verschieben und Mails senden (SMTP von iCloud,
-//   danach eine Kopie in „Gesendet“). Gesendet wird nur, wenn du in der App auf „Senden“ klickst. Löschen geht nicht.
+// - Die App kann lesen (Posteingang, Archiv, Gesendet, Werbung/Spam, Papierkorb), als gelesen/ungelesen markieren,
+//   ins Archiv und zurück in den Posteingang verschieben und Mails senden (SMTP von iCloud, danach eine Kopie in
+//   „Gesendet“). Gesendet wird nur, wenn du in der App auf „Senden“ klickst. Löschen geht nicht.
 //
 // Einrichten: mail-setup.command (siehe APPLEMAIL.md). Prüfen von Hand: node mail-icloud.mjs --check name@icloud.com
 
@@ -29,7 +30,7 @@ const MAX_INLINE = 4_000_000;  // eingebettete Bilder (cid:) insgesamt
 const IDLE_MS = 4 * 60 * 1000; // Verbindung zu iCloud nach 4 Min Pause schließen
 const cfg = { host: 'imap.mail.me.com', port: 993, smtpHost: 'smtp.mail.me.com', smtpPort: 587, ca: undefined, origins: ['https://salkinsuirelav.github.io'], user: null, pass: null, quiet: false };
 // Nur für Tests: anderer Server/Zertifikat, feste Zugangsdaten, zusätzliche Herkunft
-export function configure(o) { Object.assign(cfg, o); conn?.close(); conn = null; archiveBox = null; sentBox = null; fromName = undefined; }
+export function configure(o) { Object.assign(cfg, o); conn?.close(); conn = null; boxes = null; fromName = undefined; }
 
 const log = (...a) => { if (!cfg.quiet) console.log(new Date().toLocaleTimeString('de-DE'), ...a); };
 const err = (code, message, status) => Object.assign(new Error(message), { code, status });
@@ -162,7 +163,7 @@ function withImap(fn) {
     if (!user) throw err('setup', 'Apple Mail ist auf diesem Mac noch nicht eingerichtet. Bitte mail-setup.command ausführen (APPLEMAIL.md).', 412);
     for (let attempt = 0; ; attempt++) {
       try {
-        if (!conn?.alive || conn.user !== user) { conn?.close(); conn = new Imap(user); await conn.open(await password(user)); }
+        if (!conn?.alive || conn.user !== user) { conn?.close(); boxes = null; conn = new Imap(user); await conn.open(await password(user)); }
         return await fn(conn);
       } catch (e) {
         if (e.code === 'auth') passCache = null;
@@ -355,11 +356,15 @@ const uidOk = (u) => { const n = Number(u); if (!Number.isInteger(n) || n <= 0) 
 export function status() {
   return withImap(async (c) => { await c.select('INBOX', true); return { configured: true, account: c.user, count: c.exists }; });
 }
-export function list(n = 40) {
+// kind: inbox | archive | sent | spam | trash (Ordner, siehe findBox)
+export function list(n = 40, kind) {
   n = Math.min(Math.max(Number(n) || 40, 1), 100);
+  kind = kindOk(kind);
   return withImap(async (c) => {
-    await c.select('INBOX', true); // frisch auswählen: Anzahl und Stand aktuell
-    if (!c.exists) return { account: c.user, v: c.v, list: [] };
+    const box = await findBox(c, kind);
+    if (!box) return { account: c.user, v: null, box: kind, list: [] }; // Ordner gibt es (noch) nicht: leer
+    await c.select(box, true); // frisch auswählen: Anzahl und Stand aktuell
+    if (!c.exists) return { account: c.user, v: c.v, box: kind, list: [] };
     const r = await c.cmd(`FETCH ${Math.max(1, c.exists - n + 1)}:${c.exists} (UID FLAGS INTERNALDATE BODY.PEEK[HEADER.FIELDS (${HDRS})] BODY.PEEK[TEXT]<0.6000>)`);
     const out = [];
     for (const line of r.untagged) {
@@ -368,21 +373,21 @@ export function list(n = 40) {
       const h = headers(pick(f, 'BODY[HEADER') || '');
       const fl = flagsOf(f);
       out.push({
-        uid: Number(f.UID), from: words(h.from), subject: words(h.subject), at: imapDate(f.INTERNALDATE) || Date.parse(h.date) || 0,
+        uid: Number(f.UID), from: words(h.from), to: words(h.to), subject: words(h.subject), at: imapDate(f.INTERNALDATE) || Date.parse(h.date) || 0,
         unread: !fl.includes('\\seen'), flagged: fl.includes('\\flagged'), snippet: snippetOf(h, pick(f, 'BODY[TEXT]')), mid: (h['message-id'] || '').trim(),
       });
     }
     out.sort((a, b) => b.at - a.at);
-    return { account: c.user, v: c.v, list: out };
+    return { account: c.user, v: c.v, box: kind, list: out };
   });
 }
-export function message(uid, v) {
-  uid = uidOk(uid);
+export function message(uid, v, kind) {
+  uid = uidOk(uid); kind = kindOk(kind);
   return withImap(async (c) => {
-    await c.select('INBOX'); checkV(c, v);
+    await c.select(await boxOf(c, kind)); checkV(c, v);
     const r = await c.cmd(`UID FETCH ${uid} (UID FLAGS RFC822.SIZE BODY.PEEK[]<0.${MAX_BYTES}>)`);
     const f = r.untagged.map(fetchItems).find((x) => x && Number(x.UID) === uid);
-    if (!f) throw err('gone', 'Diese Mail ist nicht mehr im Posteingang.', 404);
+    if (!f) throw err('gone', kind === 'inbox' ? 'Diese Mail ist nicht mehr im Posteingang.' : 'Diese Mail ist nicht mehr in diesem Ordner.', 404);
     const raw = pick(f, 'BODY[]') || '';
     const h = headers(splitHead(raw).head);
     const out = { html: null, text: null, cid: {}, att: [], inline: 0 };
@@ -397,22 +402,47 @@ export function message(uid, v) {
     };
   });
 }
-export function setSeen(uid, v, seen) {
-  uid = uidOk(uid);
-  return withImap(async (c) => { await c.select('INBOX'); checkV(c, v); await c.cmd(`UID STORE ${uid} ${seen ? '+' : '-'}FLAGS.SILENT (\\Seen)`); return { ok: true }; });
+export function setSeen(uid, v, seen, kind) {
+  uid = uidOk(uid); kind = kindOk(kind);
+  return withImap(async (c) => { await c.select(await boxOf(c, kind)); checkV(c, v); await c.cmd(`UID STORE ${uid} ${seen ? '+' : '-'}FLAGS.SILENT (\\Seen)`); return { ok: true }; });
 }
-// Archiv-Ordner finden. iCloud meldet keine Sonder-Ordner (SPECIAL-USE), der Ordner heißt "Archive".
-// Gibt es ihn noch nicht, wird er angelegt (macht Apple Mail beim ersten Archivieren genauso).
-let archiveBox = null;
+// Ordner finden. iCloud meldet meist keine Sonder-Ordner (SPECIAL-USE), deshalb zusätzlich die Namen wie in
+// Apple Mail: "Archive", "Sent Messages", "Junk" (in Apple Mail „Werbung“), "Deleted Messages" (Papierkorb).
+const KINDS = {
+  archive: ['\\archive', /^archive$/i, /^archiv(es)?$/i],
+  sent: ['\\sent', /^sent messages$/i, /^(sent|gesendet)/i],
+  spam: ['\\junk', /^junk$/i, /^(spam|werbung|junk[ -]?e-?mail|bulk mail)$/i],
+  trash: ['\\trash', /^deleted messages$/i, /^(trash|papierkorb|deleted items|gelöschte (objekte|e-mails))$/i],
+};
+const kindOk = (k) => { k = k || 'inbox'; if (k !== 'inbox' && !Object.hasOwn(KINDS, k)) throw err('bad', 'Unbekannter Ordner.', 400); return k; };
+let boxes = null; // Ordnerliste, einmal je Verbindung
+async function findBox(c, kind) {
+  if (kind === 'inbox') return 'INBOX';
+  if (!boxes) {
+    const r = await c.cmd('LIST "" "*"');
+    boxes = r.untagged.map((l) => { const t = parse(l); return String(t[1]).toUpperCase() === 'LIST' ? { flags: (t[2] || []).map((x) => String(x).toLowerCase()), name: t[4] } : null; }).filter((b) => b && typeof b.name === 'string');
+  }
+  const [flag, ...names] = KINDS[kind];
+  const b = boxes.find((x) => x.flags.includes(flag)) || names.map((re) => boxes.find((x) => re.test(x.name))).find(Boolean);
+  return b ? b.name : null;
+}
+async function boxOf(c, kind) {
+  const b = await findBox(c, kind);
+  if (!b) throw err('gone', 'Diesen Ordner gibt es in iCloud nicht.', 404);
+  return b;
+}
+// Archiv: gibt es ihn noch nicht, wird er angelegt (macht Apple Mail beim ersten Archivieren genauso)
 async function findArchive(c) {
-  if (archiveBox) return archiveBox;
-  const r = await c.cmd('LIST "" "*"');
-  const boxes = r.untagged.map((l) => { const t = parse(l); return String(t[1]).toUpperCase() === 'LIST' ? { flags: (t[2] || []).map((x) => String(x).toLowerCase()), name: t[4] } : null; }).filter((b) => b && typeof b.name === 'string');
-  const b = boxes.find((x) => x.flags.includes('\\archive')) || boxes.find((x) => /^archive$/i.test(x.name)) || boxes.find((x) => /^archiv(es)?$/i.test(x.name));
-  if (b) return (archiveBox = b.name);
-  await c.cmd('CREATE "Archive"');
+  const b = await findBox(c, 'archive');
+  if (b) return b;
+  await c.cmd('CREATE "Archive"'); boxes = null;
   log('Mail: Ordner "Archive" in iCloud angelegt');
-  return (archiveBox = 'Archive');
+  return 'Archive';
+}
+async function byMid(c, mid) {
+  const r = await c.cmd(`UID SEARCH HEADER Message-ID ${q(mid)}`);
+  const m = r.untagged.map((l) => /^\* SEARCH(.*)$/i.exec(l)).find(Boolean);
+  return m ? Number(m[1].trim().split(/\s+/).filter(Boolean).pop()) || null : null;
 }
 // Verschieben. iCloud kann UID MOVE, meldet es aber nicht. Falls doch nicht: kopieren und NUR diese eine Mail
 // aus dem Ordner nehmen (UID EXPUNGE). Gibt die neue Nummer im Zielordner zurück (falls iCloud sie nennt).
@@ -443,14 +473,24 @@ export function unarchive(box, uid, mid) {
     if (typeof box !== 'string' || !box || box.toUpperCase() === 'INBOX') throw err('bad', 'Ungültiger Ordner.', 400);
     await c.select(box, true);
     let u = uid ? uidOk(uid) : null;
-    if (!u && mid) {
-      const r = await c.cmd(`UID SEARCH HEADER Message-ID ${q(mid)}`);
-      const m = r.untagged.map((l) => /^\* SEARCH(.*)$/i.exec(l)).find(Boolean);
-      u = m ? Number(m[1].trim().split(/\s+/).filter(Boolean).pop()) || null : null;
-    }
+    if (!u && mid) u = await byMid(c, mid);
     if (!u) throw err('gone', 'Mail im Archiv nicht gefunden.', 404);
     const back = await move(c, u, 'INBOX');
     return { uid: back };
+  });
+}
+// Zwischen Posteingang und Archiv, Spam oder Papierkorb verschieben (z. B. „In den Posteingang“ und Rückgängig).
+// Ohne Nummer wird die Mail über ihre Message-ID gesucht. Gibt die neue Nummer im Zielordner zurück (falls bekannt).
+export function moveMail(from, to, uid, v, mid) {
+  from = kindOk(from); to = kindOk(to);
+  if (from === to || (from !== 'inbox' && to !== 'inbox') || from === 'sent' || to === 'sent') throw err('bad', 'Verschieben geht nur zwischen Posteingang und Archiv, Spam oder Papierkorb.', 400);
+  let u = uid ? uidOk(uid) : null;
+  return withImap(async (c) => {
+    const src = await boxOf(c, from), dest = to === 'archive' ? await findArchive(c) : await boxOf(c, to);
+    await c.select(src, !v); if (v) checkV(c, v);
+    if (!u && mid) u = await byMid(c, mid);
+    if (!u) throw err('gone', 'Mail nicht gefunden.', 404);
+    return { box: dest, uid: await move(c, u, dest) };
   });
 }
 
@@ -539,14 +579,8 @@ function smtpSend(user, pass, rcpts, data) {
   });
 }
 // Ordner „Gesendet“: iCloud nennt ihn "Sent Messages"
-let sentBox = null, fromName;
-async function findSent(c) {
-  if (sentBox) return sentBox;
-  const r = await c.cmd('LIST "" "*"');
-  const boxes = r.untagged.map((l) => { const t = parse(l); return String(t[1]).toUpperCase() === 'LIST' ? { flags: (t[2] || []).map((x) => String(x).toLowerCase()), name: t[4] } : null; }).filter((b) => b && typeof b.name === 'string');
-  const b = boxes.find((x) => x.flags.includes('\\sent')) || boxes.find((x) => /^sent messages$/i.test(x.name)) || boxes.find((x) => /^(sent|gesendet)/i.test(x.name));
-  return (sentBox = b ? b.name : 'Sent Messages');
-}
+let fromName;
+const findSent = async (c) => (await findBox(c, 'sent')) || 'Sent Messages';
 // Absendername wie in Apple Mail: aus der letzten gesendeten Mail übernehmen (sonst nur die Adresse)
 async function senderName(c, user) {
   if (fromName !== undefined) return fromName;
@@ -604,8 +638,8 @@ export function handleMail(req, res) {
   if (req.method === 'GET') {
     const s = url.searchParams;
     if (route === 'status') return done(account() ? status() : Promise.resolve({ configured: false })), true;
-    if (route === 'list') return done(list(s.get('n'))), true;
-    if (route === 'msg') return done(Promise.resolve().then(() => message(s.get('uid'), s.get('v')))), true;
+    if (route === 'list') return done(Promise.resolve().then(() => list(s.get('n'), s.get('box')))), true;
+    if (route === 'msg') return done(Promise.resolve().then(() => message(s.get('uid'), s.get('v'), s.get('box')))), true;
   }
   if (req.method === 'POST') {
     let body = '';
@@ -614,8 +648,9 @@ export function handleMail(req, res) {
       let j = {};
       try { j = JSON.parse(body || '{}'); } catch { return send(400, { error: 'bad', message: 'Ungültige Anfrage.' }); }
       const run = {
-        seen: () => setSeen(j.uid, j.v, j.seen !== false),
+        seen: () => setSeen(j.uid, j.v, j.seen !== false, j.box),
         archive: () => archive(j.uid, j.v),
+        move: () => moveMail(j.from, j.to, j.uid, j.v, j.mid),
         unarchive: () => unarchive(j.box, j.uid, j.mid),
         send: () => sendMail(j),
       }[route];

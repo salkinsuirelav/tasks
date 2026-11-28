@@ -52,6 +52,7 @@ Am besten öffnest du die App dafür in **Zen** oder Chrome. Ob die Safari-Web-A
 ## Was du in der App machen kannst
 - **Mail öffnen:** wird in iCloud als gelesen markiert (wie in Apple Mail).
 - **Als ungelesen markieren**, **Archivieren** (mit „Rückgängig“).
+- **Ordner:** Posteingang, Archiv, Gesendet, Spam (in Apple Mail „Werbung“) und Papierkorb. Aus Archiv, Spam und Papierkorb holst du Mails zurück in den Posteingang. Werbung filtert iCloud selbst, sie taucht im Posteingang nie auf. Braucht den Helfer ab Ende November 2026 (Schritt 2).
 - **Mail → Aufgabe:** legt eine Aufgabe mit Absender und Link an. Der Link öffnet die Mail direkt in Apple Mail.
 - **Schreiben, Antworten, Allen antworten, Weiterleiten:** wie bei Gmail. Bei einer iCloud-Mail geht die Antwort automatisch über iCloud. Bei einer neuen Mail wählst du oben bei **Von** zwischen Gmail und iCloud. Gesendet wird über iCloud selbst (wie Apple Mail), eine Kopie landet in **Gesendet**.
 - **↗ In Apple Mail öffnen:** oben rechts in der geöffneten Mail. Anhänge öffnest du auch dort. Anhänge mitschicken geht in der App noch nicht.

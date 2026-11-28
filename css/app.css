@@ -1461,3 +1461,22 @@ body:has(#pill-root .timer-pill) .m-fab { bottom: calc(136px + env(safe-area-ins
 /* v0.19: Absender wählen (Gmail oder iCloud) */
 html[data-design] .compose .c-row select { flex: 1; min-width: 0; border: 0; background-color: transparent; box-shadow: none !important; padding: 10px 0; height: auto; font-size: 13.5px; color: var(--muted); cursor: pointer; outline: none; }
 html[data-design] .compose .c-row select:hover, html[data-design] .compose .c-row select:focus { color: var(--text); }
+/* v0.20: Ordner in Mail (Posteingang, Archiv, Gesendet, Spam, Papierkorb) */
+.m-folder { position: relative; display: inline-flex; align-items: center; flex: none; }
+html[data-design] .m-folder select { -webkit-appearance: none; appearance: none; width: auto; height: 34px; padding: 0 30px 0 33px; border: 1px solid var(--line); border-radius: 11px; background: var(--line-soft) !important; background-image: none !important; box-shadow: none !important; font-size: 14px; font-weight: 500; color: var(--text); cursor: pointer; }
+html[data-design] .m-folder select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.m-folder svg.i { position: absolute; pointer-events: none; color: var(--muted); }
+.m-folder svg.i:first-child { left: 12px; width: 15px; height: 15px; }
+.m-folder svg.i:last-child { right: 10px; width: 14px; height: 14px; }
+.m-folder.on svg.i:first-child { color: var(--accent); }
+html[data-design="hero"] .m-folder select { height: 32px; border: 0; border-radius: 999px; background: var(--h-default) !important; font-size: 13px; }
+@media (max-width: 760px) {
+  html[data-design] .m-folder select { padding: 0 26px 0 30px; }
+  .m-folder svg.i:first-child { left: 10px; }
+  .m-folder svg.i:last-child { right: 8px; }
+  html[data-design] .m-filter button { padding-left: 11px; padding-right: 11px; }
+}
+@media (max-width: 760px) {
+  .mail-head > .head-title { padding-right: 0; }
+  .mail-head > .head-title > :is(h1, .sub) { padding-right: 84px; }
+}

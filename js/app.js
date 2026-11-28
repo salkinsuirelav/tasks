@@ -298,6 +298,14 @@ store.subscribe(() => { applyTheme(); renderAll(); });
 F.onFx(() => { if (route().view === 'finance') renderMain(); }); // Wechselkurse sind da
 P.onPrices(() => { if (route().view === 'finance') renderMain(); }); // Krypto-Kurse sind da
 Ml.onMail(() => { if (route().view === 'mail') renderMain(); }); // Mails geladen / geändert
+// Google-Zugriff (1 Stunde) beim ersten Klick in Mail oder auf „Mail“ selbst erneuern. Muss im Klick passieren (Pop-up).
+document.addEventListener('click', (e) => {
+  if (!Ml.needsRenew()) return;
+  const t = e.target;
+  if (t.closest?.('[data-action="mail-signin"], [data-action="mail-signout"], [data-action="mail-accounts"], [data-action="mail-setup-done"], .modal, #m-folder')) return;
+  if (route().view === 'mail' || t.closest?.('a[href="#mail"]')) Ml.autoRenew();
+}, true);
+setTimeout(Ml.preloadGis, 2500); // Google-Skript schon da, damit das Pop-up sofort aus dem Klick kommt
 window.addEventListener('hashchange', () => { ui.sideOpen = false; T.onNavigate(); renderMain(); renderPill(); applyPendingScroll(); });
 let resizeT;
 window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(renderMain, 200); });
@@ -582,6 +590,12 @@ const A = {
     try {
       const r = await Ml.archive(el.dataset.id);
       if (r) toast('Archiviert.', { label: 'Rückgängig', fn: () => Ml.unarchive(r).catch((e) => toast(e.message)) });
+    } catch (e) { toast(e.message === 'auth' ? 'Google-Anmeldung abgelaufen.' : e.message); }
+  },
+  'mail-restore': async (el) => {
+    try {
+      const r = await Ml.restore(el.dataset.id);
+      if (r) toast(r.m.folder === 'spam' ? 'Kein Spam: liegt jetzt im Posteingang.' : 'Zurück im Posteingang.', { label: 'Rückgängig', fn: () => Ml.unrestore(r).catch((e) => toast(e.message)) });
     } catch (e) { toast(e.message === 'auth' ? 'Google-Anmeldung abgelaufen.' : e.message); }
   },
   // Schreiben / Antworten / Weiterleiten (Gmail). Nach „Senden“ 5 Sekunden Zeit für „Rückgängig“.
@@ -1115,6 +1129,7 @@ document.addEventListener('change', async (e) => {
   if (el.id === 'slot-proj' && ui.modal) { ui.modal.projectId = el.value; return; }
   if (el.id === 'slot-dur' && ui.modal) { ui.modal.dur = +el.value; ui.modal.projectId = $('#slot-proj')?.value || ''; renderModal(); return; }
   if (el.id === 'today-proj') { ui.todayProj = el.value; return; }
+  if (el.id === 'm-folder') { Ml.setFolder(el.value); return; }
   const f = el.dataset.field;
   if (f && ui.openTask) {
     const id = ui.openTask;
