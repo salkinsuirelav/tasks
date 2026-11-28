@@ -23,11 +23,17 @@ const lsSet = (k, v) => { try { v == null ? localStorage.removeItem(k) : localSt
 let tok = (() => { try { const t = JSON.parse(sessionStorage.getItem(TOK) || 'null'); return t && t.exp > Date.now() ? t : null; } catch { return null; } })();
 const saveTok = () => { try { tok ? sessionStorage.setItem(TOK, JSON.stringify(tok)) : sessionStorage.removeItem(TOK); } catch {} };
 // st = Gmail (+ gemeinsamer Speicher für geöffnete Mails), ic = Apple Mail (iCloud)
-export const st = { account: ls(ACC), list: null, loading: false, error: null, full: {}, imgs: {} };
-export const ic = { account: ls(ICL), list: null, loading: false, error: null, code: null, v: null, busy: false };
+// list = Mails im gerade gewählten Ordner (folder), cache = zuletzt geladene Listen der anderen Ordner
+export const st = { account: ls(ACC), list: null, loading: false, error: null, full: {}, imgs: {}, folder: 'inbox', cache: {}, seq: 0 };
+export const ic = { account: ls(ICL), list: null, loading: false, error: null, code: null, v: null, busy: false, folder: 'inbox', cache: {}, seq: 0 };
 export const connected = () => !!st.account || !!ic.account;
 export const hasToken = () => !!tok && tok.exp > Date.now();
 const both = () => !!st.account && !!ic.account;
+// Ordner, für Gmail und iCloud gleich: [Schlüssel, Name, Symbol]
+export const FOLDERS = [['inbox', 'Posteingang', 'inbox'], ['archive', 'Archiv', 'archive'], ['sent', 'Gesendet', 'send'], ['spam', 'Spam', 'spam'], ['trash', 'Papierkorb', 'trash']];
+export const folder = () => (FOLDERS.some((f) => f[0] === ui.mailFolder) ? ui.mailFolder : 'inbox');
+const fInfo = (f) => FOLDERS.find((x) => x[0] === f) || FOLDERS[0];
+const MOVABLE = ['archive', 'spam', 'trash']; // von dort geht „In den Posteingang“
 
 const listeners = new Set();
 export const onMail = (fn) => listeners.add(fn);
@@ -45,7 +51,7 @@ const loadGis = () => gisP ||= new Promise((res, rej) => {
 // Muss direkt aus einem Klick kommen, sonst blockiert der Browser das Pop-up
 export async function signIn() {
   if (!clientId()) throw new Error('Zuerst die Client-ID eintragen.');
-  await loadGis();
+  if (!window.google?.accounts?.oauth2) await loadGis(); // schon geladen: Pop-up öffnet noch im selben Klick
   await new Promise((res, rej) => {
     const c = window.google.accounts.oauth2.initTokenClient({
       client_id: clientId(), scope: SCOPE, login_hint: st.account || undefined,
@@ -63,10 +69,23 @@ export async function signIn() {
   st.error = null; ui.mailSetup = false;
   return gmRefresh();
 }
+// Automatisch erneuern: Google gibt Web-Apps den Zugriff immer nur für 1 Stunde. Beim ersten Klick in Mail
+// (oder auf „Mail“) holt die App einen neuen. Google fragt dabei nichts, das Fenster blitzt nur kurz auf.
+// Ein Pop-up geht nur direkt aus einem Klick. Klappt es nicht, 1 Minute Pause, dann bleibt „Weiter mit Google“.
+let renewing = false, renewFail = 0;
+export const renewingNow = () => renewing;
+export const needsRenew = () => !!st.account && !!clientId() && !renewing && Date.now() - renewFail > 60000 && (!tok || tok.exp - Date.now() < 5 * 60000);
+export function autoRenew() {
+  if (!needsRenew()) return;
+  renewing = true;
+  setTimeout(notify, 0);
+  signIn().catch(() => { renewFail = Date.now(); }).finally(() => { renewing = false; notify(); });
+}
+export const preloadGis = () => { if (st.account && clientId()) loadGis().catch(() => {}); };
 export function signOut() {
   if (tok && window.google?.accounts?.oauth2) try { window.google.accounts.oauth2.revoke(tok.at, () => {}); } catch {}
   if (mailById(ui.mailOpen)?.src === 'gm') ui.mailOpen = null;
-  tok = null; saveTok(); st.account = null; lsSet(ACC, null); st.list = null; st.error = null;
+  tok = null; saveTok(); st.account = null; lsSet(ACC, null); st.list = null; st.cache = {}; st.error = null;
   notify();
 }
 
@@ -92,26 +111,37 @@ function parseFrom(v) {
   return m ? { name: m[1].trim() || m[2], email: m[2].trim() } : { name: v.trim() || '(unbekannt)', email: v.trim() };
 }
 const CATS = { CATEGORY_UPDATES: 'Updates', CATEGORY_PROMOTIONS: 'Werbung', CATEGORY_SOCIAL: 'Soziale Netzwerke', CATEGORY_FORUMS: 'Foren' };
-function parseMeta(m) {
+// Empfänger für die Liste in „Gesendet“: erster Empfänger + wie viele noch
+const toOf = (raw) => { const a = splitAddrs(raw); return a.length ? { to: parseFrom(a[0].raw), toMore: a.length - 1 } : { to: null, toMore: 0 }; };
+function parseMeta(m, f = 'inbox') {
   const from = parseFrom(hdr(m, 'From'));
   const labels = m.labelIds || [];
   return {
-    id: m.id, src: 'gm', threadId: m.threadId, from, subject: hdr(m, 'Subject') || '(ohne Betreff)', snippet: decodeEnt(m.snippet),
+    id: m.id, src: 'gm', folder: f, ...toOf(hdr(m, 'To')), threadId: m.threadId, from, subject: hdr(m, 'Subject') || '(ohne Betreff)', snippet: decodeEnt(m.snippet),
     at: Number(m.internalDate) || Date.parse(hdr(m, 'Date')) || Date.now(),
     unread: labels.includes('UNREAD'), starred: labels.includes('STARRED'), important: labels.includes('IMPORTANT'),
     cat: Object.keys(CATS).find((c) => labels.includes(c)) || null,
   };
 }
+// Ordner in Gmail: Labels. Archiv = alles, was nicht im Posteingang, gesendet oder Entwurf ist (Spam und Papierkorb sind ohnehin raus).
+const GQ = {
+  inbox: 'labelIds=INBOX',
+  archive: 'q=' + encodeURIComponent('-in:inbox -in:sent -in:drafts'),
+  sent: 'labelIds=SENT',
+  spam: 'labelIds=SPAM&includeSpamTrash=true',
+  trash: 'labelIds=TRASH&includeSpamTrash=true',
+};
 async function gmRefresh() {
   if (!st.account || !hasToken()) { notify(); return; }
+  const f = st.folder, n = ++st.seq; // Ordner gewechselt, während geladen wird: Ergebnis in den Zwischenspeicher
   st.loading = true; st.error = null; notify();
   try {
-    const j = await g('/messages?maxResults=40&labelIds=INBOX');
+    const j = await g(`/messages?maxResults=40&${GQ[f]}`);
     const ids = (j.messages || []).map((m) => m.id);
-    const metas = await pool(ids, 8, (id) => g(`/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`));
-    st.list = metas.filter(Boolean).map(parseMeta).sort((a, b) => b.at - a.at);
-    st.at = Date.now();
-  } catch (e) { if (e.message !== 'auth') st.error = e.message; } finally { st.loading = false; notify(); }
+    const metas = await pool(ids, 8, (id) => g(`/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`));
+    const list = metas.filter(Boolean).map((m) => parseMeta(m, f)).sort((a, b) => b.at - a.at);
+    if (st.folder === f) { st.list = list; st.at = Date.now(); } else st.cache[f] = list;
+  } catch (e) { if (e.message !== 'auth' && st.folder === f) st.error = e.message; } finally { if (n === st.seq) st.loading = false; notify(); }
 }
 // Ganze Mail laden (beim Öffnen) und als gelesen markieren
 const b64 = (s) => { const bin = atob((s || '').replace(/-/g, '+').replace(/_/g, '/')); return new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))); };
@@ -163,32 +193,57 @@ export async function icConnect() {
 }
 export function icDisconnect() {
   if (mailById(ui.mailOpen)?.src === 'ic') ui.mailOpen = null;
-  ic.account = null; lsSet(ICL, null); ic.list = null; ic.error = null; ic.code = null;
+  ic.account = null; lsSet(ICL, null); ic.list = null; ic.cache = {}; ic.error = null; ic.code = null;
   notify();
 }
-const icMeta = (x) => ({
-  id: 'ic' + x.uid, uid: x.uid, src: 'ic', from: parseFrom(x.from), subject: x.subject || '(ohne Betreff)', snippet: x.snippet || '',
+// UIDs gelten nur je Ordner: Posteingang „ic5“, andere Ordner „ic-archive-5“
+const icId = (f, uid) => (f === 'inbox' ? 'ic' + uid : `ic-${f}-${uid}`);
+const icMeta = (x, f = 'inbox', v = null) => ({
+  id: icId(f, x.uid), uid: x.uid, src: 'ic', folder: f, v, ...toOf(x.to), from: parseFrom(x.from), subject: x.subject || '(ohne Betreff)', snippet: x.snippet || '',
   at: x.at || Date.now(), unread: !!x.unread, starred: !!x.flagged, mid: x.mid || '', cat: null,
 });
 async function icRefresh() {
   if (!ic.account) return;
+  const f = ic.folder, n = ++ic.seq;
   ic.loading = true; ic.error = null; ic.code = null; notify();
   try {
-    const j = await hx('list?n=40');
-    ic.v = j.v; ic.list = (j.list || []).map(icMeta); ic.at = Date.now();
+    const j = await hx(`list?n=40${f === 'inbox' ? '' : '&box=' + f}`);
+    // Alter Helfer kennt keine Ordner und schickt den Posteingang
+    if (f !== 'inbox' && j.box !== f) throw Object.assign(new Error('Für die Ordner braucht es den neuen Mac-Helfer. Einmal updaten, siehe Anleitung Schritt 2.'), { code: 'old' });
+    const list = (j.list || []).map((x) => icMeta(x, f, j.v));
+    if (f === 'inbox') ic.v = j.v;
+    if (ic.folder === f) { ic.list = list; ic.at = Date.now(); } else ic.cache[f] = list;
     if (j.account && j.account !== ic.account) { ic.account = j.account; lsSet(ICL, j.account); }
-  } catch (e) { ic.error = e.message; ic.code = e.code; } finally { ic.loading = false; notify(); }
+  } catch (e) { if (ic.folder === f) { ic.error = e.message; ic.code = e.code; } } finally { if (n === ic.seq) ic.loading = false; notify(); }
 }
+// Ordner-Angaben für den Helfer (Posteingang ohne, damit auch der alte Helfer passt)
+const icAt = (m) => ({ uid: m.uid, v: m.v || ic.v, ...(m.folder && m.folder !== 'inbox' ? { box: m.folder } : {}) });
 // Posteingang hat sich in iCloud geändert: neu laden
 const icStale = (e) => { if (e.code === 'stale') icRefresh(); return e; };
 
 // ---------- Gemeinsam ----------
 export function refresh() { return Promise.all([gmRefresh(), icRefresh()]); }
+// Ordner wechseln: zuletzt geladene Liste sofort zeigen, dann frisch laden
+function useFolder(f) {
+  for (const s of [st, ic]) {
+    if (s.folder === f) continue;
+    if (s.list) s.cache[s.folder] = s.list;
+    s.folder = f; s.list = s.cache[f] || null; s.error = null; s.loading = false;
+    if (s === ic) ic.code = null;
+  }
+}
+export function setFolder(f) {
+  ui.mailFolder = f; ui.mailOpen = null;
+  useFolder(folder());
+  notify();
+  return refresh();
+}
 export const icRetry = () => icRefresh();
 export const allMail = () => [...(st.list || []), ...(ic.list || [])].sort((a, b) => b.at - a.at);
 export const mailById = (id) => (id ? (st.list || []).find((x) => x.id === id) || (ic.list || []).find((x) => x.id === id) : null);
-const listOf = (m) => (m.src === 'ic' ? ic.list : st.list);
-export const gmailLink = (m) => `https://mail.google.com/mail/u/${encodeURIComponent(st.account || '0')}/#all/${m.threadId}`;
+// Liste, in die eine Mail gehört (auch wenn gerade ein anderer Ordner offen ist)
+const listOf = (m) => { const s = m.src === 'ic' ? ic : st, f = m.folder || 'inbox'; return s.folder === f ? s.list : s.cache[f]; };
+export const gmailLink = (m) => `https://mail.google.com/mail/u/${encodeURIComponent(st.account || '0')}/#${m.folder === 'spam' ? 'spam' : m.folder === 'trash' ? 'trash' : 'all'}/${m.threadId}`;
 // Apple Mail auf dem Mac öffnet eine Mail über ihre Message-ID (message://<…>)
 export const mailLink = (m) => (m.src === 'ic' ? (m.mid ? `message://${encodeURIComponent(m.mid)}` : '') : gmailLink(m));
 
@@ -199,8 +254,9 @@ export async function openMail(id) {
   if (!st.full[id]) {
     try {
       if (m.src === 'ic') {
-        const f = await hx(`msg?uid=${m.uid}&v=${encodeURIComponent(ic.v || '')}`);
-        st.full[id] = { html: f.html, text: f.text, to: f.to, cc: f.cc, attachments: f.attachments || [], truncated: f.truncated };
+        const a = icAt(m);
+        const f = await hx(`msg?uid=${a.uid}&v=${encodeURIComponent(a.v || '')}${a.box ? '&box=' + a.box : ''}`);
+        st.full[id] = { html: f.html, text: f.text, to: f.to, cc: f.cc, attachments: f.attachments || [], truncated: f.truncated, subject: f.subject, mid: f.mid || m.mid, refs: f.refs, replyTo: f.replyTo };
         if (f.mid && !m.mid) m.mid = f.mid;
       } else {
         const full = await g(`/messages/${id}?format=full`);
@@ -214,7 +270,7 @@ export async function openMail(id) {
   }
   if (m.unread && !st.full[id]?.error) {
     m.unread = false;
-    (m.src === 'ic' ? hx('seen', { uid: m.uid, v: ic.v, seen: true }) : g(`/messages/${id}/modify`, { method: 'POST', body: JSON.stringify({ removeLabelIds: ['UNREAD'] }) })).catch(() => {});
+    (m.src === 'ic' ? hx('seen', { ...icAt(m), seen: true }) : g(`/messages/${id}/modify`, { method: 'POST', body: JSON.stringify({ removeLabelIds: ['UNREAD'] }) })).catch(() => {});
   }
   notify();
 }
@@ -222,7 +278,7 @@ export async function setUnread(id, unread) {
   const m = mailById(id); if (!m) return;
   m.unread = unread; notify();
   try {
-    if (m.src === 'ic') await hx('seen', { uid: m.uid, v: ic.v, seen: !unread });
+    if (m.src === 'ic') await hx('seen', { ...icAt(m), seen: !unread });
     else await g(`/messages/${id}/modify`, { method: 'POST', body: JSON.stringify(unread ? { addLabelIds: ['UNREAD'] } : { removeLabelIds: ['UNREAD'] }) });
   } catch (e) { m.unread = !unread; notify(); throw icStale(e); }
 }
@@ -232,9 +288,10 @@ export async function archive(id) {
   const L = listOf(m), i = L.indexOf(m);
   L.splice(i, 1);
   if (ui.mailOpen === id) ui.mailOpen = null;
+  delete (m.src === 'ic' ? ic : st).cache.archive;
   notify();
   try {
-    if (m.src === 'ic') { const r = await hx('archive', { uid: m.uid, v: ic.v }); return { m, i, box: r.box, newUid: r.uid }; }
+    if (m.src === 'ic') { const r = await hx('archive', { uid: m.uid, v: m.v || ic.v }); return { m, i, box: r.box, newUid: r.uid }; }
     await g(`/messages/${id}/modify`, { method: 'POST', body: JSON.stringify({ removeLabelIds: ['INBOX'] }) });
     return { m, i };
   } catch (e) { L.splice(i, 0, m); notify(); throw icStale(e); }
@@ -249,6 +306,35 @@ export async function unarchive({ m, i, box, newUid }) {
   } else await g(`/messages/${m.id}/modify`, { method: 'POST', body: JSON.stringify({ addLabelIds: ['INBOX'] }) });
   const L = listOf(m);
   if (L) { L.splice(Math.min(i, L.length), 0, m); notify(); }
+}
+// „In den Posteingang“ aus Archiv, Spam oder Papierkorb. Gmail: Label INBOX wieder dran (Spam: SPAM weg,
+// Papierkorb: erst zurückholen). iCloud: in den Posteingang verschieben.
+export async function restore(id) {
+  const m = mailById(id); if (!m || !MOVABLE.includes(m.folder)) return null;
+  const L = listOf(m), i = L.indexOf(m);
+  L.splice(i, 1);
+  if (ui.mailOpen === id) ui.mailOpen = null;
+  delete (m.src === 'ic' ? ic : st).cache.inbox;
+  notify();
+  try {
+    if (m.src === 'ic') { const r = await hx('move', { from: m.folder, to: 'inbox', uid: m.uid, v: m.v, mid: m.mid }); return { m, i, newUid: r.uid }; }
+    if (m.folder === 'trash') await g(`/messages/${id}/untrash`, { method: 'POST' });
+    await g(`/messages/${id}/modify`, { method: 'POST', body: JSON.stringify({ addLabelIds: ['INBOX'], ...(m.folder === 'spam' ? { removeLabelIds: ['SPAM'] } : {}) }) });
+    return { m, i };
+  } catch (e) { L.splice(i, 0, m); notify(); throw icStale(e); }
+}
+// Rückgängig: wieder zurück in den Ordner
+export async function unrestore({ m, i, newUid }) {
+  if (m.src === 'ic') {
+    const r = await hx('move', { from: 'inbox', to: m.folder, uid: newUid || undefined, mid: m.mid });
+    const old = m.id;
+    if (r.uid) { m.uid = r.uid; m.id = icId(m.folder, r.uid); if (st.full[old]) { st.full[m.id] = st.full[old]; delete st.full[old]; } }
+    else { delete ic.cache[m.folder]; return ic.folder === m.folder ? icRefresh() : undefined; } // neue Nummer unbekannt: neu laden
+  } else if (m.folder === 'trash') await g(`/messages/${m.id}/trash`, { method: 'POST' });
+  else await g(`/messages/${m.id}/modify`, { method: 'POST', body: JSON.stringify({ removeLabelIds: ['INBOX'], ...(m.folder === 'spam' ? { addLabelIds: ['SPAM'] } : {}) }) });
+  delete (m.src === 'ic' ? ic : st).cache.inbox;
+  const L = listOf(m);
+  if (L && !L.includes(m)) { L.splice(Math.min(i, L.length), 0, m); notify(); }
 }
 
 // ---------- Ansicht ----------
@@ -303,7 +389,7 @@ function icCard() {
         <span class="pf-pill">Nur auf dem Mac</span>
       </div>`;
   return `
-      <div class="panel m-acc">${h}<p class="muted">Lesen, archivieren, als gelesen markieren, Mail → Aufgabe. Läuft über den Mac-Helfer, nur auf diesem Mac.</p></div></div>
+      <div class="panel m-acc">${h}<p class="muted">Lesen, schreiben, archivieren, Mail → Aufgabe. Läuft über den Mac-Helfer, nur auf diesem Mac.</p></div></div>
         <ol class="m-steps m-ol">
           <li>Bei <a href="https://account.apple.com" target="_blank" rel="noopener">account.apple.com</a> ein <b>App-spezifisches Passwort</b> erstellen.</li>
           <li>Den Mac-Helfer updaten (1 Befehl im Terminal).</li>
@@ -323,19 +409,24 @@ function setupView() {
     </div>`;
 }
 
+// Knopf je nach Ordner: Posteingang → Archivieren, Archiv/Spam/Papierkorb → zurück in den Posteingang
+const moveBtn = (m) => (m.folder === 'inbox' || !m.folder ? `<button class="icon-btn" data-action="mail-archive" data-id="${m.id}" title="Archivieren">${icon('archive')}</button>`
+  : MOVABLE.includes(m.folder) ? `<button class="icon-btn" data-action="mail-restore" data-id="${m.id}" title="${m.folder === 'spam' ? 'Kein Spam: in den Posteingang' : 'In den Posteingang'}">${icon('inbox')}</button>` : '');
 function row(m, compact) {
   const on = ui.mailOpen === m.id;
+  // In „Gesendet“ zählt, an wen die Mail ging
+  const sent = m.folder === 'sent' && m.to, who = sent ? m.to : m.from;
   const chip = m.src === 'ic' ? (both() ? '<span class="m-cat ic"><i></i>iCloud</span>' : '<span class="m-cat empty"></span>')
     : m.cat ? `<span class="m-cat"><i></i>${CATS[m.cat]}</span>` : both() ? '<span class="m-cat gm"><i></i>Gmail</span>' : '<span class="m-cat empty"></span>';
   return `<div class="m-row ${m.unread ? 'unread' : ''} ${on ? 'on' : ''}" data-action="mail-open" data-id="${m.id}">
-    ${avatar(m.from)}
-    <span class="m-from">${esc(m.from.name)}</span>
+    ${avatar(who)}
+    <span class="m-from">${sent ? `<span class="muted">An</span> ${esc(who.name)}${m.toMore ? ` <span class="muted">+${m.toMore}</span>` : ''}` : esc(m.from.name)}</span>
     ${compact ? '' : chip}
     <span class="m-txt"><b>${esc(m.subject)}</b><span class="muted"> ${esc(m.snippet)}</span></span>
     <span class="m-time">${fmtTime(m.at)}</span>
     <span class="m-acts">
       <button class="icon-btn" data-action="mail-task" data-id="${m.id}" title="Als Aufgabe übernehmen">${icon('check')}</button>
-      <button class="icon-btn" data-action="mail-archive" data-id="${m.id}" title="Archivieren">${icon('archive')}</button>
+      ${moveBtn(m)}
     </span>
   </div>`;
 }
@@ -354,8 +445,8 @@ function reader(m) {
   } else body = `<div class="m-plain">${esc(f.text || m.snippet).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>')}</div>`;
   const hasRemote = f?.html && /<img[^>]+src=["']?https?:/i.test(f.html);
   const link = mailLink(m);
-  // Antworten/Weiterleiten: Gmail (iCloud folgt über den Mac-Helfer)
-  const rep = canSend(m.src) && f && !f.error, all = rep && canReplyAll(m);
+  // Antworten/Weiterleiten: Gmail direkt, iCloud über den Mac-Helfer (nur am Mac)
+  const rep = canSend(m.src) && f && !f.error && m.folder !== 'spam', all = rep && canReplyAll(m); // auf Spam nicht antworten
   const att = f?.attachments?.length ? `<div class="m-att">${f.attachments.map((a) => `<span class="m-att-i" title="${esc(a.type)}">${icon('clip')}<b>${esc(a.name)}</b><small>${fsize(a.size)}</small></span>`).join('')}<small class="muted m-att-n">Anhänge öffnest du in ${m.src === 'ic' ? 'Apple Mail' : 'Gmail'}.</small></div>` : '';
   return `<div class="m-reader panel">
     <div class="m-r-bar">
@@ -365,8 +456,8 @@ function reader(m) {
       ${all ? `<button class="icon-btn" data-action="mail-replyall" data-id="${m.id}" title="Allen antworten">${icon('replyAll')}</button>` : ''}
       <button class="icon-btn" data-action="mail-forward" data-id="${m.id}" title="Weiterleiten">${icon('forward')}</button><span class="m-r-div"></span>` : ''}
       <button class="icon-btn" data-action="mail-task" data-id="${m.id}" title="Als Aufgabe übernehmen">${icon('check')}</button>
-      <button class="icon-btn" data-action="mail-unread" data-id="${m.id}" title="Als ungelesen markieren">${icon('mail')}</button>
-      <button class="icon-btn" data-action="mail-archive" data-id="${m.id}" title="Archivieren">${icon('archive')}</button>
+      ${m.folder === 'sent' ? '' : `<button class="icon-btn" data-action="mail-unread" data-id="${m.id}" title="Als ungelesen markieren">${icon('mail')}</button>`}
+      ${moveBtn(m)}
       ${link ? `<a class="icon-btn" href="${esc(link)}" ${m.src === 'ic' ? '' : 'target="_blank" rel="noopener"'} title="${m.src === 'ic' ? 'In Apple Mail öffnen' : 'In Gmail öffnen'}">${icon('external')}</a>` : ''}
     </div>
     <h2 class="m-subj">${esc(m.subject)}</h2>
@@ -375,28 +466,28 @@ function reader(m) {
     ${f?.truncated ? '<p class="fin-note" style="margin:0">Sehr große Mail: Nur der Anfang ist geladen. Den Rest siehst du in Apple Mail.</p>' : ''}
     ${body}
     ${att}
-    ${rep ? `<div class="m-reply">
-      <button class="btn" data-action="mail-reply" data-id="${m.id}">${icon('reply')} Antworten</button>
-      ${all ? `<button class="btn" data-action="mail-replyall" data-id="${m.id}">${icon('replyAll')} Allen antworten</button>` : ''}
-      <button class="btn" data-action="mail-forward" data-id="${m.id}">${icon('forward')} Weiterleiten</button>
-    </div>` : ''}
   </div>`;
 }
 
 // Hinweise oben (abgelaufene Anmeldung, Helfer aus, Fehler)
 function notes() {
   const out = [];
-  if (st.account && !hasToken()) out.push(`<div class="m-note">${icon('lock')}<span><b>Gmail:</b> Google gibt der App immer nur für eine Stunde Zugriff.</span><button class="btn small primary" data-action="mail-signin">Weiter mit Google</button></div>`);
+  if (st.account && !hasToken()) out.push(renewing ? `<div class="m-note">${icon('refresh')}<span><b>Gmail:</b> Anmeldung wird erneuert …</span></div>`
+    : `<div class="m-note">${icon('lock')}<span><b>Gmail:</b> Anmeldung abgelaufen (Google erlaubt nur 1 Stunde).</span><button class="btn small primary" data-action="mail-signin">Weiter mit Google</button></div>`);
   else if (st.account && st.error) out.push(`<div class="m-note bad"><span><b>Gmail:</b> ${esc(st.error)}</span><button class="btn small" data-action="mail-refresh">Nochmal</button></div>`);
   if (ic.account && ic.error) out.push(`<div class="m-note bad"><span><b>Apple Mail:</b> ${esc(ic.error)}${['setup', 'auth', 'old'].includes(ic.code) ? ` <a href="${GUIDE}" target="_blank" rel="noopener">Anleitung</a>` : ''}</span><button class="btn small" data-action="ic-refresh">Nochmal</button></div>`);
   return out.join('');
 }
 
+const EMPTY = { inbox: 'Posteingang leer. 🎉', archive: 'Archiv leer.', sent: 'Noch nichts gesendet.', spam: 'Kein Spam. 👍', trash: 'Papierkorb leer.' };
 export function viewMail() {
   if (!connected() || ui.mailSetup) {
     const done = connected() ? `<button class="btn" data-action="mail-setup-done">Fertig</button>` : '';
     return `${head('Mail', connected() ? 'Konten' : 'Gmail und Apple Mail an einem Ort', done, 'mail-head')}${setupView()}`;
   }
+  const fo = folder();
+  if (st.folder !== fo || ic.folder !== fo) useFolder(fo);
+  if (st.account && !hasToken()) preloadGis();
   if (st.account && hasToken() && !st.list && !st.loading && !st.error) gmRefresh();
   if (ic.account && !ic.list && !ic.loading && !ic.error) icRefresh();
   const boxF = both() ? ui.mailBox || 'all' : 'all';
@@ -406,26 +497,27 @@ export function viewMail() {
   const write = canSend() ? `<button class="btn primary m-compose" data-action="mail-compose" title="Neue Mail">${icon('pen')} Schreiben</button>` : '';
   const actions = `${write}<button class="icon-btn" data-action="mail-refresh" title="Neu laden">${icon('refresh')}</button>
     <button class="icon-btn" data-action="mail-accounts" title="Konten (Gmail, Apple Mail)">${icon('user')}</button>`;
-  const tabs = `<div class="tabs m-filter">${[['all', 'Posteingang'], ['unread', `Ungelesen${unread ? `<span class="n">${unread}</span>` : ''}`]].map(([v, l]) => `<button class="${filter === v ? 'on' : ''}" data-action="mail-filter" data-v="${v}">${l}</button>`).join('')}</div>`
+  const fsel = `<label class="m-folder${fo !== 'inbox' ? ' on' : ''}" title="Ordner">${icon(fInfo(fo)[2])}<select id="m-folder" aria-label="Ordner">${FOLDERS.map(([v, l]) => `<option value="${v}"${v === fo ? ' selected' : ''}>${l}</option>`).join('')}</select>${icon('chevDown')}</label>`;
+  const tabs = fsel + `<div class="tabs m-filter">${[['all', 'Alle'], ['unread', `Ungelesen${unread ? `<span class="n">${unread}</span>` : ''}`]].map(([v, l]) => `<button class="${filter === v ? 'on' : ''}" data-action="mail-filter" data-v="${v}">${l}</button>`).join('')}</div>`
     + (both() ? `<div class="tabs m-box">${[['all', 'Alle'], ['gm', 'Gmail'], ['ic', 'iCloud']].map(([v, l]) => `<button class="${boxF === v ? 'on' : ''}" data-action="mail-box" data-v="${v}">${l}</button>`).join('')}</div>` : '');
   const sub = [st.account, ic.account].filter(Boolean).map(esc).join(' · ');
   const top = head('Mail', sub, actions, 'mail-head', tabs);
   // Nur Gmail und die Stunde ist um: große Karte wie bisher
-  if (st.account && !ic.account && !hasToken()) return `${top}
+  if (st.account && !ic.account && !hasToken()) return `${top}${renewing ? '<div class="m-load muted">Google-Anmeldung wird erneuert …</div>' : `
     <div class="panel fin-empty"><span class="fin-empty-ic">${icon('lock')}</span><h3>Google-Anmeldung abgelaufen</h3>
-      <p class="muted">Google gibt der App immer nur für eine Stunde Zugriff. Ein Klick genügt, du musst nichts neu bestätigen.</p>
+      <p class="muted">Google gibt der App immer nur für eine Stunde Zugriff. Normalerweise erneuert die App das beim ersten Klick selbst. Hier geht es von Hand, ohne neue Bestätigung.</p>
       <button class="btn primary" data-action="mail-signin">${icon('mail')} Weiter mit Google</button>
-      ${st.error ? errLine(st.error) : ''}</div>`;
+      ${st.error ? errLine(st.error) : ''}</div>`}`;
   if (!st.list && !ic.list) {
     const pending = (st.account && hasToken() && !st.error) || (ic.account && !ic.error);
-    return `${top}${notes()}${pending ? '<div class="m-load muted">Posteingang wird geladen …</div>' : ''}`;
+    return `${top}${notes()}${pending ? `<div class="m-load muted">${fInfo(fo)[1]} wird geladen …</div>` : ''}`;
   }
   const list = items.filter((m) => filter !== 'unread' || m.unread || ui.mailOpen === m.id);
   const open = ui.mailOpen && mailById(ui.mailOpen);
   const compact = !!open;
   let lastG = '';
   const rows = list.map((m) => { const gname = groupOf(m.at); const h = gname !== lastG ? `<div class="m-group">${gname}</div>` : ''; lastG = gname; return h + row(m, compact); }).join('');
-  const listHTML = `<div class="m-list ${compact ? 'compact' : ''}">${rows || `<p class="muted fin-none" style="padding:24px">${filter === 'unread' ? 'Alles gelesen.' : 'Posteingang leer. 🎉'}</p>`}</div>`;
+  const listHTML = `<div class="m-list ${compact ? 'compact' : ''}">${rows || `<p class="muted fin-none" style="padding:24px">${filter === 'unread' ? 'Alles gelesen.' : EMPTY[fo]}</p>`}</div>`;
   if (open && isMobile()) return reader(open);
   const fab = canSend() && isMobile() ? `<button class="m-fab" data-action="mail-compose" aria-label="Neue Mail">${icon('pen')}</button>` : '';
   return `${top}${notes()}
@@ -434,10 +526,12 @@ export function viewMail() {
 
 // ---------- Schreiben, Antworten, Weiterleiten ----------
 // Gmail: über die Gmail-API (die Berechtigung gmail.modify erlaubt Senden schon, kein neuer Login nötig).
-// Gesendet wird reiner Text. Gmail setzt Absender, Datum und Message-ID selbst und legt die Mail unter „Gesendet“ ab.
-export const canSend = (src) => (src === 'gm' || !src) && !!st.account;
+// Gmail setzt Absender, Datum und Message-ID selbst und legt die Mail unter „Gesendet“ ab.
+// iCloud: über den Mac-Helfer (SMTP von iCloud, danach Kopie in „Gesendet“). Gesendet wird reiner Text.
+export const canSend = (src) => (src === 'gm' ? !!st.account : src === 'ic' ? !!ic.account && !isIOS() : canSend('gm') || canSend('ic'));
 export const isCompose = (m) => m?.type === 'compose';
-const me = () => (st.account || '').toLowerCase();
+const mine = () => [st.account, ic.account].filter(Boolean).map((x) => x.toLowerCase());
+const isMe = (e) => mine().includes(String(e || '').toLowerCase());
 const EMAIL = /^[^\s@<>(),;:"]+@[^\s@<>(),;:"]+\.[^\s@<>(),;:"]{2,}$/;
 // "A <a@x>, \"Doe, John\" <j@x>; b@y" → [{name, email, raw}]
 export function splitAddrs(s) {
@@ -458,7 +552,7 @@ export function splitAddrs(s) {
 const showAddr = (a) => (a.name && a.name.toLowerCase() !== a.email.toLowerCase() ? `${/[,;"<>]/.test(a.name) ? `"${a.name.replace(/"/g, '')}"` : a.name} <${a.email}>` : a.email);
 const uniq = (list, skip = []) => {
   const seen = new Set(skip.map((x) => x.toLowerCase()));
-  return list.filter((a) => { const k = a.email.toLowerCase(); if (!a.email || seen.has(k) || k === me()) return false; seen.add(k); return true; });
+  return list.filter((a) => { const k = a.email.toLowerCase(); if (!a.email || seen.has(k) || isMe(k)) return false; seen.add(k); return true; });
 };
 
 // MIME-Kopfzeilen: Umlaute als =?UTF-8?B?…?= (höchstens 39 Byte je Stück, damit Zeilen unter 78 Zeichen bleiben; kein Zeichen wird zerteilt)
@@ -503,17 +597,19 @@ const quote = (t) => t.split('\n').map((l) => (l.startsWith('>') ? '>' + l : l ?
 function replyTargets(m) {
   const f = st.full[m.id] || {};
   const sender = splitAddrs(f.replyTo).length ? splitAddrs(f.replyTo) : [{ name: m.from.name === m.from.email ? '' : m.from.name, email: m.from.email }];
-  const mine = m.from.email.toLowerCase() === me();
-  const to = mine ? splitAddrs(f.to) : sender;
-  const toAll = uniq([...to, ...(mine ? [] : splitAddrs(f.to))]);
+  const own = isMe(m.from.email);
+  const to = own ? splitAddrs(f.to) : sender;
+  const toAll = uniq([...to, ...(own ? [] : splitAddrs(f.to))]);
   const ccAll = uniq(splitAddrs(f.cc), toAll.map((a) => a.email));
   return { to: uniq(to), toAll, ccAll };
 }
 export const canReplyAll = (m) => { const r = replyTargets(m); return r.toAll.length + r.ccAll.length > r.to.length; };
 
 export function composeFor(kind, id) {
-  const c = { type: 'compose', kind, to: '', cc: '', bcc: '', subject: '', body: '', showCc: false, err: null };
   const m = id && mailById(id);
+  // Absender: bei Antworten das Konto, in dem die Mail liegt, sonst Gmail (falls verbunden)
+  const src = m && canSend(m.src) ? m.src : canSend('gm') ? 'gm' : 'ic';
+  const c = { type: 'compose', kind, src, to: '', cc: '', bcc: '', subject: '', body: '', showCc: false, err: null };
   if (kind !== 'new' && m) {
     const f = st.full[m.id] || {};
     const subj = f.subject || (m.subject === '(ohne Betreff)' ? '' : m.subject);
@@ -537,7 +633,7 @@ export function composeFor(kind, id) {
 }
 export function captureCompose(c) {
   const v = (id) => document.getElementById(id)?.value;
-  for (const [k, id] of [['to', 'c-to'], ['cc', 'c-cc'], ['bcc', 'c-bcc'], ['subject', 'c-subj'], ['body', 'c-body']]) { const x = v(id); if (x != null) c[k] = x; }
+  for (const [k, id] of [['to', 'c-to'], ['cc', 'c-cc'], ['bcc', 'c-bcc'], ['subject', 'c-subj'], ['body', 'c-body'], ['src', 'c-from']]) { const x = v(id); if (x != null) c[k] = x; }
 }
 export const composeDirty = (c) => JSON.stringify([c.to, c.cc, c.bcc, c.subject, c.body]) !== c.init;
 // Prüfen und fertig machen. Wirft einen Fehler mit verständlichem Text.
@@ -549,9 +645,24 @@ export function prepareSend(c) {
     if (bad) throw new Error(`„${bad.raw}“ ist keine gültige Adresse.`);
   }
   if (!lists.to.length) throw new Error(lists.cc.length || lists.bcc.length ? 'Bitte mindestens eine Adresse bei „An“ eintragen.' : 'An wen soll die Mail gehen?');
-  return { ...lists, subject: c.subject.trim(), body: c.body, threadId: c.threadId, inReplyTo: c.inReplyTo, references: c.references };
+  // Verlauf (threadId) gibt es nur in Gmail; wechselt der Absender, beginnt dort ein neuer Verlauf
+  const ref = c.ref && mailById(c.ref);
+  return { ...lists, src: c.src, subject: c.subject.trim(), body: c.body, threadId: ref?.src === c.src ? c.threadId : undefined, inReplyTo: c.inReplyTo, references: c.references };
 }
+// Gibt einen Hinweis zurück, falls etwas nur halb geklappt hat
 export async function send(p) {
+  if (p.src === 'ic') {
+    if (!canSend('ic')) throw new Error('Zum Senden über iCloud zuerst Apple Mail auf diesem Mac verbinden.');
+    let r;
+    try {
+      r = await hx('send', { to: p.to, cc: p.cc, bcc: p.bcc, subject: p.subject, body: p.body, inReplyTo: p.inReplyTo, references: p.references });
+    } catch (e) {
+      if (e.code === 'unknown') throw new Error('Der Mac-Helfer ist noch die alte Version. Zum Senden über iCloud einmal updaten (APPLEMAIL.md, Schritt 2).');
+      throw e;
+    }
+    for (const a of [...p.to, ...p.cc, ...p.bcc]) sent.set(a.email.toLowerCase(), a);
+    return r.saved === false ? 'Die Kopie in „Gesendet“ hat nicht geklappt.' : null;
+  }
   if (!canSend('gm')) throw new Error('Zum Senden zuerst Gmail verbinden.');
   try {
     await g('/messages/send', { method: 'POST', body: JSON.stringify({ raw: buildRaw(p), ...(p.threadId ? { threadId: p.threadId } : {}) }) });
@@ -561,13 +672,14 @@ export async function send(p) {
     throw e;
   }
   for (const a of [...p.to, ...p.cc, ...p.bcc]) sent.set(a.email.toLowerCase(), a);
+  return null;
 }
 
 // Vorschläge beim Tippen der Adresse: alle Absender und Empfänger aus den geladenen Mails
 const sent = new Map();
 function contacts() {
   const map = new Map(sent);
-  const add = (a) => { const k = (a.email || '').toLowerCase(); if (!EMAIL.test(k) || k === me() || /no-?reply|mailer-daemon/.test(k)) return; const o = map.get(k); if (!o || (!o.name && a.name)) map.set(k, { name: a.name && a.name !== a.email ? a.name : '', email: a.email }); };
+  const add = (a) => { const k = (a.email || '').toLowerCase(); if (!EMAIL.test(k) || isMe(k) || /no-?reply|mailer-daemon/.test(k)) return; const o = map.get(k); if (!o || (!o.name && a.name)) map.set(k, { name: a.name && a.name !== a.email ? a.name : '', email: a.email }); };
   for (const m of allMail()) add(m.from);
   for (const f of Object.values(st.full)) { splitAddrs(f.to).forEach(add); splitAddrs(f.cc).forEach(add); }
   return [...map.values()];
@@ -633,7 +745,9 @@ export function composeHTML(c) {
       <button class="btn primary small c-send-m" data-action="compose-send">${icon('send')} Senden</button>
     </div>
     <div class="c-fields">
-      <div class="c-row c-from"><label>Von</label><span>${esc(st.account || '')}</span></div>
+      <div class="c-row c-from"><label for="c-from">Von</label>${canSend('gm') && canSend('ic')
+        ? `<select id="c-from">${[['gm', st.account], ['ic', ic.account]].map(([v, a]) => `<option value="${v}" ${c.src === v ? 'selected' : ''}>${esc(a)} · ${v === 'gm' ? 'Gmail' : 'iCloud'}</option>`).join('')}</select>`
+        : `<span>${esc((c.src === 'ic' ? ic.account : st.account) || '')}</span>`}</div>
       ${row('c-to', 'An', c.to, focusTo ? 'autofocus' : '')}
       ${c.showCc ? row('c-cc', 'Cc', c.cc) + row('c-bcc', 'Bcc', c.bcc) : ''}
       ${row('c-subj', 'Betreff', c.subject)}

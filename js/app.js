@@ -298,6 +298,14 @@ store.subscribe(() => { applyTheme(); renderAll(); });
 F.onFx(() => { if (route().view === 'finance') renderMain(); }); // Wechselkurse sind da
 P.onPrices(() => { if (route().view === 'finance') renderMain(); }); // Krypto-Kurse sind da
 Ml.onMail(() => { if (route().view === 'mail') renderMain(); }); // Mails geladen / geändert
+// Google-Zugriff (1 Stunde) beim ersten Klick in Mail oder auf „Mail“ selbst erneuern. Muss im Klick passieren (Pop-up).
+document.addEventListener('click', (e) => {
+  if (!Ml.needsRenew()) return;
+  const t = e.target;
+  if (t.closest?.('[data-action="mail-signin"], [data-action="mail-signout"], [data-action="mail-accounts"], [data-action="mail-setup-done"], .modal, #m-folder')) return;
+  if (route().view === 'mail' || t.closest?.('a[href="#mail"]')) Ml.autoRenew();
+}, true);
+setTimeout(Ml.preloadGis, 2500); // Google-Skript schon da, damit das Pop-up sofort aus dem Klick kommt
 window.addEventListener('hashchange', () => { ui.sideOpen = false; T.onNavigate(); renderMain(); renderPill(); applyPendingScroll(); });
 let resizeT;
 window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(renderMain, 200); });
@@ -327,8 +335,8 @@ function queueSend(c, p) {
   const t = setTimeout(async () => {
     pendingSend = null;
     try {
-      await Ml.send(p);
-      toast(`Gesendet an ${who}${more > 0 ? ` und ${more} weitere` : ''}.`);
+      const note = await Ml.send(p);
+      toast(`Gesendet an ${who}${more > 0 ? ` und ${more} weitere` : ''}.${note ? ' ' + note : ''}`);
     } catch (e) {
       // Nichts geht verloren: Fenster mit allem wieder öffnen
       c.err = e.message === 'auth' ? 'Google-Anmeldung abgelaufen. Klick nochmal auf Senden.' : e.message;
@@ -584,6 +592,12 @@ const A = {
       if (r) toast('Archiviert.', { label: 'Rückgängig', fn: () => Ml.unarchive(r).catch((e) => toast(e.message)) });
     } catch (e) { toast(e.message === 'auth' ? 'Google-Anmeldung abgelaufen.' : e.message); }
   },
+  'mail-restore': async (el) => {
+    try {
+      const r = await Ml.restore(el.dataset.id);
+      if (r) toast(r.m.folder === 'spam' ? 'Kein Spam: liegt jetzt im Posteingang.' : 'Zurück im Posteingang.', { label: 'Rückgängig', fn: () => Ml.unrestore(r).catch((e) => toast(e.message)) });
+    } catch (e) { toast(e.message === 'auth' ? 'Google-Anmeldung abgelaufen.' : e.message); }
+  },
   // Schreiben / Antworten / Weiterleiten (Gmail). Nach „Senden“ 5 Sekunden Zeit für „Rückgängig“.
   'mail-compose': () => openCompose(Ml.composeFor('new')),
   'mail-reply': (el) => openCompose(Ml.composeFor('reply', el.dataset.id)),
@@ -603,7 +617,7 @@ const A = {
     let p;
     try { p = Ml.prepareSend(c); } catch (e) { c.err = e.message; renderModal(); return; }
     // Abgelaufene Google-Anmeldung direkt aus diesem Klick erneuern (Pop-up braucht einen Klick)
-    if (!Ml.hasToken()) { try { await Ml.signIn(); } catch (e) { c.err = e.message; if (ui.modal === c) renderModal(); return; } }
+    if (p.src !== 'ic' && !Ml.hasToken()) { try { await Ml.signIn(); } catch (e) { c.err = e.message; if (ui.modal === c) renderModal(); return; } }
     if (!p.subject && !confirm('Ohne Betreff senden?')) return;
     c.err = null; ui.modal = null; renderModal();
     queueSend(c, p);
@@ -1115,6 +1129,7 @@ document.addEventListener('change', async (e) => {
   if (el.id === 'slot-proj' && ui.modal) { ui.modal.projectId = el.value; return; }
   if (el.id === 'slot-dur' && ui.modal) { ui.modal.dur = +el.value; ui.modal.projectId = $('#slot-proj')?.value || ''; renderModal(); return; }
   if (el.id === 'today-proj') { ui.todayProj = el.value; return; }
+  if (el.id === 'm-folder') { Ml.setFolder(el.value); return; }
   const f = el.dataset.field;
   if (f && ui.openTask) {
     const id = ui.openTask;

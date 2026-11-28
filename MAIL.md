@@ -57,7 +57,8 @@ Einmalig, dauert etwa 10 Minuten, am besten am Mac. Danach meldest du dich in de
 6. Dein Posteingang erscheint. Mit iCloud zusammen kannst du oben zwischen **Alle / Gmail / iCloud** umschalten.
 
 ## Im Alltag
-- Google gibt der App immer nur **eine Stunde** Zugriff. Danach zeigt sie **„Weiter mit Google“**: ein Klick, ohne neue Bestätigung.
+- Google gibt Web-Apps immer nur **eine Stunde** Zugriff (lässt sich nicht ändern). Die App erneuert ihn beim ersten Klick in Mail selbst, ein Fenster blitzt kurz auf. Klappt das nicht (z. B. Pop-up blockiert), steht oben **„Weiter mit Google“**: ein Klick, ohne neue Bestätigung.
+- **Ordner:** oben links neben „Alle | Ungelesen“: Posteingang, Archiv, Gesendet, Spam, Papierkorb. Aus Archiv, Spam und Papierkorb holst du Mails mit dem Posteingang-Symbol zurück. Spam sortiert Gmail selbst aus, er taucht im Posteingang der App nie auf.
 - **iPhone:** Die Client-ID ist schon da (Sync), du meldest dich dort einfach einmal mit Google an. Ob das Google-Fenster in der App vom Home-Bildschirm sauber aufgeht, ist noch ungetestet. Klappt es nicht, schick mir einen Screenshot.
 - **Mail → Aufgabe:** ✓-Symbol an der Mail. Die Aufgabe bekommt Absender und einen Link zurück zur Mail in Gmail.
 - **Schreiben:** oben rechts **Schreiben** (iPhone: Stift-Knopf unten rechts). In einer geöffneten Mail: **Antworten**, **Allen antworten**, **Weiterleiten**. Die Antwort landet in Gmail im selben Verlauf.
