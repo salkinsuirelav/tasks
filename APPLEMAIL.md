@@ -27,7 +27,7 @@ Terminal öffnen (⌘ + Leertaste → „Terminal“) und diesen Befehl einfüge
 ```
 cd ~/Documents && curl -L -o tasks.zip https://github.com/salkinsuirelav/tasks/archive/refs/heads/main.zip && rm -rf tasks-main && unzip -q tasks.zip && rm tasks.zip && zsh tasks-main/helper/install.command
 ```
-Am Ende steht **„✓ Fertig!“**. Eine Taste drücken, Fenster offen lassen.
+Am Ende steht **„✓ Fertig!“** und **„Taste drücken zum Schließen“**. **Erst eine Taste drücken** (z. B. Enter), dann geht es weiter. Fenster offen lassen.
 
 ## 3. iCloud verbinden
 Im gleichen Terminal-Fenster:

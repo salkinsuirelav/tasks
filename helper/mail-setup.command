@@ -3,6 +3,9 @@
 # Fragt einmal deine iCloud-Adresse und ein App-spezifisches Passwort ab, testet die Verbindung
 # und legt das Passwort im macOS-Schlüsselbund ab (nicht in einer Datei). Nochmal ausführen = Passwort ersetzen.
 
+# Mit "sh" oder "bash" gestartet? Dann mit zsh neu starten (das Skript braucht zsh).
+[ -z "$ZSH_VERSION" ] && exec /bin/zsh "$0" "$@"
+
 cd "$(dirname "$0")"
 APP="$HOME/.tasks-helper-app"
 SERVICE="tasks-icloud-mail"

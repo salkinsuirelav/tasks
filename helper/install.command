@@ -3,6 +3,9 @@
 # Doppelklick genügt. Danach startet der Helfer bei jedem Login unsichtbar mit.
 # Nochmal ausführen = Update (z. B. nach neuer ZIP von GitHub).
 
+# Mit "sh" oder "bash" gestartet? Dann mit zsh neu starten (das Skript braucht zsh).
+[ -z "$ZSH_VERSION" ] && exec /bin/zsh "$0" "$@"
+
 cd "$(dirname "$0")"
 SRC="$PWD"
 APP="$HOME/.tasks-helper-app"          # außerhalb von Dokumente/Schreibtisch, damit macOS den Zugriff nicht blockiert
