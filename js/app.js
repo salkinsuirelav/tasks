@@ -327,8 +327,8 @@ function queueSend(c, p) {
   const t = setTimeout(async () => {
     pendingSend = null;
     try {
-      await Ml.send(p);
-      toast(`Gesendet an ${who}${more > 0 ? ` und ${more} weitere` : ''}.`);
+      const note = await Ml.send(p);
+      toast(`Gesendet an ${who}${more > 0 ? ` und ${more} weitere` : ''}.${note ? ' ' + note : ''}`);
     } catch (e) {
       // Nichts geht verloren: Fenster mit allem wieder öffnen
       c.err = e.message === 'auth' ? 'Google-Anmeldung abgelaufen. Klick nochmal auf Senden.' : e.message;
@@ -603,7 +603,7 @@ const A = {
     let p;
     try { p = Ml.prepareSend(c); } catch (e) { c.err = e.message; renderModal(); return; }
     // Abgelaufene Google-Anmeldung direkt aus diesem Klick erneuern (Pop-up braucht einen Klick)
-    if (!Ml.hasToken()) { try { await Ml.signIn(); } catch (e) { c.err = e.message; if (ui.modal === c) renderModal(); return; } }
+    if (p.src !== 'ic' && !Ml.hasToken()) { try { await Ml.signIn(); } catch (e) { c.err = e.message; if (ui.modal === c) renderModal(); return; } }
     if (!p.subject && !confirm('Ohne Betreff senden?')) return;
     c.err = null; ui.modal = null; renderModal();
     queueSend(c, p);

@@ -80,7 +80,7 @@ In der Health-App (`/gym/`) unter **Ernährung → ✨ Claude** schickst du ein 
 
 ## Apple Mail (iCloud) in der App
 
-Der Helfer holt deine iCloud-Mails per IMAP (wie Apple Mail) und zeigt sie in der App unter **Mail**, nur auf diesem Mac. Lesen, gelesen/ungelesen, archivieren. Kein Senden, kein Löschen. Das App-spezifische Passwort liegt im macOS-Schlüsselbund. Einrichten: [APPLEMAIL.md](../APPLEMAIL.md).
+Der Helfer holt deine iCloud-Mails per IMAP (wie Apple Mail) und zeigt sie in der App unter **Mail**, nur auf diesem Mac. Lesen, gelesen/ungelesen, archivieren und senden (über iCloud-SMTP, Kopie in „Gesendet“). Kein Löschen. Das App-spezifische Passwort liegt im macOS-Schlüsselbund. Einrichten: [APPLEMAIL.md](../APPLEMAIL.md).
 
 ## Schnell-Eingabe per Tastenkürzel (aus jeder App)
 

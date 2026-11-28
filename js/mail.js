@@ -200,7 +200,7 @@ export async function openMail(id) {
     try {
       if (m.src === 'ic') {
         const f = await hx(`msg?uid=${m.uid}&v=${encodeURIComponent(ic.v || '')}`);
-        st.full[id] = { html: f.html, text: f.text, to: f.to, cc: f.cc, attachments: f.attachments || [], truncated: f.truncated };
+        st.full[id] = { html: f.html, text: f.text, to: f.to, cc: f.cc, attachments: f.attachments || [], truncated: f.truncated, subject: f.subject, mid: f.mid || m.mid, refs: f.refs, replyTo: f.replyTo };
         if (f.mid && !m.mid) m.mid = f.mid;
       } else {
         const full = await g(`/messages/${id}?format=full`);
@@ -303,7 +303,7 @@ function icCard() {
         <span class="pf-pill">Nur auf dem Mac</span>
       </div>`;
   return `
-      <div class="panel m-acc">${h}<p class="muted">Lesen, archivieren, als gelesen markieren, Mail → Aufgabe. Läuft über den Mac-Helfer, nur auf diesem Mac.</p></div></div>
+      <div class="panel m-acc">${h}<p class="muted">Lesen, schreiben, archivieren, Mail → Aufgabe. Läuft über den Mac-Helfer, nur auf diesem Mac.</p></div></div>
         <ol class="m-steps m-ol">
           <li>Bei <a href="https://account.apple.com" target="_blank" rel="noopener">account.apple.com</a> ein <b>App-spezifisches Passwort</b> erstellen.</li>
           <li>Den Mac-Helfer updaten (1 Befehl im Terminal).</li>
@@ -354,7 +354,7 @@ function reader(m) {
   } else body = `<div class="m-plain">${esc(f.text || m.snippet).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>')}</div>`;
   const hasRemote = f?.html && /<img[^>]+src=["']?https?:/i.test(f.html);
   const link = mailLink(m);
-  // Antworten/Weiterleiten: Gmail (iCloud folgt über den Mac-Helfer)
+  // Antworten/Weiterleiten: Gmail direkt, iCloud über den Mac-Helfer (nur am Mac)
   const rep = canSend(m.src) && f && !f.error, all = rep && canReplyAll(m);
   const att = f?.attachments?.length ? `<div class="m-att">${f.attachments.map((a) => `<span class="m-att-i" title="${esc(a.type)}">${icon('clip')}<b>${esc(a.name)}</b><small>${fsize(a.size)}</small></span>`).join('')}<small class="muted m-att-n">Anhänge öffnest du in ${m.src === 'ic' ? 'Apple Mail' : 'Gmail'}.</small></div>` : '';
   return `<div class="m-reader panel">
@@ -375,11 +375,6 @@ function reader(m) {
     ${f?.truncated ? '<p class="fin-note" style="margin:0">Sehr große Mail: Nur der Anfang ist geladen. Den Rest siehst du in Apple Mail.</p>' : ''}
     ${body}
     ${att}
-    ${rep ? `<div class="m-reply">
-      <button class="btn" data-action="mail-reply" data-id="${m.id}">${icon('reply')} Antworten</button>
-      ${all ? `<button class="btn" data-action="mail-replyall" data-id="${m.id}">${icon('replyAll')} Allen antworten</button>` : ''}
-      <button class="btn" data-action="mail-forward" data-id="${m.id}">${icon('forward')} Weiterleiten</button>
-    </div>` : ''}
   </div>`;
 }
 
@@ -434,10 +429,12 @@ export function viewMail() {
 
 // ---------- Schreiben, Antworten, Weiterleiten ----------
 // Gmail: über die Gmail-API (die Berechtigung gmail.modify erlaubt Senden schon, kein neuer Login nötig).
-// Gesendet wird reiner Text. Gmail setzt Absender, Datum und Message-ID selbst und legt die Mail unter „Gesendet“ ab.
-export const canSend = (src) => (src === 'gm' || !src) && !!st.account;
+// Gmail setzt Absender, Datum und Message-ID selbst und legt die Mail unter „Gesendet“ ab.
+// iCloud: über den Mac-Helfer (SMTP von iCloud, danach Kopie in „Gesendet“). Gesendet wird reiner Text.
+export const canSend = (src) => (src === 'gm' ? !!st.account : src === 'ic' ? !!ic.account && !isIOS() : canSend('gm') || canSend('ic'));
 export const isCompose = (m) => m?.type === 'compose';
-const me = () => (st.account || '').toLowerCase();
+const mine = () => [st.account, ic.account].filter(Boolean).map((x) => x.toLowerCase());
+const isMe = (e) => mine().includes(String(e || '').toLowerCase());
 const EMAIL = /^[^\s@<>(),;:"]+@[^\s@<>(),;:"]+\.[^\s@<>(),;:"]{2,}$/;
 // "A <a@x>, \"Doe, John\" <j@x>; b@y" → [{name, email, raw}]
 export function splitAddrs(s) {
@@ -458,7 +455,7 @@ export function splitAddrs(s) {
 const showAddr = (a) => (a.name && a.name.toLowerCase() !== a.email.toLowerCase() ? `${/[,;"<>]/.test(a.name) ? `"${a.name.replace(/"/g, '')}"` : a.name} <${a.email}>` : a.email);
 const uniq = (list, skip = []) => {
   const seen = new Set(skip.map((x) => x.toLowerCase()));
-  return list.filter((a) => { const k = a.email.toLowerCase(); if (!a.email || seen.has(k) || k === me()) return false; seen.add(k); return true; });
+  return list.filter((a) => { const k = a.email.toLowerCase(); if (!a.email || seen.has(k) || isMe(k)) return false; seen.add(k); return true; });
 };
 
 // MIME-Kopfzeilen: Umlaute als =?UTF-8?B?…?= (höchstens 39 Byte je Stück, damit Zeilen unter 78 Zeichen bleiben; kein Zeichen wird zerteilt)
@@ -503,17 +500,19 @@ const quote = (t) => t.split('\n').map((l) => (l.startsWith('>') ? '>' + l : l ?
 function replyTargets(m) {
   const f = st.full[m.id] || {};
   const sender = splitAddrs(f.replyTo).length ? splitAddrs(f.replyTo) : [{ name: m.from.name === m.from.email ? '' : m.from.name, email: m.from.email }];
-  const mine = m.from.email.toLowerCase() === me();
-  const to = mine ? splitAddrs(f.to) : sender;
-  const toAll = uniq([...to, ...(mine ? [] : splitAddrs(f.to))]);
+  const own = isMe(m.from.email);
+  const to = own ? splitAddrs(f.to) : sender;
+  const toAll = uniq([...to, ...(own ? [] : splitAddrs(f.to))]);
   const ccAll = uniq(splitAddrs(f.cc), toAll.map((a) => a.email));
   return { to: uniq(to), toAll, ccAll };
 }
 export const canReplyAll = (m) => { const r = replyTargets(m); return r.toAll.length + r.ccAll.length > r.to.length; };
 
 export function composeFor(kind, id) {
-  const c = { type: 'compose', kind, to: '', cc: '', bcc: '', subject: '', body: '', showCc: false, err: null };
   const m = id && mailById(id);
+  // Absender: bei Antworten das Konto, in dem die Mail liegt, sonst Gmail (falls verbunden)
+  const src = m && canSend(m.src) ? m.src : canSend('gm') ? 'gm' : 'ic';
+  const c = { type: 'compose', kind, src, to: '', cc: '', bcc: '', subject: '', body: '', showCc: false, err: null };
   if (kind !== 'new' && m) {
     const f = st.full[m.id] || {};
     const subj = f.subject || (m.subject === '(ohne Betreff)' ? '' : m.subject);
@@ -537,7 +536,7 @@ export function composeFor(kind, id) {
 }
 export function captureCompose(c) {
   const v = (id) => document.getElementById(id)?.value;
-  for (const [k, id] of [['to', 'c-to'], ['cc', 'c-cc'], ['bcc', 'c-bcc'], ['subject', 'c-subj'], ['body', 'c-body']]) { const x = v(id); if (x != null) c[k] = x; }
+  for (const [k, id] of [['to', 'c-to'], ['cc', 'c-cc'], ['bcc', 'c-bcc'], ['subject', 'c-subj'], ['body', 'c-body'], ['src', 'c-from']]) { const x = v(id); if (x != null) c[k] = x; }
 }
 export const composeDirty = (c) => JSON.stringify([c.to, c.cc, c.bcc, c.subject, c.body]) !== c.init;
 // Prüfen und fertig machen. Wirft einen Fehler mit verständlichem Text.
@@ -549,9 +548,24 @@ export function prepareSend(c) {
     if (bad) throw new Error(`„${bad.raw}“ ist keine gültige Adresse.`);
   }
   if (!lists.to.length) throw new Error(lists.cc.length || lists.bcc.length ? 'Bitte mindestens eine Adresse bei „An“ eintragen.' : 'An wen soll die Mail gehen?');
-  return { ...lists, subject: c.subject.trim(), body: c.body, threadId: c.threadId, inReplyTo: c.inReplyTo, references: c.references };
+  // Verlauf (threadId) gibt es nur in Gmail; wechselt der Absender, beginnt dort ein neuer Verlauf
+  const ref = c.ref && mailById(c.ref);
+  return { ...lists, src: c.src, subject: c.subject.trim(), body: c.body, threadId: ref?.src === c.src ? c.threadId : undefined, inReplyTo: c.inReplyTo, references: c.references };
 }
+// Gibt einen Hinweis zurück, falls etwas nur halb geklappt hat
 export async function send(p) {
+  if (p.src === 'ic') {
+    if (!canSend('ic')) throw new Error('Zum Senden über iCloud zuerst Apple Mail auf diesem Mac verbinden.');
+    let r;
+    try {
+      r = await hx('send', { to: p.to, cc: p.cc, bcc: p.bcc, subject: p.subject, body: p.body, inReplyTo: p.inReplyTo, references: p.references });
+    } catch (e) {
+      if (e.code === 'unknown') throw new Error('Der Mac-Helfer ist noch die alte Version. Zum Senden über iCloud einmal updaten (APPLEMAIL.md, Schritt 2).');
+      throw e;
+    }
+    for (const a of [...p.to, ...p.cc, ...p.bcc]) sent.set(a.email.toLowerCase(), a);
+    return r.saved === false ? 'Die Kopie in „Gesendet“ hat nicht geklappt.' : null;
+  }
   if (!canSend('gm')) throw new Error('Zum Senden zuerst Gmail verbinden.');
   try {
     await g('/messages/send', { method: 'POST', body: JSON.stringify({ raw: buildRaw(p), ...(p.threadId ? { threadId: p.threadId } : {}) }) });
@@ -561,13 +575,14 @@ export async function send(p) {
     throw e;
   }
   for (const a of [...p.to, ...p.cc, ...p.bcc]) sent.set(a.email.toLowerCase(), a);
+  return null;
 }
 
 // Vorschläge beim Tippen der Adresse: alle Absender und Empfänger aus den geladenen Mails
 const sent = new Map();
 function contacts() {
   const map = new Map(sent);
-  const add = (a) => { const k = (a.email || '').toLowerCase(); if (!EMAIL.test(k) || k === me() || /no-?reply|mailer-daemon/.test(k)) return; const o = map.get(k); if (!o || (!o.name && a.name)) map.set(k, { name: a.name && a.name !== a.email ? a.name : '', email: a.email }); };
+  const add = (a) => { const k = (a.email || '').toLowerCase(); if (!EMAIL.test(k) || isMe(k) || /no-?reply|mailer-daemon/.test(k)) return; const o = map.get(k); if (!o || (!o.name && a.name)) map.set(k, { name: a.name && a.name !== a.email ? a.name : '', email: a.email }); };
   for (const m of allMail()) add(m.from);
   for (const f of Object.values(st.full)) { splitAddrs(f.to).forEach(add); splitAddrs(f.cc).forEach(add); }
   return [...map.values()];
@@ -633,7 +648,9 @@ export function composeHTML(c) {
       <button class="btn primary small c-send-m" data-action="compose-send">${icon('send')} Senden</button>
     </div>
     <div class="c-fields">
-      <div class="c-row c-from"><label>Von</label><span>${esc(st.account || '')}</span></div>
+      <div class="c-row c-from"><label for="c-from">Von</label>${canSend('gm') && canSend('ic')
+        ? `<select id="c-from">${[['gm', st.account], ['ic', ic.account]].map(([v, a]) => `<option value="${v}" ${c.src === v ? 'selected' : ''}>${esc(a)} · ${v === 'gm' ? 'Gmail' : 'iCloud'}</option>`).join('')}</select>`
+        : `<span>${esc((c.src === 'ic' ? ic.account : st.account) || '')}</span>`}</div>
       ${row('c-to', 'An', c.to, focusTo ? 'autofocus' : '')}
       ${c.showCc ? row('c-cc', 'Cc', c.cc) + row('c-bcc', 'Bcc', c.bcc) : ''}
       ${row('c-subj', 'Betreff', c.subject)}

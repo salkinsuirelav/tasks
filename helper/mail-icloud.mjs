@@ -8,11 +8,14 @@
 //   In ~/.tasks-helper-mail.json steht nur deine iCloud-Adresse.
 // - Antworten bekommt nur die Task-App (Herkunft https://salkinsuirelav.github.io) und nur über 127.0.0.1.
 // - Mails werden nur durchgereicht, nirgends gespeichert und nicht protokolliert. Nichts davon landet in Firebase.
-// - Die App kann lesen, als gelesen/ungelesen markieren und ins Archiv verschieben. Senden oder Löschen geht nicht.
+// - Die App kann lesen, als gelesen/ungelesen markieren, ins Archiv verschieben und Mails senden (SMTP von iCloud,
+//   danach eine Kopie in „Gesendet“). Gesendet wird nur, wenn du in der App auf „Senden“ klickst. Löschen geht nicht.
 //
 // Einrichten: mail-setup.command (siehe APPLEMAIL.md). Prüfen von Hand: node mail-icloud.mjs --check name@icloud.com
 
 import tls from 'node:tls';
+import net from 'node:net';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -24,9 +27,9 @@ const CONF = path.join(os.homedir(), '.tasks-helper-mail.json');
 const MAX_BYTES = 3_000_000;   // größere Mails werden gekürzt geladen (Text kommt fast immer zuerst, Anhänge danach)
 const MAX_INLINE = 4_000_000;  // eingebettete Bilder (cid:) insgesamt
 const IDLE_MS = 4 * 60 * 1000; // Verbindung zu iCloud nach 4 Min Pause schließen
-const cfg = { host: 'imap.mail.me.com', port: 993, ca: undefined, origins: ['https://salkinsuirelav.github.io'], user: null, pass: null, quiet: false };
+const cfg = { host: 'imap.mail.me.com', port: 993, smtpHost: 'smtp.mail.me.com', smtpPort: 587, ca: undefined, origins: ['https://salkinsuirelav.github.io'], user: null, pass: null, quiet: false };
 // Nur für Tests: anderer Server/Zertifikat, feste Zugangsdaten, zusätzliche Herkunft
-export function configure(o) { Object.assign(cfg, o); conn?.close(); conn = null; archiveBox = null; }
+export function configure(o) { Object.assign(cfg, o); conn?.close(); conn = null; archiveBox = null; sentBox = null; fromName = undefined; }
 
 const log = (...a) => { if (!cfg.quiet) console.log(new Date().toLocaleTimeString('de-DE'), ...a); };
 const err = (code, message, status) => Object.assign(new Error(message), { code, status });
@@ -110,7 +113,8 @@ class Imap {
   onLine(line) {
     if (this.greet) { const g = this.greet; this.greet = null; return /^\* (OK|PREAUTH)/i.test(line) ? g.res() : g.rej(err('net', 'iCloud: ' + line.slice(0, 120), 502)); }
     const c = this.cur;
-    if (!c || line.startsWith('+')) return;
+    if (!c) return;
+    if (line.startsWith('+')) { const k = c.cont; c.cont = null; k?.(); return; } // Server wartet auf ein Literal (APPEND)
     if (line.startsWith('* ')) {
       const m = /^\* (\d+) (EXISTS|EXPUNGE)/i.exec(line);
       if (m) this.exists = m[2].toUpperCase() === 'EXISTS' ? Number(m[1]) : Math.max(0, this.exists - 1);
@@ -129,6 +133,15 @@ class Imap {
       const tag = 'T' + (++this.n);
       this.cur = { tag, untagged: [], res, rej };
       this.sock.write(`${tag} ${text}\r\n`);
+    });
+  }
+  // Mail in einen Ordner legen: erst ankündigen ({Länge}), auf "+" warten, dann die Bytes schicken
+  append(box, flags, data) {
+    if (!this.alive) return Promise.reject(err('net', 'Verbindung zu iCloud getrennt.', 502));
+    return new Promise((res, rej) => {
+      const tag = 'T' + (++this.n);
+      this.cur = { tag, untagged: [], res, rej, cont: () => { this.sock.write(data); this.sock.write('\r\n'); } };
+      this.sock.write(`${tag} APPEND ${q(box)} (${flags}) {${data.length}}\r\n`);
     });
   }
   async select(box, force) {
@@ -378,6 +391,7 @@ export function message(uid, v) {
     const html = out.html && out.html.replace(/cid:([^"'\s)>]+)/gi, (m, id) => { let k = id.toLowerCase(); try { k = decodeURIComponent(k); } catch {} const d = out.cid[k]; if (d) used.add(k); return d || m; });
     return {
       html, text: out.text, to: words(h.to), cc: words(h.cc), mid: (h['message-id'] || '').trim(),
+      subject: words(h.subject), replyTo: words(h['reply-to']), refs: (h.references || '').replace(/\s+/g, ' ').trim(),
       attachments: out.att.filter((a) => !a.cid || !used.has(a.cid)).map(({ name, type, size }) => ({ name, type, size })),
       truncated: Number(f['RFC822.SIZE']) > MAX_BYTES,
     };
@@ -440,6 +454,130 @@ export function unarchive(box, uid, mid) {
   });
 }
 
+// ---------- Senden: SMTP von iCloud (smtp.mail.me.com:587, STARTTLS), gleiches App-spezifisches Passwort ----------
+const EMAIL = /^[^\s@<>(),;:"]+@[^\s@<>(),;:"]+\.[^\s@<>(),;:"]{2,}$/;
+const oneLine = (s) => String(s ?? '').replace(/[\r\n\0]+/g, ' ').trim(); // keine eingeschleusten Kopfzeilen
+function encWord(s) {
+  if (/^[\x20-\x7e]*$/.test(s)) return s;
+  const parts = []; let cur = '';
+  for (const ch of s) { if (Buffer.byteLength(cur + ch) > 39) { parts.push(cur); cur = ch; } else cur += ch; }
+  if (cur) parts.push(cur);
+  return parts.map((p) => `=?UTF-8?B?${Buffer.from(p).toString('base64')}?=`).join('\r\n ');
+}
+const hdrAddr = (a) => (!a.name ? a.email : /^[\x20-\x7e]*$/.test(a.name) ? `"${a.name.replace(/["\\]/g, '\\$&')}" <${a.email}>` : `${encWord(a.name)} <${a.email}>`);
+function addrs(list, label) {
+  if (list == null) return [];
+  if (!Array.isArray(list) || list.length > 100) throw err('bad', `Ungültige Empfänger (${label}).`, 400);
+  return list.map((a) => {
+    const email = oneLine(a?.email).replace(/[<>]/g, ''), name = oneLine(a?.name).slice(0, 200);
+    if (!EMAIL.test(email)) throw err('bad', `„${email || '?'}“ ist keine gültige Adresse.`, 400);
+    return { name, email };
+  });
+}
+const refsOk = (s) => oneLine(s).split(/\s+/).filter((x) => /^<[^<>\s]+>$/.test(x)).join(' ');
+export function buildMessage(from, j) {
+  const to = addrs(j.to, 'An'), cc = addrs(j.cc, 'Cc'), bcc = addrs(j.bcc, 'Bcc');
+  if (!to.length) throw err('bad', 'An wen soll die Mail gehen?', 400);
+  const dom = from.email.split('@')[1] || 'icloud.com';
+  const mid = `<${Date.now().toString(36)}.${crypto.randomBytes(8).toString('hex')}@${dom}>`;
+  const H = [`From: ${hdrAddr(from)}`, `To: ${to.map(hdrAddr).join(',\r\n ')}`];
+  if (cc.length) H.push(`Cc: ${cc.map(hdrAddr).join(',\r\n ')}`);
+  H.push(`Subject: ${encWord(oneLine(j.subject).slice(0, 900))}`, `Date: ${new Date().toUTCString().replace('GMT', '+0000')}`, `Message-ID: ${mid}`);
+  const irt = refsOk(j.inReplyTo).split(' ')[0], refs = refsOk(j.references);
+  if (irt) H.push(`In-Reply-To: ${irt}`);
+  if (refs) H.push(`References: ${refs}`);
+  H.push('MIME-Version: 1.0', 'Content-Type: text/plain; charset="UTF-8"', 'Content-Transfer-Encoding: base64');
+  const body = Buffer.from(String(j.body ?? '').replace(/\r?\n/g, '\r\n')).toString('base64').replace(/.{76}/g, '$&\r\n');
+  // Bcc steht absichtlich nicht im Kopf: Blindkopie-Empfänger bekommen die Mail nur über RCPT TO
+  return { data: Buffer.from(`${H.join('\r\n')}\r\n\r\n${body}\r\n`), rcpts: [...to, ...cc, ...bcc].map((a) => a.email), mid };
+}
+function smtpSend(user, pass, rcpts, data) {
+  return new Promise((resolve, reject) => {
+    let sock = net.connect(cfg.smtpPort, cfg.smtpHost), buf = '', wait = null, done = false;
+    const finish = (e, v) => { if (done) return; done = true; clearTimeout(timer); try { sock.end(); } catch {} e ? reject(e) : resolve(v); };
+    const timer = setTimeout(() => { finish(err('net', 'iCloud antwortet beim Senden nicht (Zeitüberschreitung).', 504)); sock.destroy(); }, 60000);
+    const onData = (d) => {
+      buf += d.toString('latin1');
+      for (;;) {
+        const lines = buf.split('\r\n'); if (lines.length < 2) return;
+        const k = lines.findIndex((l, i) => i < lines.length - 1 && /^\d{3}( |$)/.test(l));
+        if (k < 0) return;
+        const resp = { code: Number(lines[k].slice(0, 3)), text: lines.slice(0, k + 1).join(' ') };
+        buf = lines.slice(k + 1).join('\r\n');
+        const w = wait; wait = null; w?.(resp);
+      }
+    };
+    const read = () => new Promise((r) => { wait = r; });
+    const attach = (s) => { s.on('data', onData); s.on('error', (e) => finish(netErr(e))); s.on('close', () => finish(err('net', 'iCloud hat die Verbindung beim Senden getrennt.', 502))); };
+    const step = async (line, ok, fail) => {
+      if (line != null) sock.write(line + '\r\n');
+      const r = await read();
+      if (!ok.includes(r.code)) throw fail ? fail(r) : err('send', `iCloud: ${r.text.slice(0, 160)}`, 502);
+      return r;
+    };
+    attach(sock);
+    (async () => {
+      await step(null, [220]);
+      await step('EHLO tasks-helper', [250]);
+      await step('STARTTLS', [220]);
+      // Ab hier verschlüsselt
+      sock.removeAllListeners('data'); sock.removeAllListeners('error'); sock.removeAllListeners('close');
+      sock = tls.connect({ socket: sock, servername: cfg.smtpHost, ca: cfg.ca });
+      attach(sock);
+      await new Promise((r, j) => { sock.once('secureConnect', r); sock.once('error', j); });
+      await step('EHLO tasks-helper', [250]);
+      await step(`AUTH PLAIN ${Buffer.from(`\0${user}\0${pass}`).toString('base64')}`, [235], () => err('auth', 'iCloud lehnt die Anmeldung zum Senden ab. Stimmt das App-spezifische Passwort? mail-setup.command nochmal ausführen.', 401));
+      await step(`MAIL FROM:<${user}>`, [250]);
+      for (const r of rcpts) await step(`RCPT TO:<${r}>`, [250, 251], (x) => err('bad', `iCloud lehnt die Adresse ${r} ab (${x.code}).`, 400));
+      await step('DATA', [354]);
+      // Zeilen, die mit einem Punkt beginnen, bekommen einen zweiten (sonst endet DATA zu früh)
+      sock.write(Buffer.from(data.toString('latin1').replace(/(^|\r\n)\./g, '$1..'), 'latin1'));
+      await step('.', [250]);
+      sock.write('QUIT\r\n');
+      finish(null, true);
+    })().catch((e) => finish(e?.code ? e : netErr(e)));
+  });
+}
+// Ordner „Gesendet“: iCloud nennt ihn "Sent Messages"
+let sentBox = null, fromName;
+async function findSent(c) {
+  if (sentBox) return sentBox;
+  const r = await c.cmd('LIST "" "*"');
+  const boxes = r.untagged.map((l) => { const t = parse(l); return String(t[1]).toUpperCase() === 'LIST' ? { flags: (t[2] || []).map((x) => String(x).toLowerCase()), name: t[4] } : null; }).filter((b) => b && typeof b.name === 'string');
+  const b = boxes.find((x) => x.flags.includes('\\sent')) || boxes.find((x) => /^sent messages$/i.test(x.name)) || boxes.find((x) => /^(sent|gesendet)/i.test(x.name));
+  return (sentBox = b ? b.name : 'Sent Messages');
+}
+// Absendername wie in Apple Mail: aus der letzten gesendeten Mail übernehmen (sonst nur die Adresse)
+async function senderName(c, user) {
+  if (fromName !== undefined) return fromName;
+  let name = '';
+  try {
+    await c.select(await findSent(c), true);
+    if (c.exists) {
+      const r = await c.cmd(`FETCH ${c.exists}:${c.exists} (BODY.PEEK[HEADER.FIELDS (FROM)])`);
+      const f = r.untagged.map(fetchItems).find((x) => x && pick(x, 'BODY[HEADER'));
+      const v = words(headers(pick(f, 'BODY[HEADER') || '').from || '');
+      const m = /^\s*"?([^"<]*?)"?\s*<([^>]+)>/.exec(v);
+      if (m && m[2].trim().toLowerCase() === user.toLowerCase()) name = m[1].trim();
+    }
+  } catch (e) { if (e.code === 'net') throw e; } // Verbindung weg: withImap versucht es neu (es ist noch nichts gesendet)
+  return (fromName = name);
+}
+export function sendMail(j) {
+  return withImap(async (c) => {
+    const name = await senderName(c, c.user);
+    const msg = buildMessage({ name, email: c.user }, j || {});
+    // Fehler beim Senden nie als 'net' melden: withImap würde sonst neu versuchen und die Mail doppelt schicken
+    try { await smtpSend(c.user, await password(c.user), msg.rcpts, msg.data); }
+    catch (e) { throw e.code === 'net' ? err('send', e.message, e.status) : e; }
+    log(`Mail gesendet an ${msg.rcpts.length} Empfänger`);
+    // Kopie in „Gesendet“, wie Apple Mail. Klappt das nicht, ist die Mail trotzdem raus.
+    let saved = true;
+    try { await c.append(await findSent(c), '\\Seen', msg.data); } catch (e) { saved = false; log('Mail: Kopie in „Gesendet“ fehlgeschlagen:', e.message); }
+    return { ok: true, saved, mid: msg.mid };
+  });
+}
+
 // ---------- HTTP für die App (im Helfer unter http://127.0.0.1:7777/mail/...) ----------
 // Gibt true zurück, wenn die Anfrage hierher gehörte.
 export function handleMail(req, res) {
@@ -459,7 +597,7 @@ export function handleMail(req, res) {
   // Eigener Header: eine fremde Webseite kann ihn nicht ohne Erlaubnis (CORS) mitschicken
   if (!req.headers['x-tasks']) { send(403, { error: 'forbidden', message: 'Header X-Tasks fehlt.' }); return true; }
   const done = (p) => p.then((j) => send(200, j), (e) => {
-    if (!['setup', 'auth', 'stale', 'gone'].includes(e.code)) log('Mail-Fehler:', e.message);
+    if (!['setup', 'auth', 'stale', 'gone', 'bad'].includes(e.code)) log('Mail-Fehler:', e.message);
     send(e.status || 500, { error: e.code || 'error', message: e.message || 'Unbekannter Fehler' });
   });
   const route = url.pathname.slice(6);
@@ -471,7 +609,7 @@ export function handleMail(req, res) {
   }
   if (req.method === 'POST') {
     let body = '';
-    req.on('data', (d) => { body += d; if (body.length > 20000) req.destroy(); });
+    req.on('data', (d) => { body += d; if (body.length > 3_000_000) req.destroy(); });
     req.on('end', () => {
       let j = {};
       try { j = JSON.parse(body || '{}'); } catch { return send(400, { error: 'bad', message: 'Ungültige Anfrage.' }); }
@@ -479,6 +617,7 @@ export function handleMail(req, res) {
         seen: () => setSeen(j.uid, j.v, j.seen !== false),
         archive: () => archive(j.uid, j.v),
         unarchive: () => unarchive(j.box, j.uid, j.mid),
+        send: () => sendMail(j),
       }[route];
       if (!run) return send(404, { error: 'unknown', message: 'Unbekannter Befehl.' });
       done(Promise.resolve().then(run));
