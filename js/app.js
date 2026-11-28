@@ -556,7 +556,9 @@ const A = {
   },
   // ---- Navigation: Reihenfolge ----
   'nav-more': () => { ui.modal = { type: 'nav-more' }; renderModal(); },
-  'nav-edit': () => { ui.modal = null; renderModal(); location.hash = '#settings'; setTimeout(() => $('#nav-order')?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 80); },
+  'set-cat': (el) => { ui.setCat = el.dataset.v; renderMain(); window.scrollTo(0, 0); },
+  'mail-avatars': (el) => { store.saveSettings({ mailAvatars: el.dataset.v === '1' }); renderMain(); },
+  'nav-edit': () => { ui.modal = null; renderModal(); ui.setCat = 'allgemein'; location.hash = '#settings'; setTimeout(() => $('#nav-order')?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 80); },
   'nav-move': (el) => {
     const items = navItems(store.settings).map((n) => n.href), i = items.indexOf(el.dataset.href), j = i + +el.dataset.d;
     if (i < 0 || j < 0 || j >= items.length) return;
@@ -1399,3 +1401,60 @@ document.addEventListener('pointerdown', (e) => { if (!e.target.closest('#ctx-me
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeCtx(); });
 window.addEventListener('scroll', closeCtx, true);
 window.addEventListener('blur', closeCtx);
+
+// ---------- Mail am iPhone: Wischen wie in Apple Mail ----------
+// Nach rechts: gelesen/ungelesen. Nach links: archivieren (aus Archiv, Spam, Papierkorb: zurück in den Posteingang).
+{
+  let sw = null, swallow = false;
+  const GO = 90;
+  const moveKind = (m) => (!m.folder || m.folder === 'inbox' ? 'archive' : ['archive', 'spam', 'trash'].includes(m.folder) ? 'restore' : null);
+  const clear = () => { sw?.bg?.remove(); sw?.row.classList.remove('swiping'); sw = null; };
+  document.addEventListener('touchstart', (e) => {
+    const row = e.target.closest?.('.m-row');
+    if (!row || !isMobile() || e.touches.length !== 1 || sw) return;
+    const m = Ml.mailById(row.dataset.id);
+    if (!m) return;
+    sw = { row, m, x0: e.touches[0].clientX, y0: e.touches[0].clientY, dx: 0, on: false, bg: null, dir: 0 };
+  }, { passive: true });
+  document.addEventListener('touchmove', (e) => {
+    if (!sw) return;
+    const dx = e.touches[0].clientX - sw.x0, dy = e.touches[0].clientY - sw.y0;
+    if (!sw.on) {
+      if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) { sw = null; return; } // Scrollen
+      if (Math.abs(dx) < 14) return;
+      sw.on = true; sw.row.classList.add('swiping');
+      sw.bg = document.createElement('div');
+      sw.bg.style.top = sw.row.offsetTop + 'px'; sw.bg.style.height = sw.row.offsetHeight + 'px';
+      sw.row.parentElement.insertBefore(sw.bg, sw.row);
+    }
+    e.preventDefault();
+    let x = dx;
+    if (x < 0 && !moveKind(sw.m)) x = Math.max(x, -24); // in „Gesendet“ nichts zu verschieben
+    sw.dx = x; sw.row.style.transform = `translateX(${x}px)`;
+    const dir = x > 0 ? 1 : -1;
+    if (dir !== sw.dir) {
+      sw.dir = dir;
+      const k = moveKind(sw.m);
+      sw.bg.innerHTML = dir > 0 ? `${icon('mail')}<span>${sw.m.unread ? 'Gelesen' : 'Ungelesen'}</span>` : k === 'archive' ? `<span>Archivieren</span>${icon('archive')}` : `<span>Posteingang</span>${icon('inbox')}`;
+    }
+    sw.bg.className = `m-swipe-bg ${dir > 0 ? 'read' : 'move'} ${Math.abs(x) > GO ? 'go' : ''}`;
+  }, { passive: false });
+  const end = () => {
+    if (!sw) return;
+    if (!sw.on) { sw = null; return; }
+    swallow = true; setTimeout(() => { swallow = false; }, 400);
+    const { row, m, dx } = sw;
+    const back = () => { row.classList.add('swipe-back'); row.style.transform = ''; setTimeout(() => { row.classList.remove('swipe-back'); clear(); }, 260); };
+    if (dx > GO) { back(); Ml.setUnread(m.id, !m.unread).catch((e) => toast(e.message === 'auth' ? 'Google-Anmeldung abgelaufen.' : e.message)); return; }
+    const k = moveKind(m);
+    if (dx < -GO && k) {
+      row.classList.add('swipe-back'); row.style.transform = 'translateX(-110%)';
+      setTimeout(() => { clear(); A[k === 'archive' ? 'mail-archive' : 'mail-restore']({ dataset: { id: m.id } }); }, 200);
+      return;
+    }
+    back();
+  };
+  document.addEventListener('touchend', end);
+  document.addEventListener('touchcancel', end);
+  document.addEventListener('click', (e) => { if (swallow && e.target.closest?.('.m-row')) { e.stopPropagation(); e.preventDefault(); } }, true);
+}
