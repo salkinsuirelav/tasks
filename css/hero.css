@@ -458,3 +458,13 @@ html[data-design="hero"] .m-att-i { border-color: var(--h-sep); background: var(
 html[data-design="hero"] .more-sheet { background: var(--h-surface); box-shadow: var(--h-overlay-shadow), 0 0 0 1px var(--h-sep); }
 html[data-design="hero"] .more-item { background: var(--h-default); }
 html[data-design="hero"] .tabbar a.active svg.i { color: var(--h-accent); }
+
+/* ===== v0.18 Mail schreiben im Modern-Design ===== */
+html[data-design="hero"] .modal.compose { padding: 0; }
+html[data-design="hero"] :is(.c-row, .modal .c-foot) { border-color: var(--h-sep); }
+html[data-design="hero"] :is(.c-head .c-x:hover, .c-ccb:hover, .c-sug-i:hover, .c-sug-i.on) { background: var(--h-default); }
+html[data-design="hero"] .c-sug { background: var(--h-surface); border: 0; box-shadow: var(--h-overlay-shadow); }
+html[data-design="hero"] .m-fab { background: var(--h-accent); border-radius: 999px; box-shadow: var(--h-overlay-shadow); }
+@media (max-width: 760px) {
+  html[data-design="hero"] .modal.compose { border-radius: 0; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+}

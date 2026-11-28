@@ -6,7 +6,7 @@ Einmalig, dauert etwa 10 Minuten, am besten am Mac. Danach meldest du dich in de
 
 **Warum das nötig ist:** Google lässt eine App erst an Gmail, wenn sie eine eigene „Client-ID“ hat. Die erstellst du in deinem eigenen Google-Cloud-Projekt. Das ist kostenlos, und nur du (als Testnutzer) kannst dich darüber anmelden.
 
-**Was die App macht:** Posteingang lesen, archivieren, als gelesen/ungelesen markieren, Mail → Aufgabe. Dafür braucht sie die Google-Berechtigung `gmail.modify`. Google beschreibt die beim Login breiter („E-Mails lesen, verfassen, senden …“), weil es für Archivieren keine engere gibt. Die App selbst **sendet nichts und löscht nichts** (der Code ist öffentlich im Repo).
+**Was die App macht:** Posteingang lesen, archivieren, als gelesen/ungelesen markieren, Mail → Aufgabe, Mails **schreiben, antworten und weiterleiten**. Dafür reicht die Google-Berechtigung `gmail.modify`, die du beim Login bestätigst (Google beschreibt sie als „E-Mails lesen, verfassen, senden …“). Die App sendet nur, wenn du selbst auf **Senden** klickst, und löscht nichts (der Code ist öffentlich im Repo).
 
 **Datenschutz:** Deine Mails werden direkt zwischen deinem Gerät und Google geladen. Die App speichert sie nirgends, auch nicht in Firebase. Bilder aus dem Netz (oft Zählpixel) lädt sie erst, wenn du auf „Bilder laden“ klickst.
 
@@ -60,6 +60,9 @@ Einmalig, dauert etwa 10 Minuten, am besten am Mac. Danach meldest du dich in de
 - Google gibt der App immer nur **eine Stunde** Zugriff. Danach zeigt sie **„Weiter mit Google“**: ein Klick, ohne neue Bestätigung.
 - **iPhone:** Die Client-ID ist schon da (Sync), du meldest dich dort einfach einmal mit Google an. Ob das Google-Fenster in der App vom Home-Bildschirm sauber aufgeht, ist noch ungetestet. Klappt es nicht, schick mir einen Screenshot.
 - **Mail → Aufgabe:** ✓-Symbol an der Mail. Die Aufgabe bekommt Absender und einen Link zurück zur Mail in Gmail.
+- **Schreiben:** oben rechts **Schreiben** (iPhone: Stift-Knopf unten rechts). In einer geöffneten Mail: **Antworten**, **Allen antworten**, **Weiterleiten**. Die Antwort landet in Gmail im selben Verlauf.
+- **Rückgängig:** Nach „Senden“ hast du 5 Sekunden Zeit. `⌘ + Enter` sendet direkt aus dem Textfeld.
+- Gesendete Mails findest du wie gewohnt in Gmail unter **Gesendet**. Anhänge kann die App noch nicht mitschicken (beim Weiterleiten sagt sie dir das).
 
 ## Trennen
 - In der App: Mail → Personen-Symbol (Konten) → bei Gmail **Trennen**. Gilt nur für dieses Gerät.
