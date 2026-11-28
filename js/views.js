@@ -710,7 +710,7 @@ export function viewSettings() {
     <div class="set-cats" role="tablist">${SET_CATS.map(([v, l, ic]) => `<button class="${v === cat ? 'on' : ''}" data-action="set-cat" data-v="${v}" role="tab">${icon(ic)}<span>${l}</span></button>`).join('')}</div>
     <div class="settings">
       ${panels.filter((x) => x[0] === cat).map((x) => x[1]).join('\n')}
-      <p class="mono muted">Version 0.22.0</p>
+      <p class="mono muted">Version 0.22.1</p>
     </div>`;
 }
 
