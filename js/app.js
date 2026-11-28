@@ -28,13 +28,14 @@ function renderNav() {
   const syncColor = { online: '#30a46c', offline: '#e2a336', error: '#e5484d', connecting: '#e2a336', 'signed-out': '#e2a336' }[sy.status] || 'var(--faint)';
   const syncText = { off: 'Nur lokal', online: 'Synchronisiert', offline: 'Offline', error: 'Sync-Fehler', connecting: 'Verbinde…', 'signed-out': 'Nicht angemeldet' }[sy.status];
   const collapsed = !!store.settings.navCollapsed;
+  const projShut = !!store.settings.navProjHidden; // Projekte in der Seitenleiste zugeklappt
   $('.app').classList.toggle('nav-collapsed', collapsed);
   $('#sidebar').innerHTML = `
     <div class="brand"><img class="brand-logo" src="favicon.svg" alt=""><span class="txt">Tasks</span>
       <button class="icon-btn collapse-btn" data-action="toggle-nav" title="Seitenleiste ${collapsed ? 'ausklappen' : 'einklappen'} (B)">${icon(collapsed ? 'expand' : 'collapse')}</button></div>
     ${navItems(store.settings).map((n) => `<a class="nav-item ${active(n.href) ? 'active' : ''}" href="${n.href}" title="${n.label}" draggable="true" data-nav="${n.href}">${icon(n.icon)}<span class="lbl">${n.label}</span>${n.href === '#inbox' && M.aiNewCount() ? '<span class="ai-dot" title="Claude ist mit Aufgaben fertig"></span>' : ''}${n.href === '#inbox' && inboxCount ? `<span class="count">${inboxCount}</span>` : ''}</a>`).join('')}
-    <div class="nav-label"><span class="txt">Projekte</span> <button class="icon-btn" style="width:24px;height:24px" data-action="new-project" title="Neues Projekt">${icon('plus')}</button></div>
-    ${M.projects().map((p) => `<a class="nav-item ${view === 'project' && param === p.id ? 'active' : ''}" href="#project/${p.id}" title="${esc(p.name)}">${V.projIcon(p, 16)}<span class="lbl">${esc(p.name)}</span><span class="count">${M.openTasks().filter((t) => t.projectId === p.id).length || ''}</span></a>`).join('')}
+    <div class="nav-label"><button class="nav-label-t ${projShut ? 'shut' : ''}" data-action="toggle-nav-proj" title="Projekte ${projShut ? 'einblenden' : 'ausblenden'}" aria-expanded="${!projShut}"><span class="txt">Projekte</span>${icon('right', 'chev')}</button> <button class="icon-btn" style="width:24px;height:24px" data-action="new-project" title="Neues Projekt">${icon('plus')}</button></div>
+    ${projShut ? '' : M.projects().map((p) => `<a class="nav-item ${view === 'project' && param === p.id ? 'active' : ''}" href="#project/${p.id}" title="${esc(p.name)}">${V.projIcon(p, 16)}<span class="lbl">${esc(p.name)}</span><span class="count">${M.openTasks().filter((t) => t.projectId === p.id).length || ''}</span></a>`).join('')}
     <div class="sidebar-foot">
       <a class="nav-item ${view === 'settings' ? 'active' : ''}" href="#settings" title="Einstellungen">${icon('gear')}<span class="lbl">Einstellungen</span></a>
       <div class="sync-pill" title="${syncText}"><span class="dot" style="background:${syncColor}"></span><span class="txt">${syncText}</span></div>
@@ -457,6 +458,7 @@ const A = {
   'toggle-nav': () => store.saveSettings({ navCollapsed: !store.settings.navCollapsed }),
   theme: (el) => store.saveSettings({ theme: el.dataset.v }),
   design: (el) => setDesign(el.dataset.v),
+  'toggle-nav-proj': () => store.saveSettings({ navProjHidden: !store.settings.navProjHidden }),
   'toggle-side': () => { if (isMobile()) { ui.sideOpen = !ui.sideOpen; renderMain(); } else store.saveSettings({ sidebar: !store.settings.sidebar }); },
 
   'auto-plan': () => {

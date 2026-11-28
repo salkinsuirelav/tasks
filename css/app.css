@@ -512,10 +512,7 @@ details.pull[open] summary::before { content: "▾"; }
 .tsec { margin-bottom: 22px; }
 .tsec-head { display: flex; align-items: center; gap: 8px; margin: 0 2px 8px; min-height: 28px; }
 .tsec-title { font-size: 12px; font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase; }
-.tsec-sum { margin-left: auto; font-size: 12.5px; }
-.tsec-head .eye { width: 28px; height: 28px; }
-.tsec-head .eye:only-of-type { margin-left: auto; }
-.tsec-sum:empty + .eye { margin-left: auto; }
+.tsec-head .eye { width: 28px; height: 28px; margin-left: auto; }
 .capture.tcap { margin-bottom: 10px; padding: 4px 6px 4px 14px; flex-wrap: nowrap; }
 .capture.tcap input { padding: 9px 0; }
 .mini-select { width: auto; max-width: 150px; padding: 6px 8px; font-size: 13px; border-radius: 8px; }
@@ -1389,3 +1386,10 @@ body:has(#pill-root .timer-pill) .m-fab { bottom: calc(136px + env(safe-area-ins
   html[data-motion] .modal.compose { animation: compose-up .35s var(--spring); }
 }
 @keyframes compose-up { from { transform: translateY(40px); opacity: 0; } }
+/* v0.18: Projekte in der Seitenleiste zuklappen (Klick auf „Projekte“) */
+.nav-label-t { display: inline-flex; align-items: center; gap: 3px; background: none; border: 0; padding: 2px 4px 2px 0; margin: 0; font: inherit; color: inherit; cursor: pointer; border-radius: 6px; }
+.nav-label-t:hover { color: var(--text); }
+.nav-label-t svg.chev { width: 11px; height: 11px; stroke-width: 2.2; transform: rotate(90deg); opacity: 0; transition: transform .2s ease, opacity .15s ease; }
+.nav-label:hover .nav-label-t svg.chev, .nav-label-t:focus-visible svg.chev, .nav-label-t.shut svg.chev { opacity: .75; }
+.nav-label-t.shut svg.chev { transform: none; }
+.app.nav-collapsed .nav-label-t { padding: 2px; }
