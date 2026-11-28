@@ -573,6 +573,10 @@ const A = {
     ui.mailCidEdit = false; store.saveSettings({ gmailClientId: v });
   },
   'mail-cid-edit': () => { ui.mailCidEdit = true; renderMain(); },
+  'mail-svc-save': () => {
+    try { Ml.saveLoginService($('#gm-svc')?.value); ui.mailSvcEdit = false; toast($('#gm-svc')?.value.trim() ? 'Gespeichert. Jetzt einmal „Dauerhaft anmelden“.' : 'Login-Dienst entfernt.'); renderMain(); } catch (e) { toast(e.message); }
+  },
+  'mail-svc-edit': () => { ui.mailSvcEdit = true; renderMain(); },
   'mail-signin': async () => { try { await Ml.signIn(); } catch (e) { toast(e.message); renderMain(); } },
   'mail-signout': () => { if (confirm('Gmail auf diesem Gerät trennen? Deine Mails bleiben in Gmail.')) Ml.signOut(); },
   'mail-refresh': () => Ml.refresh(),
@@ -619,7 +623,7 @@ const A = {
     let p;
     try { p = Ml.prepareSend(c); } catch (e) { c.err = e.message; renderModal(); return; }
     // Abgelaufene Google-Anmeldung direkt aus diesem Klick erneuern (Pop-up braucht einen Klick)
-    if (p.src !== 'ic' && !Ml.hasToken()) { try { await Ml.signIn(); } catch (e) { c.err = e.message; if (ui.modal === c) renderModal(); return; } }
+    if (p.src !== 'ic' && !Ml.hasToken() && !Ml.permanent()) { try { await Ml.signIn(); } catch (e) { c.err = e.message; if (ui.modal === c) renderModal(); return; } }
     if (!p.subject && !confirm('Ohne Betreff senden?')) return;
     c.err = null; ui.modal = null; renderModal();
     queueSend(c, p);
@@ -985,6 +989,7 @@ document.addEventListener('keydown', (e) => {
   else if (el.id === 'p-name') A['save-project']();
   else if (el.id === 'quick-title') A['quick-save']();
   else if (el.id === 'gm-cid') A['mail-cid-save']();
+  else if (el.id === 'gm-svc') A['mail-svc-save']();
   else if (el.id === 'h-search') A['hold-search']();
   else if (el.closest('.pf-modal') && el.tagName === 'INPUT') A['save-holding']();
   else if (el.closest('.loan-modal')) { if (/^lx-/.test(el.id)) A['loan-extra-add'](); else if (el.tagName === 'INPUT') A['save-loan'](); }
