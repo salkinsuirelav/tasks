@@ -286,8 +286,10 @@ export async function setUnread(id, unread) {
 export async function archive(id) {
   const m = mailById(id); if (!m) return null;
   const L = listOf(m), i = L.indexOf(m);
+  const next = ui.mailOpen === id ? nextAfter(id) : undefined;
   L.splice(i, 1);
   if (ui.mailOpen === id) ui.mailOpen = null;
+  if (next) openMail(next);
   delete (m.src === 'ic' ? ic : st).cache.archive;
   notify();
   try {
@@ -312,8 +314,10 @@ export async function unarchive({ m, i, box, newUid }) {
 export async function restore(id) {
   const m = mailById(id); if (!m || !MOVABLE.includes(m.folder)) return null;
   const L = listOf(m), i = L.indexOf(m);
+  const next = ui.mailOpen === id ? nextAfter(id) : undefined;
   L.splice(i, 1);
   if (ui.mailOpen === id) ui.mailOpen = null;
+  if (next) openMail(next);
   delete (m.src === 'ic' ? ic : st).cache.inbox;
   notify();
   try {
@@ -339,7 +343,10 @@ export async function unrestore({ m, i, newUid }) {
 
 // ---------- Ansicht ----------
 const COLORS = ['#e5484d', '#f76b15', '#e2a336', '#30a46c', '#12a594', '#0090ff', '#6e56cf', '#d6409f', '#8d8d86'];
+// Profilbilder der Absender lassen sich in den Einstellungen ausblenden
+export const showAvatars = () => store.settings.mailAvatars !== false;
 const avatar = (from, size = 28) => {
+  if (!showAvatars()) return '';
   const s = from.name || from.email || '?';
   let h = 0; for (const ch of from.email || s) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   const c = COLORS[h % COLORS.length];
@@ -479,6 +486,18 @@ function notes() {
   return out.join('');
 }
 
+// Mails, wie sie gerade in der Liste stehen (Konto-Filter, optional Ungelesen-Filter)
+function shown(useFilter = true) {
+  const boxF = both() ? ui.mailBox || 'all' : 'all';
+  const items = allMail().filter((m) => boxF === 'all' || m.src === boxF);
+  return useFilter && (ui.mailFilter || 'all') === 'unread' ? items.filter((m) => m.unread || ui.mailOpen === m.id) : items;
+}
+// Nach Archivieren/Verschieben der offenen Mail: die nächste darunter öffnen (sonst die darüber, sonst keine)
+function nextAfter(id) {
+  const L = shown(), i = L.findIndex((m) => m.id === id);
+  if (i < 0) return null;
+  return (L[i + 1] || L[i - 1] || null)?.id || null;
+}
 const EMPTY = { inbox: 'Posteingang leer. 🎉', archive: 'Archiv leer.', sent: 'Noch nichts gesendet.', spam: 'Kein Spam. 👍', trash: 'Papierkorb leer.' };
 export function viewMail() {
   if (!connected() || ui.mailSetup) {
@@ -490,8 +509,7 @@ export function viewMail() {
   if (st.account && !hasToken()) preloadGis();
   if (st.account && hasToken() && !st.list && !st.loading && !st.error) gmRefresh();
   if (ic.account && !ic.list && !ic.loading && !ic.error) icRefresh();
-  const boxF = both() ? ui.mailBox || 'all' : 'all';
-  const items = allMail().filter((m) => boxF === 'all' || m.src === boxF);
+  const items = shown(false);
   const unread = items.filter((m) => m.unread).length;
   const filter = ui.mailFilter || 'all';
   const write = canSend() ? `<button class="btn primary m-compose" data-action="mail-compose" title="Neue Mail">${icon('pen')} Schreiben</button>` : '';
@@ -499,7 +517,7 @@ export function viewMail() {
     <button class="icon-btn" data-action="mail-accounts" title="Konten (Gmail, Apple Mail)">${icon('user')}</button>`;
   const fsel = `<label class="m-folder${fo !== 'inbox' ? ' on' : ''}" title="Ordner">${icon(fInfo(fo)[2])}<select id="m-folder" aria-label="Ordner">${FOLDERS.map(([v, l]) => `<option value="${v}"${v === fo ? ' selected' : ''}>${l}</option>`).join('')}</select>${icon('chevDown')}</label>`;
   const tabs = fsel + `<div class="tabs m-filter">${[['all', 'Alle'], ['unread', `Ungelesen${unread ? `<span class="n">${unread}</span>` : ''}`]].map(([v, l]) => `<button class="${filter === v ? 'on' : ''}" data-action="mail-filter" data-v="${v}">${l}</button>`).join('')}</div>`
-    + (both() ? `<div class="tabs m-box">${[['all', 'Alle'], ['gm', 'Gmail'], ['ic', 'iCloud']].map(([v, l]) => `<button class="${boxF === v ? 'on' : ''}" data-action="mail-box" data-v="${v}">${l}</button>`).join('')}</div>` : '');
+    + (both() ? `<div class="tabs m-box">${[['all', 'Alle'], ['gm', 'Gmail'], ['ic', 'iCloud']].map(([v, l]) => `<button class="${(ui.mailBox || 'all') === v ? 'on' : ''}" data-action="mail-box" data-v="${v}">${l}</button>`).join('')}</div>` : '');
   const sub = [st.account, ic.account].filter(Boolean).map(esc).join(' · ');
   const top = head('Mail', sub, actions, 'mail-head', tabs);
   // Nur Gmail und die Stunde ist um: große Karte wie bisher
@@ -512,12 +530,12 @@ export function viewMail() {
     const pending = (st.account && hasToken() && !st.error) || (ic.account && !ic.error);
     return `${top}${notes()}${pending ? `<div class="m-load muted">${fInfo(fo)[1]} wird geladen …</div>` : ''}`;
   }
-  const list = items.filter((m) => filter !== 'unread' || m.unread || ui.mailOpen === m.id);
+  const list = shown();
   const open = ui.mailOpen && mailById(ui.mailOpen);
   const compact = !!open;
   let lastG = '';
   const rows = list.map((m) => { const gname = groupOf(m.at); const h = gname !== lastG ? `<div class="m-group">${gname}</div>` : ''; lastG = gname; return h + row(m, compact); }).join('');
-  const listHTML = `<div class="m-list ${compact ? 'compact' : ''}">${rows || `<p class="muted fin-none" style="padding:24px">${filter === 'unread' ? 'Alles gelesen.' : EMPTY[fo]}</p>`}</div>`;
+  const listHTML = `<div class="m-list ${compact ? 'compact' : ''} ${showAvatars() ? '' : 'no-av'}">${rows || `<p class="muted fin-none" style="padding:24px">${filter === 'unread' ? 'Alles gelesen.' : EMPTY[fo]}</p>`}</div>`;
   if (open && isMobile()) return reader(open);
   const fab = canSend() && isMobile() ? `<button class="m-fab" data-action="mail-compose" aria-label="Neue Mail">${icon('pen')}</button>` : '';
   return `${top}${notes()}

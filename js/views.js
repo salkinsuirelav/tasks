@@ -591,6 +591,7 @@ export function viewReview() {
 }
 
 // ---------- Einstellungen ----------
+export const SET_CATS = [['allgemein', 'Allgemein', 'gear'], ['planung', 'Planung', 'calendar'], ['mail', 'Mail', 'mail'], ['finanzen', 'Finanzen', 'wallet'], ['konto', 'Sync & Mac', 'refresh'], ['daten', 'Daten', 'download']];
 export function viewSettings() {
   const s = store.settings, sy = store.sync;
   const statusText = { off: 'Nicht eingerichtet', connecting: 'Verbinde…', 'signed-out': 'Nicht angemeldet', online: 'Synchronisiert', offline: 'Offline (wird später synchronisiert)', error: 'Fehler' }[sy.status];
@@ -611,11 +612,12 @@ export function viewSettings() {
       <button class="btn" data-action="sign-out">Abmelden</button>`;
   }
   const hourOpts = (from, to, sel) => Array.from({ length: to - from + 1 }, (_, i) => from + i).map((h) => `<option value="${h}" ${h === sel ? 'selected' : ''}>${String(h % 24).padStart(2, '0')}:00${h > 24 ? ' (nächster Tag)' : ''}</option>`).join('');
-  return `
-    ${head('Einstellungen')}
-    <div class="settings">
+  // Einstellungen nach Bereichen (oben umschalten). Jeder Kasten gehört zu genau einem Bereich.
+  const panels = [
+    ['konto', `
       <div class="panel"><h4>Sync · <span style="text-transform:none;letter-spacing:0">${statusText}</span></h4>${syncBody}
-        ${sy.error ? `<p style="color:var(--danger);font-size:13px">${esc(sy.error)}</p>` : ''}</div>
+        ${sy.error ? `<p style="color:var(--danger);font-size:13px">${esc(sy.error)}</p>` : ''}</div>`],
+    ['allgemein', `
       <div class="panel"><h4>Darstellung</h4>
         <div class="seg">${[['system', 'Wie System'], ['light', 'Hell'], ['dark', 'Dunkel']].map(([v, l]) => `<button class="${(s.theme || 'system') === v ? 'on' : ''}" data-action="theme" data-v="${v}">${l}</button>`).join('')}</div>
         <p class="muted" style="font-size:13px;margin:10px 0 0">„Wie System“ folgt der Einstellung deines Macs bzw. iPhones (Hell/Dunkel/Automatisch).</p>
@@ -624,14 +626,16 @@ export function viewSettings() {
         <div class="field mac-only" style="margin:16px 0 0"><label>Tabs oben (Mac)</label>
           <div class="seg"><button class="${tabsOn() ? 'on' : ''}" data-action="tabs-on" data-v="1">Ein</button><button class="${tabsOn() ? '' : 'on'}" data-action="tabs-on" data-v="0">Aus</button></div>
           <p class="muted" style="font-size:13px;margin:8px 0 0">Mehrere Ansichten offen halten. ⌘-Klick auf einen Eintrag links öffnet ihn in einem neuen Tab. Tabs lassen sich verschieben.</p></div>
-      </div>
+      </div>`],
+    ['allgemein', `
       <div class="panel" id="nav-order"><h4>Navigation</h4>
         <p class="muted" style="font-size:13px;margin:0 0 10px">Reihenfolge der Bereiche. Auf dem Mac kannst du sie auch direkt links in der Seitenleiste ziehen. Auf dem iPhone stehen die ersten ${BAR} unten in der Leiste, der Rest unter „Mehr“.</p>
         <div class="nav-order">${navItems(s).map((n, i, a) => `<div class="no-row ${i === BAR ? 'cut' : ''}">${icon(n.icon)}<span class="no-l">${n.label}</span>${i < BAR ? '<span class="no-tag">iPhone-Leiste</span>' : '<span class="no-tag muted">Mehr</span>'}
           <button class="icon-btn" data-action="nav-move" data-href="${n.href}" data-d="-1" title="Nach oben" ${i === 0 ? 'disabled' : ''}>${icon('up')}</button>
           <button class="icon-btn" data-action="nav-move" data-href="${n.href}" data-d="1" title="Nach unten" ${i === a.length - 1 ? 'disabled' : ''}>${icon('down')}</button></div>`).join('')}</div>
         ${(s.navOrder || []).length ? '<button class="btn small" data-action="nav-reset" style="margin-top:10px">Standard-Reihenfolge</button>' : ''}
-      </div>
+      </div>`],
+    ['planung', `
       <div class="panel"><h4>Planung</h4>
         <div class="set-grid">
           <div class="set-lbl">Kalender zeigt</div>
@@ -647,48 +651,66 @@ export function viewSettings() {
         </div>
         <div class="field" style="margin:4px 0 0"><label>Am Wochenende einplanen (Auto-Plan + Claude)</label>
           <div class="seg"><button class="${s.planWeekends !== false ? 'on' : ''}" data-action="plan-weekends" data-v="1">Ja</button><button class="${s.planWeekends === false ? 'on' : ''}" data-action="plan-weekends" data-v="0">Nein, nur Mo–Fr</button></div></div>
-      </div>
+      </div>`],
+    ['finanzen', `
       <div class="panel"><h4>Finanzen</h4>
         <div class="set-grid">
           <div class="set-lbl">Hauptwährung <span class="muted">(Summen + Abo-Kalender)</span></div>
           <select id="base-cur" aria-label="Hauptwährung">${['EUR', 'USD', 'KRW', 'GBP', 'CHF'].map((c) => `<option ${c === (s.baseCurrency || 'EUR') ? 'selected' : ''}>${c}</option>`).join('')}</select>
         </div>
         <p class="muted" style="font-size:13px;margin:10px 0 0">Abos in anderen Währungen rechnet die App mit den Tageskursen der EZB um (frankfurter.dev, ohne Anmeldung).</p>
-      </div>
+      </div>`],
+    ['mail', `
       <div class="panel"><h4>Mail</h4>
         ${mailSt.account || mailIc.account ? `${mailSt.account ? `<p style="margin:0 0 6px">Gmail: <b>${esc(mailSt.account)}</b></p>` : ''}${mailIc.account ? `<p style="margin:0 0 6px">Apple Mail: <b>${esc(mailIc.account)}</b> <span class="muted">(über den Mac-Helfer)</span></p>` : ''}`
           : '<p class="muted" style="margin:0 0 10px">Noch kein Postfach verbunden.</p>'}
         <button class="btn" data-action="mail-accounts-go" style="margin-top:4px">${icon('mail')} Konten verwalten</button>
+        <div class="field" style="margin:14px 0 0"><label>Profilbilder der Absender</label>
+          <div class="seg"><button class="${s.mailAvatars !== false ? 'on' : ''}" data-action="mail-avatars" data-v="1">Anzeigen</button><button class="${s.mailAvatars === false ? 'on' : ''}" data-action="mail-avatars" data-v="0">Ausblenden</button></div></div>
         <p class="muted" style="font-size:13px;margin:10px 0 0">Mails bleiben auf deinem Gerät, die App speichert sie nirgends. Apple Mail (iCloud) geht nur auf dem Mac, auf dem der Helfer läuft.</p>
-      </div>
+      </div>`],
+    ['daten', `
       <div class="panel"><h4>Backup</h4>
         <p class="muted" style="margin-top:0">Lädt alle Daten als JSON-Datei herunter. Am besten ab und zu in iCloud Drive speichern.</p>
         <div class="inline" style="max-width:420px">
           <button class="btn" data-action="export">${icon('download')} Exportieren</button>
           <label class="btn" style="justify-content:center">${icon('upload')} Importieren<input type="file" accept="application/json" data-import hidden></label>
         </div>
-      </div>
+      </div>`],
+    ['konto', `
       <div class="panel"><h4>Claude (Mac-Helfer)</h4>
         ${(() => { const h = M.helperInfo(); return M.helperOnline() ? `<p style="margin-top:0">🟢 Online auf <b>${esc(h.host || 'deinem Mac')}</b></p>` : `<p style="margin-top:0" class="muted">⚪️ Offline${h ? ` · zuletzt gesehen ${new Date(h.lastSeen).toLocaleString('de-DE')}` : ' · noch nie verbunden'}. Einrichtung: Ordner <span class="mono">helper/</span> im Repo, Anleitung in <span class="mono">helper/README.md</span>.</p>`; })()}
-      </div>
-      <div class="panel"><h4>Erinnerungen</h4>${remindersPanel()}</div>
+      </div>`],
+    ['planung', `
+      <div class="panel"><h4>Erinnerungen</h4>${remindersPanel()}</div>`],
+    ['konto', `
       <div class="panel desktop-only"><h4>Mac-Menüleiste</h4>
         <p class="muted" style="margin-top:0;font-size:13px">Zeigt oben in der Menüleiste deines Macs den laufenden Timer bzw. die nächste Aufgabe. Klick darauf öffnet die Liste für heute. Braucht den Mac-Helfer und die kostenlose App SwiftBar (Anleitung in <span class="mono">helper/README.md</span>).</p>
         ${(() => { const mb = M.menubarSettings(); const seg = (k, on) => `<div class="seg"><button class="${on ? 'on' : ''}" data-action="menubar" data-k="${k}" data-v="1">An</button><button class="${on ? '' : 'on'}" data-action="menubar" data-k="${k}" data-v="0">Aus</button></div>`;
           return `<div class="field"><label>Laufenden Timer anzeigen</label>${seg('timer', mb.timer)}</div>
           <div class="field"><label>Nächste Aufgabe mit Uhrzeit anzeigen</label>${seg('next', mb.next)}</div>`; })()}
-      </div>
+      </div>`],
+    ['allgemein', `
       <div class="panel desktop-only"><h4>Tastenkürzel</h4>
         <p class="muted" style="margin-top:0;font-size:13px">Funktionieren, wenn du nicht gerade in einem Textfeld tippst. Zum Ändern auf die Taste klicken und die neue drücken (Entf = keine Taste).</p>
         ${keysList(true)}
         <button class="btn small" data-action="keys-reset" style="margin-top:10px">Standard wiederherstellen</button>
-      </div>
+      </div>`],
+    ['daten', `
       <div class="panel"><h4>Neu anfangen</h4>
         <p class="muted" style="margin-top:0;font-size:13px">Löscht alle Aufgaben mit ihren Zeiteinträgen, Anhängen und Claude-Aufträgen, auf allen Geräten. Projekte und Sperrzeiten bleiben. Vorher wird automatisch ein Backup heruntergeladen.</p>
         <button class="btn danger" data-action="wipe-tasks">${icon('trash')} Alle Aufgaben löschen</button>
-      </div>
-      <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>
-      <p class="mono muted">Version 0.20.0</p>
+      </div>`],
+    ['daten', `
+      <div class="panel"><h4>Ausprobieren</h4><p class="muted" style="margin-top:0">Legt ein paar Beispiel-Projekte, Aufgaben und Sperrzeiten an.</p><button class="btn" data-action="seed-demo">Beispieldaten laden</button></div>`],
+  ];
+  const cat = SET_CATS.some((c) => c[0] === ui.setCat) ? ui.setCat : 'allgemein';
+  return `
+    ${head('Einstellungen')}
+    <div class="set-cats" role="tablist">${SET_CATS.map(([v, l, ic]) => `<button class="${v === cat ? 'on' : ''}" data-action="set-cat" data-v="${v}" role="tab">${icon(ic)}<span>${l}</span></button>`).join('')}</div>
+    <div class="settings">
+      ${panels.filter((x) => x[0] === cat).map((x) => x[1]).join('\n')}
+      <p class="mono muted">Version 0.21.0</p>
     </div>`;
 }
 

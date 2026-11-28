@@ -1480,3 +1480,35 @@ html[data-design="hero"] .m-folder select { height: 32px; border: 0; border-radi
   .mail-head > .head-title { padding-right: 0; }
   .mail-head > .head-title > :is(h1, .sub) { padding-right: 84px; }
 }
+/* v0.21: Ungelesen-Punkt mittig zum Profilbild (zweizeilige Liste), Profilbilder ausblendbar, Wischen am iPhone */
+.m-list.compact .m-row.unread::before { top: 25px; }
+.m-list.no-av .m-row { grid-template-columns: minmax(0, 180px) 140px minmax(0, 1fr) 64px; }
+.m-list.no-av.compact .m-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "from time" "txt txt"; }
+.m-list.no-av.compact .m-row.unread::before, .m-list.no-av .m-row.unread::before { top: 19px; }
+.m-list.no-av:not(.compact) .m-row.unread::before { top: 50%; }
+@media (max-width: 760px) {
+  .m-row.unread::before { top: 26px; }
+  .m-list.no-av .m-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "from time" "txt txt"; }
+  .m-list.no-av .m-row.unread::before, .m-list.no-av:not(.compact) .m-row.unread::before { top: 20px; }
+  .m-swipe-bg { position: absolute; left: 0; right: 0; display: flex; align-items: center; padding: 0 24px; color: #fff; font-size: 13px; font-weight: 600; gap: 8px; z-index: 0; pointer-events: none; }
+  .m-swipe-bg.read { background: var(--accent); justify-content: flex-start; }
+  .m-swipe-bg.move { background: #30a46c; justify-content: flex-end; }
+  .m-swipe-bg svg.i { width: 20px; height: 20px; transition: transform .15s; }
+  .m-swipe-bg.go svg.i { transform: scale(1.25); }
+  .m-list { position: relative; overflow: hidden; }
+  .m-row.swiping { background: var(--panel); z-index: 1; transition: none; }
+  .m-row.swipe-back { transition: transform .25s var(--ease-out, ease-out); }
+}
+/* v0.21: Einstellungen nach Bereichen */
+.set-cats { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 16px; max-width: 640px; }
+.set-cats button { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 14px; border-radius: 999px; font-size: 14px; font-weight: 500; color: var(--muted); background: var(--line-soft); border: 1px solid transparent; }
+.set-cats button svg.i { width: 15px; height: 15px; }
+.set-cats button:hover { color: var(--text); }
+.set-cats button.on { color: var(--text); background: var(--card); border-color: var(--line); box-shadow: var(--shadow); }
+html[data-design="hero"] .set-cats button { background: var(--h-default); border: 0; height: 32px; font-size: 13px; }
+html[data-design="hero"] .set-cats button.on { background: var(--h-surface); box-shadow: var(--h-shadow); }
+@media (max-width: 760px) {
+  .set-cats { flex-wrap: nowrap; overflow-x: auto; margin: 0 -16px 14px; padding: 2px 16px; scrollbar-width: none; }
+  .set-cats::-webkit-scrollbar { display: none; }
+  .set-cats button { flex: none; }
+}
